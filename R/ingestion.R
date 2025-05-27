@@ -69,7 +69,7 @@ ingest_pds_trips <- function(log_threshold = logger::DEBUG) {
     secret = pars$pds$secret,
     dateFrom = "2023-01-01",
     dateTo = Sys.Date(),
-    imeis = unique(devices_table$devices$IMEI)
+    imeis = unique(devices_table$IMEI)
   )
 
   filename <- pars$pds$pds_trips$file_prefix %>%
