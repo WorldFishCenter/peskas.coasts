@@ -1,6 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^peskas\.kenya\.data\.pipeline\.Rproj$
+^peskas\.coasts\.Rproj$
 ^LICENSE\.md$
 ^README\.Rmd$
 ^cran-comments\.md$

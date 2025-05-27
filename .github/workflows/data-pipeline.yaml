@@ -1,0 +1,95 @@
+name: Peskas Coasts
+
+on:
+  push:
+  schedule:
+    - cron: '0 0 */2 * *'
+
+env:
+  MONGODB_CONNECTION_STRING: ${{ secrets.MONGODB_CONNECTION_STRING }}
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+  PDS_TOKEN: ${{ secrets.PDS_TOKEN }}
+  PDS_SECRET: ${{ secrets.PDS_SECRET }}
+
+jobs:
+  build-container:
+    name: Build R container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Build image with cache
+        id: build-docker
+        uses: whoan/docker-build-with-cache-action@v5
+        with:
+          username: ${{ github.actor }}
+          password: "${{ secrets.GITHUB_TOKEN }}"
+          registry: docker.pkg.github.com
+          image_name: r-runner-peskas-coasts
+          dockerfile: Dockerfile.prod
+
+  ingest-pds-trips:
+    name: Ingest GPS trips
+    needs: build-container
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call ingest_pds_trips()
+        run: Rscript -e 'coasts::ingest_pds_trips()'
+
+  ingest-pds-tracks:
+    name: Ingest GPS tracks
+    needs: ingest-pds-trips
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call ingest_pds_tracks
+        run: Rscript -e 'coasts::ingest_pds_tracks()'
+
+  preprocess-pds-tracks:
+    name: Preprocess GPS tracks data
+    needs: ingest-pds-tracks
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call preprocess_pds_tracks()
+        run: Rscript -e 'coasts::preprocess_pds_tracks()'      
+
+  export-data:
+    name: Export WIO data
+    needs: preprocess-pds-tracks
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call export_geos()
+        run: Rscript -e 'coasts::export_geos()'        
+

@@ -1,0 +1,44 @@
+FROM rocker/geospatial:4.5
+
+# Tidyverse system requirements
+RUN apt-get update -qq && apt-get -y --no-install-recommends install \
+    libxml2-dev \
+    libcairo2-dev \
+    libgit2-dev \
+    default-libmysqlclient-dev \
+    libpq-dev \
+    libsasl2-dev \
+    libsqlite3-dev \
+    libssh2-1-dev \
+    unixodbc-dev && \
+  rm -rf /var/lib/apt/lists/*
+
+# Install imports
+RUN install2.r --error --skipinstalled \
+    arrow \
+    config \
+    dplyr \
+    furrr \
+    future \
+    git2r \
+    googleAuthR \
+    googleCloudStorageR \
+    googlesheets4 \
+    httr2 \
+    logger \
+    magrittr \
+    mongolite \
+    parallel \
+    purrr \
+    readr \
+    rlang \
+    sf \
+    stringr \
+    tidyr
+
+# Install local package
+COPY . /home
+WORKDIR /home
+RUN Rscript -e 'remotes::install_local(dependencies = TRUE)'
+
+ENTRYPOINT ["Rscript"]

@@ -14,7 +14,8 @@ auth/*
 *-Ex.R
 /*.tar.gz
 /*.Rcheck/
-^.DS_Store$
+.DS_Store
+**/.DS_Store
 
 ## Data files
 *.rds

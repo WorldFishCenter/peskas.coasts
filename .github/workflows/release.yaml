@@ -1,0 +1,87 @@
+name: Release from NEWS.md
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for proper tag checking
+
+      - name: Extract version and changelog from NEWS.md
+        id: changelog
+        run: |
+          # Extract version from NEWS.md (assuming format like "# coasts 0.1.0")
+          version=$(grep -m1 -oP '^# coasts \K[0-9]+\.[0-9]+\.[0-9]+' NEWS.md)
+          
+          if [ -z "$version" ]; then
+            echo "No version found in NEWS.md"
+            exit 1
+          fi
+          
+          echo "Extracted version: $version"
+
+          # Extract changelog from first version block
+          changelog=$(awk '
+            BEGIN { print_mode=0; found_first=0 }
+            /^# coasts / {
+              if (found_first == 1) exit
+              if (found_first == 0) { 
+                found_first=1
+                print_mode=1
+                next 
+              }
+            }
+            /^# / && found_first == 1 && !/^# coasts / {
+              exit
+            }
+            print_mode == 1 && !/^# coasts / { 
+              print 
+            }
+          ' NEWS.md | sed '/^$/d' | head -n -1)
+
+          echo "tag_name=v$version" >> $GITHUB_OUTPUT
+          echo "version=$version" >> $GITHUB_OUTPUT
+          
+          # Use multiline output for changelog
+          {
+            echo "changelog<<EOF"
+            echo "$changelog"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          tag_name="v${{ steps.changelog.outputs.version }}"
+          if git tag -l | grep -q "^${tag_name}$"; then
+            echo "Tag $tag_name already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $tag_name does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag_name }}
+          name: "coasts ${{ steps.changelog.outputs.version }}"
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip release creation
+        if: steps.check_tag.outputs.exists == 'true'
+        run: |
+          echo "Release for version ${{ steps.changelog.outputs.version }} already exists. Skipping release creation."
