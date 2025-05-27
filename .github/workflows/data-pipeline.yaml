@@ -34,7 +34,7 @@ jobs:
     needs: build-container
     runs-on: ubuntu-latest
     container:
-      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-coasts
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +50,7 @@ jobs:
     needs: ingest-pds-trips
     runs-on: ubuntu-latest
     container:
-      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-coasts
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
     needs: ingest-pds-tracks
     runs-on: ubuntu-latest
     container:
-      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-coasts
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -82,7 +82,7 @@ jobs:
     needs: preprocess-pds-tracks
     runs-on: ubuntu-latest
     container:
-      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-kenya
+      image: docker.pkg.github.com/worldfishcenter/coasts/r-runner-peskas-coasts
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
