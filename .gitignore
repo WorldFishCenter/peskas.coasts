@@ -1,0 +1,27 @@
+## Authentication
+auth/*
+.env*
+
+## R & Rstudio
+.Rhistory
+.Renviron
+.RData
+.Rproj.user
+.Rproj.user/
+.Rapp.history
+.RData
+.Ruserdata
+*-Ex.R
+/*.tar.gz
+/*.Rcheck/
+^.DS_Store$
+
+## Data files
+*.rds
+*.xlsx
+*.csv
+*.tsv
+*.patch
+*.parquet
+/.quarto/
+docs

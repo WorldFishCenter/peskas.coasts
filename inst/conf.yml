@@ -1,0 +1,67 @@
+default:
+  pds:
+    token: !expr Sys.getenv('PDS_TOKEN')
+    secret: !expr Sys.getenv('PDS_SECRET')
+    pds_trips:
+      file_prefix: pds-trips
+      version: latest
+    pds_tracks:
+      file_prefix: pds-tracks
+      version: latest
+  storage:
+    google:
+      key: gcs
+      options:
+        project: peskas
+        bucket: peskas-coasts
+        service_account_key: !expr Sys.getenv('GCP_SA_KEY')
+    mongodb:
+      connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING')
+      database_name: portal
+      collection:
+        pds_grids: pds_grids
+        wio_map: wio_map
+        regional_metrics: regional_metrics
+  pds_storage:
+    google:
+      key: gcs
+      options:
+        project: peskas
+        bucket: pds-peskas-coasts
+        service_account_key: !expr Sys.getenv('GCP_SA_KEY')
+  metadata:
+    google_sheets:
+      name: metadata-tables
+      sheet_id: !expr Sys.getenv("GOOGLE_SHEET_ID")
+      tables:
+        - devices
+production:
+  storage:
+    google:
+      options:
+        bucket: peskas-coasts
+    mongodb:
+      database_name: portal
+  pds_storage:
+    google:
+      options:
+        bucket: pds-peskas-coasts
+
+local:
+  inherits: development
+  pds:
+    token: !expr readLines('auth/pds-token')
+    secret: !expr readLines('auth/pds-secret')
+  storage:
+    google:
+      options:
+        service_account_key: !expr readLines("auth/gcp-sa-peskas_ingestion-key.json")
+    mongodb:
+      connection_string: !expr readLines("auth/mongodb_connection_string")
+  pds_storage:
+    google:
+      options:
+        service_account_key: !expr readLines("auth/gcp-sa-peskas_ingestion-key.json")
+  metadata:
+    google_sheets:
+      sheet_id: !expr readLines("auth/metadata-sheet-id")
