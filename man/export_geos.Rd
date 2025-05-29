@@ -29,7 +29,7 @@ This function performs several key operations:
 4. Downloads monthly summary parquet files for both countries from cloud storage
 5. Applies currency conversion factors to monetary metrics:
    - Zanzibar: multiplies values by 0.00037 (TZS to USD conversion)
-   - Kenya: multiplies values by 0.00077 (KES to USD conversion)
+   - Kenya: multiplies values by 0.0077 (KES to USD conversion)
 6. Converts the following monetary fields: mean_rpue, mean_rpua, mean_price_kg
 7. Uploads regional metrics to MongoDB without geospatial indexing
 

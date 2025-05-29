@@ -17,7 +17,7 @@
 #' 4. Downloads monthly summary parquet files for both countries from cloud storage
 #' 5. Applies currency conversion factors to monetary metrics:
 #'    - Zanzibar: multiplies values by 0.00037 (TZS to USD conversion)
-#'    - Kenya: multiplies values by 0.00077 (KES to USD conversion)
+#'    - Kenya: multiplies values by 0.0077 (KES to USD conversion)
 #' 6. Converts the following monetary fields: mean_rpue, mean_rpua, mean_price_kg
 #' 7. Uploads regional metrics to MongoDB without geospatial indexing
 #'
@@ -109,15 +109,15 @@ export_geos <- function() {
     dplyr::mutate(
       mean_rpue = dplyr::case_when(
         country == "zanzibar" ~ .data$mean_rpue * 0.00037,
-        country == "kenya" ~ .data$mean_rpue * 0.00077
+        country == "kenya" ~ .data$mean_rpue * 0.0077
       ),
       mean_rpua = dplyr::case_when(
         country == "zanzibar" ~ .data$mean_rpua * 0.00037,
-        country == "kenya" ~ .data$mean_rpua * 0.00077
+        country == "kenya" ~ .data$mean_rpua * 0.0077
       ),
       mean_price_kg = dplyr::case_when(
         country == "zanzibar" ~ .data$mean_price_kg * 0.00037,
-        country == "kenya" ~ .data$mean_price_kg * 0.00077
+        country == "kenya" ~ .data$mean_price_kg * 0.0077
       )
     )
 
