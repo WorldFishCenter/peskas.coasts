@@ -5,6 +5,12 @@
 
 <!-- badges: start -->
 
+[![R-CMD-check](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml)
+[![Lifecycle:
+experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![License: GPL
+v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 <!-- badges: end -->
 
 The `coasts` package provides a comprehensive data pipeline for

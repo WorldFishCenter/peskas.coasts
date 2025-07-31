@@ -125,19 +125,19 @@ export_geos <- function() {
   logger::log_info("Pushing combined geospatial data to MongoDB...")
   mdb_collection_push(
     data = maps,
-    connection_string = pars$storage$mongodb$connection_string,
-    collection_name = pars$storage$mongodb$collection$wio_map,
-    db_name = pars$storage$mongodb$database_name,
+    connection_string = pars$storage$mongodb$coasts_portal$connection_string,
+    collection_name = pars$storage$mongodb$coasts_portal$collection$wio_map,
+    db_name = pars$storage$mongodb$coasts_portal$database_name,
     geo = TRUE # Create 2dsphere index on geometry field
   )
 
-  logger::log_info("Pushing regional ime series metrics to MongoDB...")
+  logger::log_info("Pushing regional time series metrics to MongoDB...")
   mdb_collection_push(
     data = series,
-    connection_string = pars$storage$mongodb$connection_string,
-    collection_name = pars$storage$mongodb$collection$regional_metrics,
-    db_name = pars$storage$mongodb$database_name,
-    geo = FALSE # Create 2dsphere index on geometry field
+    connection_string = pars$storage$mongodb$coasts_portal$connection_string,
+    collection_name = pars$storage$mongodb$coasts_portal$collection$regional_metrics,
+    db_name = pars$storage$mongodb$coasts_portal$database_name,
+    geo = FALSE # No geospatial indexing needed for time series
   )
 
   # Step 7: Download and process PDS track grid summaries
@@ -153,9 +153,9 @@ export_geos <- function() {
   logger::log_info("Pushing PDS track grid summaries to MongoDB...")
   mdb_collection_push(
     data = grid_summaries,
-    connection_string = pars$storage$mongodb$connection_string,
-    collection_name = pars$storage$mongodb$collection$pds_grids,
-    db_name = pars$storage$mongodb$database_name,
+    connection_string = pars$storage$mongodb$coasts_portal$connection_string,
+    collection_name = pars$storage$mongodb$coasts_portal$collection$pds_grids,
+    db_name = pars$storage$mongodb$coasts_portal$database_name,
     geo = FALSE # No geospatial indexing needed
   )
 

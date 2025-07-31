@@ -2,6 +2,9 @@ default:
   pds:
     token: !expr Sys.getenv('PDS_TOKEN')
     secret: !expr Sys.getenv('PDS_SECRET')
+    username: !expr Sys.getenv('PDS_USERNAME')
+    password: !expr Sys.getenv('PDS_PASSWORD')
+    customer_id: !expr Sys.getenv('PDS_CUSTOMER_ID')
     pds_trips:
       file_prefix: pds-trips
       version: latest
@@ -16,12 +19,18 @@ default:
         bucket: peskas-coasts
         service_account_key: !expr Sys.getenv('GCP_SA_KEY')
     mongodb:
-      connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING')
-      database_name: portal
-      collection:
-        pds_grids: pds_grids
-        wio_map: wio_map
-        regional_metrics: regional_metrics
+      coasts_portal:
+        connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_COASTS')
+        database_name: portal
+        collection:
+          pds_grids: pds_grids
+          wio_map: wio_map
+          regional_metrics: regional_metrics
+      tracks_app:
+        connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_TRACKS')
+        database_name: portal-dev
+        collection:
+          users: users
   pds_storage:
     google:
       key: gcs
@@ -35,13 +44,28 @@ default:
       sheet_id: !expr Sys.getenv("GOOGLE_SHEET_ID")
       tables:
         - devices
+  airtable:
+    token: !expr Sys.getenv('AIRTABLE_TOKEN')
+    frame:
+      base_id: !expr Sys.getenv('AIRTABLE_BASE_ID_FRAME')
+      tables:
+        countries: Countries
+        pds_devices: pds_devices
+    tracks_app:
+      base_id: !expr Sys.getenv('AIRTABLE_BASE_ID_TRACKS_APP')
+      tables:
+        users: users
+
 production:
   storage:
     google:
       options:
         bucket: peskas-coasts
     mongodb:
-      database_name: portal
+      coasts_portal:
+        database_name: portal
+      tracks_app:
+        database_name: portal-dev
   pds_storage:
     google:
       options:
@@ -52,12 +76,18 @@ local:
   pds:
     token: !expr readLines('auth/pds-token')
     secret: !expr readLines('auth/pds-secret')
+    username: !expr readLines('auth/pds-username')
+    password: !expr readLines('auth/pds-password')
+    customer_id: !expr readLines('auth/pds-customer-id')
   storage:
     google:
       options:
         service_account_key: !expr readLines("auth/gcp-sa-peskas_ingestion-key.json")
     mongodb:
-      connection_string: !expr readLines("auth/mongodb_connection_string")
+      coasts_portal:
+        connection_string: !expr readLines("auth/mongodb_connection_string_coasts")
+      tracks_app:
+        connection_string: !expr readLines("auth/mongodb_connection_string_tracks")
   pds_storage:
     google:
       options:
@@ -65,3 +95,14 @@ local:
   metadata:
     google_sheets:
       sheet_id: !expr readLines("auth/metadata-sheet-id")
+  airtable:
+    token: !expr readLines("auth/airtable-token")
+    frame:
+      base_id: !expr readLines("auth/airtable-base-id-frame")
+      tables:
+        countries: Countries
+        pds_devices: pds_devices
+    tracks_app:
+      base_id: !expr readLines("auth/airtable-base-id-tracks-app")
+      tables:
+        users: users

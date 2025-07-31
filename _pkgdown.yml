@@ -1,4 +1,145 @@
-url: ~
+url: https://worldfishcenter.github.io/peskas.coasts/
 template:
   bootstrap: 5
+  bootswatch: flatly
+  theme: light
+  bslib:
+    primary: "#0077be"
+    secondary: "#6c757d"
+    success: "#28a745"
+    info: "#17a2b8"
+    warning: "#ffc107"
+    danger: "#dc3545"
+
+home:
+  title: "coasts: Coastal Fisheries Data Pipeline"
+  description: >
+    Comprehensive data pipeline for processing coastal fisheries data from the
+    Western Indian Ocean region, integrating GPS tracking, spatial analysis,
+    and cloud storage.
+  strip_header: false
+  sidebar:
+    structure: [links, license, community, citation, authors, dev]
+    links:
+      - text: "WorldFish Center"
+        href: "https://www.worldfishcenter.org/"
+      - text: "Peskas Initiative"
+        href: "https://www.worldfishcenter.org/research/peskas"
+      - text: "Report a Bug"
+        href: "https://github.com/WorldFishCenter/peskas.coasts/issues"
+
+navbar:
+  structure:
+    left: [home, reference, articles, tutorials, news]
+    right: [search, github]
+  components:
+    home:
+      icon: fas fa-home fa-lg
+      href: index.html
+    reference:
+      text: Reference
+      href: reference/index.html
+    articles:
+      text: Articles
+      menu:
+      - text: "Getting Started"
+        href: articles/getting-started.html
+      - text: "Data Pipeline Overview"
+        href: articles/data-pipeline.html
+      - text: "Spatial Analysis"
+        href: articles/spatial-analysis.html
+      - text: "Configuration Guide"
+        href: articles/configuration.html
+    tutorials:
+      text: Tutorials
+      menu:
+      - text: "Basic Usage"
+        href: articles/basic-usage.html
+      - text: "Advanced Workflows"
+        href: articles/advanced-workflows.html
+    news:
+      text: News
+      href: news/index.html
+    github:
+      icon: fab fa-github fa-lg
+      href: https://github.com/WorldFishCenter/peskas.coasts/
+
+reference:
+  - title: "Data Ingestion"
+    desc: "Functions for retrieving data from external APIs"
+    contents:
+    - ingest_pds_trips
+    - ingest_pds_tracks
+    - get_trips
+    - get_trip_points
+    - get_metadata
+    - ingest_pelagic_boats
+    - get_pelagic_boats
+    - get_pelagic_devices
+    - pelagic_auth
+    - pelagic_refresh_token
+
+  - title: "Data Preprocessing"
+    desc: "Functions for processing and transforming GPS track data"
+    contents:
+    - preprocess_pds_tracks
+    - preprocess_track_data
+    - process_single_track
+    - generate_track_summaries
+    - extract_trip_ids_from_filenames
+
+  - title: "Data Export & Storage"
+    desc: "Functions for exporting processed data to databases and cloud storage"
+    contents:
+    - export_geos
+    - mdb_collection_push
+    - mdb_collection_pull
+    - upload_cloud_file
+    - download_cloud_file
+    - upload_parquet_to_cloud
+    - download_parquet_from_cloud
+    - cloud_storage_authenticate
+    - cloud_object_name
+    - add_version
+
+  - title: "Airtable Integration"
+    desc: "Functions for managing vessel and trip metadata via Airtable"
+    contents:
+    - airtable_to_df
+    - df_to_airtable
+    - bulk_update_airtable
+    - update_airtable_record
+    - get_writable_fields
+    - device_sync
+    - sync_device_users
+
+  - title: "Utilities"
+    desc: "Helper functions and utilities"
+    contents:
+    - read_config
+    - "%>%"
+    - "%||%"
+    - ":="
+    - ".data"
+    - "expr"
+    - "enquo"
+    - "enquos"
+    - "sym"
+    - "syms"
+    - "as_name"
+    - "as_label"
+
+footer:
+  structure:
+    left: [developed_by, built_with]
+    right: [legal]
+  components:
+    legal: "GPL (>= 3) Licensed"
+
+authors:
+  Lorenzo Longobardi:
+    href: "https://github.com/lore-enzo"
+  WorldFish Center:
+    href: "https://www.worldfishcenter.org/"
+    html: "<img src='https://www.worldfishcenter.org/themes/custom/worldfish/logo.svg' height=24>"
 

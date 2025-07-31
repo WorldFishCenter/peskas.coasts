@@ -26,3 +26,6 @@ auth/*
 *.parquet
 /.quarto/
 docs
+
+## files
+CLAUDE.md

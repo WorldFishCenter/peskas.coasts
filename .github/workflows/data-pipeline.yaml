@@ -6,7 +6,7 @@ on:
     - cron: '0 0 */2 * *'
 
 env:
-  MONGODB_CONNECTION_STRING: ${{ secrets.MONGODB_CONNECTION_STRING }}
+  MONGODB_CONNECTION_STRING_COASTS: ${{ secrets.MONGODB_CONNECTION_STRING_COASTS }}
   GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
   GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
   PDS_TOKEN: ${{ secrets.PDS_TOKEN }}

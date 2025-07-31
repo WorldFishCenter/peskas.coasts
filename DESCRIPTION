@@ -1,7 +1,7 @@
 Package: coasts
 Type: Package
 Title: Coastal Fisheries Data Pipeline for Western Indian Ocean
-Version: 0.1.0
+Version: 1.0.0
 Author: Lorenzo Longobardi
 Maintainer: Lorenzo Longobardi <l.longobardi@cgiar.org>
 Description: Provides a comprehensive data pipeline for processing and analyzing 
@@ -23,10 +23,13 @@ Imports:
     furrr,
     future,
     git2r,
+    glue,
     googleAuthR,
     googleCloudStorageR,
     googlesheets4,
+    httr,
     httr2,
+    janitor,
     logger,
     magrittr,
     mongolite,
@@ -37,3 +40,11 @@ Imports:
     sf,
     stringr,
     tidyr
+Suggests:
+    testthat (>= 3.0.0),
+    withr,
+    covr,
+    pkgdown,
+    knitr,
+    rmarkdown
+Config/testthat/edition: 3
