@@ -1,8 +1,7 @@
 url: https://worldfishcenter.github.io/peskas.coasts/
 template:
   bootstrap: 5
-  bootswatch: flatly
-  theme: light
+  bootswatch: yeti
   bslib:
     primary: "#0077be"
     secondary: "#6c757d"
@@ -39,24 +38,24 @@ navbar:
     reference:
       text: Reference
       href: reference/index.html
-    articles:
-      text: Articles
-      menu:
-      - text: "Getting Started"
-        href: articles/getting-started.html
-      - text: "Data Pipeline Overview"
-        href: articles/data-pipeline.html
-      - text: "Spatial Analysis"
-        href: articles/spatial-analysis.html
-      - text: "Configuration Guide"
-        href: articles/configuration.html
-    tutorials:
-      text: Tutorials
-      menu:
-      - text: "Basic Usage"
-        href: articles/basic-usage.html
-      - text: "Advanced Workflows"
-        href: articles/advanced-workflows.html
+    # articles:
+    #   text: Articles
+    #   menu:
+    #   - text: "Getting Started"
+    #     href: articles/getting-started.html
+    #   - text: "Data Pipeline Overview"
+    #     href: articles/data-pipeline.html
+    #   - text: "Spatial Analysis"
+    #     href: articles/spatial-analysis.html
+    #   - text: "Configuration Guide"
+    #     href: articles/configuration.html
+    # tutorials:
+    #   text: Tutorials
+    #   menu:
+    #   - text: "Basic Usage"
+    #     href: articles/basic-usage.html
+    #   - text: "Advanced Workflows"
+    #     href: articles/advanced-workflows.html
     news:
       text: News
       href: news/index.html
@@ -138,7 +137,7 @@ footer:
 
 authors:
   Lorenzo Longobardi:
-    href: "https://github.com/lore-enzo"
+    href: "https://github.com/langbart"
   WorldFish Center:
     href: "https://www.worldfishcenter.org/"
     html: "<img src='https://www.worldfishcenter.org/themes/custom/worldfish/logo.svg' height=24>"
