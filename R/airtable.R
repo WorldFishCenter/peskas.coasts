@@ -533,7 +533,7 @@ sync_device_users <- function(pars = NULL, seed = 123) {
         TRUE ~ NA
       )
     ) |>
-    dplyr::left_join(users, by = c("IMEI", "Region", "Community")) |>
+    dplyr::left_join(users, by = c("IMEI", "Country", "Region", "Community")) |>
     dplyr::mutate(Boat = dplyr::coalesce(.data$Boat.x, .data$Boat.y)) |>
     dplyr::select(-"Boat.x", -"Boat.y")
 
