@@ -1,4 +1,4 @@
-name: Sync Device Users
+name: Sync PDS Devices & Users
 
 on:
   schedule:
@@ -8,6 +8,11 @@ on:
 
 env:
   # Airtable credentials
+  PDS_TOKEN: ${{ secrets.PDS_TOKEN }}
+  PDS_SECRET: ${{ secrets.PDS_SECRET }}
+  PDS_USERNAME: ${{ secrets.PDS_USERNAME }}
+  PDS_PASSWORD: ${{ secrets.PDS_PASSWORD }}
+  PDS_CUSTOMER_ID: ${{ secrets.PDS_CUSTOMER_ID }}  
   AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
   AIRTABLE_BASE_ID_FRAME: ${{ secrets.AIRTABLE_BASE_ID_FRAME }}
   AIRTABLE_BASE_ID_TRACKS_APP: ${{ secrets.AIRTABLE_BASE_ID_TRACKS_APP }}
@@ -36,9 +41,30 @@ jobs:
           image_name: r-runner-peskas-coasts
           dockerfile: Dockerfile.prod
 
-  sync-device-users:
-    name: Sync Device Users to MongoDB
+
+  ingest-pelagic-boats:
+    name: Ingest Pelagic Boats Data to Airtable
     needs: build-container
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/peskas.coasts/r-runner-peskas-coasts
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      
+      - name: Call ingest_pelagic_boats()
+        run: Rscript -e 'coasts::ingest_pelagic_boats()'
+        
+      - name: Log completion
+        run: echo "✅ Successfully completed Pelagic boats data ingestion"
+
+  sync-device-users:
+    name: Sync Devices & Users to MongoDB and Airtable
+    needs: ingest-pelagic-boats
     runs-on: ubuntu-latest
     container:
       image: docker.pkg.github.com/worldfishcenter/peskas.coasts/r-runner-peskas-coasts

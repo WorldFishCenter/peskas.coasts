@@ -923,7 +923,7 @@ ingest_pelagic_boats <- function(pars = NULL) {
       ),
       country = stringr::str_to_title(.data$country)
     ) |>
-    dplyr::relocate(country = .data$country, .after = "customer_name")
+    dplyr::relocate(country = "country", .after = "customer_name")
 
   logger::log_info(
     "Retrieved and processed {nrow(boats)} boat records from PDS"
@@ -947,11 +947,17 @@ ingest_pelagic_boats <- function(pars = NULL) {
       by = c("country" = "country_name")
     ) %>%
     dplyr::mutate(
-      country = purrr::map(.data$country_id, ~ if (is.na(.x)) character(0) else .x)
+      country = purrr::map(
+        .data$country_id,
+        ~ if (is.na(.x)) character(0) else .x
+      )
     ) %>%
     dplyr::select(-"country_id") |>
     dplyr::mutate(
-      country = purrr::map(.data$country, ~ if (length(.x) > 0) list(.x) else list())
+      country = purrr::map(
+        .data$country,
+        ~ if (length(.x) > 0) list(.x) else list()
+      )
     )
 
   logger::log_info(

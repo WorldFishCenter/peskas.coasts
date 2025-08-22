@@ -509,6 +509,7 @@ sync_device_users <- function(pars = NULL, seed = 123) {
   # Process and join device data with users
   devices_joined <- devices |>
     dplyr::select(
+      "customer_name",
       IMEI = "imei",
       "captain",
       "vessel_type",
@@ -520,7 +521,18 @@ sync_device_users <- function(pars = NULL, seed = 123) {
     ) |>
     # Filter to Africa timezones only
     dplyr::filter(stringr::str_detect(.data$device_timezone, "Africa")) |>
-    dplyr::mutate(Boat = tolower(.data$Boat)) |>
+    dplyr::mutate(
+      Boat = tolower(.data$Boat),
+      Country = dplyr::case_when(
+        stringr::str_detect(.data$customer_name, "Kenya") ~ "Kenya",
+        stringr::str_detect(.data$customer_name, "Zanzibar") ~ "Zanzibar",
+        stringr::str_detect(.data$customer_name, "Tanzania") ~ "Tanzania",
+        stringr::str_detect(.data$customer_name, "Mozambique") ~ "Mozambique",
+        stringr::str_detect(.data$customer_name, "Malawi") ~ "Malawi",
+        stringr::str_detect(.data$customer_name, "Egypt") ~ "Egypt",
+        TRUE ~ NA
+      )
+    ) |>
     dplyr::left_join(users, by = c("IMEI", "Region", "Community")) |>
     dplyr::mutate(Boat = dplyr::coalesce(.data$Boat.x, .data$Boat.y)) |>
     dplyr::select(-"Boat.x", -"Boat.y")
@@ -561,6 +573,7 @@ sync_device_users <- function(pars = NULL, seed = 123) {
     users_for_sync <-
       devices_with_passwords |>
       dplyr::select(
+        "Country",
         "IMEI",
         "Boat",
         "Community",
