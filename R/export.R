@@ -136,20 +136,6 @@ export_geos <- function() {
       ),
     )
 
-  # temporary fix for moz data
-  moz_series <-
-    series |>
-    dplyr::filter(.data$country == "mozambique") |>
-    dplyr::mutate(region = "cabo delgado") |>
-    dplyr::group_by(.data$country, .data$region, .data$date) |>
-    dplyr::summarise(dplyr::across(dplyr::everything(), mean, na.rm = TRUE)) |>
-    dplyr::ungroup()
-
-  series <-
-    series |>
-    dplyr::filter(country != "mozambique") |>
-    dplyr::bind_rows(moz_series)
-
   # Step 6: Push combined geospatial data to MongoDB with 2dsphere indexing
   logger::log_info("Pushing combined geospatial data to MongoDB...")
   mdb_collection_push(
