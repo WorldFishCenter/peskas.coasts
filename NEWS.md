@@ -1,3 +1,8 @@
+# coasts 1.1.0
+
+* **NEW** - Integrate (Beta) Cabo Delgado (Mozambique) estimates
+* **NEW** - Ddeveloping code to integrate catch events records from tracks-app
+
 # coasts 1.0.0
 
 ## Major New Features

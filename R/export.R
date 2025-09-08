@@ -59,7 +59,12 @@ export_geos <- function() {
 
   # Step 1: Download and read geospatial files from cloud storage
   maps <-
-    c("KE_regions", "ZAN_regions") |>
+    c(
+      "KE_regions",
+      "ZAN_regions",
+      #"CO_regions",
+      "MOZ_regions"
+    ) |>
     purrr::set_names() |>
     purrr::map(
       ~ cloud_object_name(
@@ -84,7 +89,11 @@ export_geos <- function() {
 
   # Step 2: Download and read time series data files from cloud storage
   series <-
-    c("kenya_monthly_summaries_map", "zanzibar_monthly_summaries_map") |>
+    c(
+      "kenya_monthly_summaries_map",
+      "zanzibar_monthly_summaries_map",
+      "mozambique_monthly_summaries_map"
+    ) |>
     purrr::set_names() |>
     purrr::map(
       ~ cloud_object_name(
@@ -109,17 +118,37 @@ export_geos <- function() {
     dplyr::mutate(
       mean_rpue = dplyr::case_when(
         country == "zanzibar" ~ .data$mean_rpue * 0.00037,
-        country == "kenya" ~ .data$mean_rpue * 0.0077
+        country == "kenya" ~ .data$mean_rpue * 0.0077,
+        country == "mozambique" ~ .data$mean_rpue * 0.016,
+        TRUE ~ .data$mean_rpue
       ),
       mean_rpua = dplyr::case_when(
         country == "zanzibar" ~ .data$mean_rpua * 0.00037,
-        country == "kenya" ~ .data$mean_rpua * 0.0077
+        country == "kenya" ~ .data$mean_rpua * 0.0077,
+        country == "mozambique" ~ .data$mean_rpue * 0.016,
+        TRUE ~ .data$mean_rpue
       ),
       mean_price_kg = dplyr::case_when(
         country == "zanzibar" ~ .data$mean_price_kg * 0.00037,
-        country == "kenya" ~ .data$mean_price_kg * 0.0077
-      )
+        country == "kenya" ~ .data$mean_price_kg * 0.0077,
+        country == "mozambique" ~ .data$mean_price_kg * 0.016,
+        TRUE ~ .data$mean_price_kg
+      ),
     )
+
+  # temporary fix for moz data
+  moz_series <-
+    series |>
+    dplyr::filter(.data$country == "mozambique") |>
+    dplyr::mutate(region = "cabo delgado") |>
+    dplyr::group_by(.data$country, .data$region, .data$date) |>
+    dplyr::summarise(dplyr::across(dplyr::everything(), mean, na.rm = TRUE)) |>
+    dplyr::ungroup()
+
+  series <-
+    series |>
+    dplyr::filter(country != "mozambique") |>
+    dplyr::bind_rows(moz_series)
 
   # Step 6: Push combined geospatial data to MongoDB with 2dsphere indexing
   logger::log_info("Pushing combined geospatial data to MongoDB...")

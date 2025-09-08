@@ -603,6 +603,7 @@ sync_device_users <- function(pars = NULL, seed = 123) {
     devices_with_passwords |>
     dplyr::select(
       "IMEI",
+      "Country",
       "Boat",
       "captain",
       "vessel_type",

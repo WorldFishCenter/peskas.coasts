@@ -1,7 +1,7 @@
 Package: coasts
 Type: Package
 Title: Coastal Fisheries Data Pipeline for Western Indian Ocean
-Version: 1.0.0
+Version: 1.1.0
 Author: Lorenzo Longobardi
 Maintainer: Lorenzo Longobardi <l.longobardi@cgiar.org>
 Description: Provides a comprehensive data pipeline for processing and analyzing 

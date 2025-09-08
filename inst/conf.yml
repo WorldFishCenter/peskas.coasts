@@ -31,6 +31,7 @@ default:
         database_name: portal-dev
         collection:
           users: users
+          catch_events: catch-events
   pds_storage:
     google:
       key: gcs

@@ -24,6 +24,7 @@ auth/*
 *.tsv
 *.patch
 *.parquet
+*.geojson
 /.quarto/
 docs
 
