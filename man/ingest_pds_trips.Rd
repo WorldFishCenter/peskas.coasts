@@ -12,17 +12,19 @@ See `logger::log_levels` for available options.}
 }
 \value{
 None (invisible). The function performs its operations for side effects:
-  - Creates a parquet file locally with trip data
+  - Creates a versioned parquet file locally with filtered trip data
   - Uploads file to configured cloud storage
   - Generates logs of the process
 }
 \description{
 This function handles the automated ingestion of GPS boat trip data from Pelagic Data Systems (PDS).
 It performs the following operations:
-1. Retrieves device metadata from the configured source
-2. Downloads trip data from PDS API using device IMEIs
-3. Converts the data to parquet format
-4. Uploads the processed file to configured cloud storage
+1. Retrieves device metadata from configured cloud storage
+2. Filters devices by last seen date (>= 2023-01-01)
+3. Downloads all trip data from PDS API (2023-01-01 to present)
+4. Filters trips to match active device IMEIs
+5. Converts the data to parquet format
+6. Uploads the processed file to configured cloud storage
 }
 \details{
 The function requires specific configuration in the `conf.yml` file with the following structure:
@@ -33,8 +35,11 @@ pds:
   secret: "your_pds_secret"             # PDS API secret
   pds_trips:
     file_prefix: "pds_trips"            # Prefix for output files
+metadata:
+  airtable:
+    name: "metadata_file_prefix"        # Prefix for metadata file in cloud storage
 storage:
-  google:                               # Storage provider name
+  google:                               # Storage provider configuration
     key: "google"                       # Storage provider identifier
     options:
       project: "project-id"             # Cloud project ID
@@ -42,11 +47,19 @@ storage:
       service_account_key: "path/to/key.json"
 ```
 
-The function processes trips sequentially:
-- Retrieves device metadata using `get_metadata()`
-- Downloads trip data using the `get_trips()` function
-- Converts the data to parquet format
-- Uploads the resulting file to configured storage provider
+The function processes trips as follows:
+- Downloads device metadata RDS file from cloud storage
+- Converts device `last_seen` timestamps from Unix milliseconds to Date format
+- Filters to devices active since 2023-01-01
+- Retrieves all trips from PDS API (with `deviceInfo` and `withLastSeen` options enabled)
+- Filters trips to match active device IMEIs
+- Saves as compressed parquet file (LZ4 compression, level 12)
+- Uploads to configured cloud storage
+}
+\note{
+The PDS API does not support IMEI filtering in the request, so all trips are
+retrieved and filtered locally. This ensures reliable data retrieval but may
+result in downloading more data than needed.
 }
 \examples{
 \dontrun{
@@ -60,8 +73,9 @@ ingest_pds_trips(logger::INFO)
 }
 \seealso{
 * [get_trips()] for details on the PDS trip data retrieval process
-* [get_metadata()] for details on the device metadata retrieval
-* [upload_cloud_file()] for details on the cloud upload process
+* [cloud_object_name()] for generating cloud storage object names
+* [download_cloud_file()] for downloading files from cloud storage
+* [upload_cloud_file()] for uploading files to cloud storage
 }
 \keyword{ingestion}
 \keyword{workflow}

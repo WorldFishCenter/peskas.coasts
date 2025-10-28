@@ -429,7 +429,7 @@ device_sync <- function(
 #' the combined dataset to MongoDB. This function maintains user credentials for
 #' devices in Africa timezones with complete synchronization between systems.
 #'
-#' @param pars List. Configuration parameters (defaults to read_config()).
+#' @param conf List. Configuration parameters (defaults to read_config()).
 #'   Must contain airtable (token, frame and tracks_app base_ids) and storage
 #'   (mongodb tracks_app connection_string, database_name, collection) configuration.
 #' @param seed Numeric. Random seed for password generation (default: 123).
@@ -476,9 +476,9 @@ device_sync <- function(
 #' }
 #'
 #' @export
-sync_device_users <- function(pars = NULL, seed = 123) {
-  if (is.null(pars)) {
-    pars <- read_config()
+sync_device_users <- function(conf = NULL, seed = 123) {
+  if (is.null(conf)) {
+    conf <- read_config()
   }
 
   logger::log_info("Starting device users sync to MongoDB")
@@ -490,18 +490,18 @@ sync_device_users <- function(pars = NULL, seed = 123) {
 
   # Get users data from tracks_app base
   users <- airtable_to_df(
-    base_id = pars$airtable$tracks_app$base_id,
+    base_id = conf$airtable$tracks_app$base_id,
     table_name = "users",
-    token = pars$airtable$token
+    token = conf$airtable$token
   )
 
   logger::log_info("Retrieved {nrow(users)} user records from Airtable")
 
   # Get devices data from frame base
   devices <- airtable_to_df(
-    base_id = pars$airtable$frame$base_id,
+    base_id = conf$airtable$frame$base_id,
     table_name = "pds_devices",
-    token = pars$airtable$token
+    token = conf$airtable$token
   )
 
   logger::log_info("Retrieved {nrow(devices)} device records from Airtable")
@@ -589,9 +589,9 @@ sync_device_users <- function(pars = NULL, seed = 123) {
     # Use device_sync function to handle both updates and creates
     airtable_sync_result <- device_sync(
       boats_df = users_for_sync,
-      base_id = pars$airtable$tracks_app$base_id,
+      base_id = conf$airtable$tracks_app$base_id,
       table_name = "users",
-      token = pars$airtable$token,
+      token = conf$airtable$token,
       key_field = "IMEI"
     )
 
@@ -615,9 +615,9 @@ sync_device_users <- function(pars = NULL, seed = 123) {
   # Push to MongoDB
   push_result <- mdb_collection_push(
     data = devices_with_passwords,
-    connection_string = pars$storage$mongodb$tracks_app$connection_string,
-    collection_name = pars$storage$mongodb$tracks_app$collection$users,
-    db_name = pars$storage$mongodb$tracks_app$database_name,
+    connection_string = conf$storage$mongodb$tracks_app$connection_string,
+    collection_name = conf$storage$mongodb$tracks_app$collection$users,
+    db_name = conf$storage$mongodb$tracks_app$database_name,
     geo = FALSE # No geospatial indexing needed
   )
 
@@ -631,4 +631,92 @@ sync_device_users <- function(pars = NULL, seed = 123) {
     airtable_sync_result = airtable_sync_result,
     mongodb_result = push_result
   ))
+}
+
+#' Fetch and Filter Asset Data from Airtable
+#'
+#' @description
+#' Retrieves data from a specified Airtable table
+#'
+#' @param table_name Character. Name of the Airtable table to fetch.
+#' @param select_cols Character vector. Column names to select from the table.
+#' @param conf Configuration object from read_config().
+#'
+#' @return A filtered and selected data frame from Airtable
+#'
+#' @keywords preprocessing helper
+#' @export
+fetch_asset <- function(
+  table_name = NULL,
+  select_cols = NULL,
+  conf = NULL
+) {
+  airtable_to_df(
+    base_id = conf$airtable$frame$base_id,
+    table_name = table_name,
+    token = conf$airtable$token
+  ) |>
+    janitor::clean_names() |>
+    dplyr::select(dplyr::all_of(select_cols))
+}
+
+#' Fetch Multiple Asset Tables from Airtable
+#'
+#' @description
+#' Fetches taxa, gear, vessels, and landing sites data from Airtable.
+#' Returns distinct records for each table.
+#'
+#' @param conf Configuration object from read_config().
+#'
+#' @return A named list containing four data frames:
+#'   \itemize{
+#'     \item \code{taxa}: Contains survey_label, alpha3_code, and scientific_name columns
+#'     \item \code{gear}: Contains survey_label and standard_name columns
+#'     \item \code{vessels}: Contains survey_label and standard_name columns
+#'     \item \code{sites}: Contains site and site_code columns
+#'   }
+#'
+#' @details
+#' Each table is fetched separately using `fetch_asset()` and filtered to return
+#' only distinct rows to avoid duplicates in the mapping tables.
+#'
+#' @keywords preprocessing helper
+#' @export
+fetch_assets <- function(conf = NULL) {
+  assets_list <-
+    list(
+      taxa = fetch_asset(
+        table_name = "taxa",
+        select_cols = c(
+          "form_id",
+          "survey_label",
+          "alpha3_code",
+          "scientific_name",
+          "english_name"
+        ),
+        conf = conf
+      ),
+      gear = fetch_asset(
+        table_name = "gears",
+        select_cols = c("form_id", "survey_label", "standard_name"),
+        conf = conf
+      ),
+      vessels = fetch_asset(
+        table_name = "vessels",
+        select_cols = c("form_id", "survey_label", "standard_name"),
+        conf = conf
+      ),
+      sites = fetch_asset(
+        table_name = "landing_sites",
+        select_cols = c("form_id", "site", "site_code"),
+        conf = conf
+      ),
+      sites = fetch_asset(
+        table_name = "forms",
+        select_cols = c("form_id", "form_name", "site_code"),
+        conf = conf
+      )
+    )
+
+  purrr::map(assets_list, ~ dplyr::distinct(.x))
 }

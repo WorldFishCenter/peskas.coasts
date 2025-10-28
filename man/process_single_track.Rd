@@ -4,12 +4,12 @@
 \alias{process_single_track}
 \title{Process Single PDS Track}
 \usage{
-process_single_track(trip_id, pars)
+process_single_track(trip_id, conf)
 }
 \arguments{
 \item{trip_id}{Character. The ID of the trip to process.}
 
-\item{pars}{List. Configuration parameters.}
+\item{conf}{List. Configuration parameters.}
 }
 \value{
 List with processing status and details.

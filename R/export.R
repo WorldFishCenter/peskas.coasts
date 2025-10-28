@@ -54,7 +54,7 @@
 #' @export
 export_geos <- function() {
   # Load configuration settings
-  pars <- read_config()
+  conf <- read_config()
   logger::log_info("Loading geospatial data from cloud storage...")
 
   # Step 1: Download and read geospatial files from cloud storage
@@ -69,8 +69,8 @@ export_geos <- function() {
     purrr::map(
       ~ cloud_object_name(
         prefix = .x,
-        provider = pars$storage$google$key,
-        options = pars$storage$google$options,
+        provider = conf$storage$google$key,
+        options = conf$storage$google$options,
         extension = "geojson",
         version = "latest"
       )
@@ -78,8 +78,8 @@ export_geos <- function() {
     purrr::walk(
       ~ download_cloud_file(
         name = .x,
-        provider = pars$storage$google$key,
-        options = pars$storage$google$options
+        provider = conf$storage$google$key,
+        options = conf$storage$google$options
       )
     ) |>
     purrr::map(
@@ -98,8 +98,8 @@ export_geos <- function() {
     purrr::map(
       ~ cloud_object_name(
         prefix = .x,
-        provider = pars$storage$google$key,
-        options = pars$storage$google$options,
+        provider = conf$storage$google$key,
+        options = conf$storage$google$options,
         extension = "parquet",
         version = "latest"
       )
@@ -107,8 +107,8 @@ export_geos <- function() {
     purrr::walk(
       ~ download_cloud_file(
         name = .x,
-        provider = pars$storage$google$key,
-        options = pars$storage$google$options
+        provider = conf$storage$google$key,
+        options = conf$storage$google$options
       )
     ) |>
     purrr::map(
@@ -140,18 +140,18 @@ export_geos <- function() {
   logger::log_info("Pushing combined geospatial data to MongoDB...")
   mdb_collection_push(
     data = maps,
-    connection_string = pars$storage$mongodb$coasts_portal$connection_string,
-    collection_name = pars$storage$mongodb$coasts_portal$collection$wio_map,
-    db_name = pars$storage$mongodb$coasts_portal$database_name,
+    connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+    collection_name = conf$storage$mongodb$coasts_portal$collection$wio_map,
+    db_name = conf$storage$mongodb$coasts_portal$database_name,
     geo = TRUE # Create 2dsphere index on geometry field
   )
 
   logger::log_info("Pushing regional time series metrics to MongoDB...")
   mdb_collection_push(
     data = series,
-    connection_string = pars$storage$mongodb$coasts_portal$connection_string,
-    collection_name = pars$storage$mongodb$coasts_portal$collection$regional_metrics,
-    db_name = pars$storage$mongodb$coasts_portal$database_name,
+    connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+    collection_name = conf$storage$mongodb$coasts_portal$collection$regional_metrics,
+    db_name = conf$storage$mongodb$coasts_portal$database_name,
     geo = FALSE # No geospatial indexing needed for time series
   )
 
@@ -160,17 +160,17 @@ export_geos <- function() {
   grid_summaries <-
     download_parquet_from_cloud(
       prefix = "pds-tracks-grid_summaries",
-      provider = pars$storage$google$key,
-      options = pars$storage$google$options
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options
     )
 
   # Step 8: Push grid summaries to MongoDB (without geospatial indexing)
   logger::log_info("Pushing PDS track grid summaries to MongoDB...")
   mdb_collection_push(
     data = grid_summaries,
-    connection_string = pars$storage$mongodb$coasts_portal$connection_string,
-    collection_name = pars$storage$mongodb$coasts_portal$collection$pds_grids,
-    db_name = pars$storage$mongodb$coasts_portal$database_name,
+    connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+    collection_name = conf$storage$mongodb$coasts_portal$collection$pds_grids,
+    db_name = conf$storage$mongodb$coasts_portal$database_name,
     geo = FALSE # No geospatial indexing needed
   )
 

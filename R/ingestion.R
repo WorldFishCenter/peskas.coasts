@@ -1,12 +1,123 @@
+#' Ingest Fisheries Asset Metadata
+#'
+#' @description
+#' This function handles the automated ingestion of fisheries asset metadata from Airtable.
+#' It performs the following operations:
+#' 1. Retrieves metadata for taxa, gear types, vessel types, landing sites, and survey forms
+#' 2. Removes duplicate records from each asset type
+#' 3. Packages all assets into a versioned RDS file
+#' 4. Uploads the processed file to configured cloud storage
+#'
+#' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
+#'   See `logger::log_levels` for available options.
+#'
+#'
+#' The function retrieves the following asset types from Airtable:
+#' - **Taxa**: Species information including scientific names, alpha3 codes, and English names
+#' - **Gear**: Fishing gear types with standardized names
+#' - **Vessels**: Vessel types with standardized classifications
+#' - **Landing Sites**: Site information with codes and names
+#' - **Forms**: Survey form metadata with form IDs and names
+#'
+#' All assets are deduplicated and stored together in a single RDS file with
+#' a versioned filename (includes timestamp and git SHA).
+#'
+#' @return None (invisible). The function performs its operations for side effects:
+#'   - Creates a local RDS file containing a list of all asset data frames
+#'   - Uploads file to configured cloud storage
+#'   - Generates logs of the process
+#'
+#' @examples
+#' \dontrun{
+#' # Ingest all fisheries assets from Airtable
+#' ingest_assets()
+#' }
+#'
+#' @seealso
+#' * [fetch_asset()] for details on how individual assets are retrieved
+#' * [add_version()] for details on the file versioning system
+#' * [upload_cloud_file()] for details on the cloud upload process
+#'
+#' @keywords workflow ingestion metadata
+#' @export
+ingest_assets <- function(log_threshold = logger::DEBUG) {
+  logger::log_threshold(log_threshold)
+
+  conf <- read_config()
+
+  assets_list <-
+    list(
+      taxa = fetch_asset(
+        table_name = "taxa",
+        select_cols = c(
+          "form_id",
+          "survey_label",
+          "alpha3_code",
+          "scientific_name",
+          "english_name"
+        ),
+        conf = conf
+      ),
+      gear = fetch_asset(
+        table_name = "gears",
+        select_cols = c("form_id", "survey_label", "standard_name"),
+        conf = conf
+      ),
+      vessels = fetch_asset(
+        table_name = "vessels",
+        select_cols = c("form_id", "survey_label", "standard_name"),
+        conf = conf
+      ),
+      sites = fetch_asset(
+        table_name = "landing_sites",
+        select_cols = c("form_id", "site", "site_code"),
+        conf = conf
+      ),
+      forms = fetch_asset(
+        table_name = "forms",
+        select_cols = c("form_id", "form_name"),
+        conf = conf
+      ),
+      devices = fetch_asset(
+        table_name = "pds_devices",
+        select_cols = c(
+          "customer_name",
+          "imei",
+          "boat_name",
+          "registration_number",
+          "last_seen",
+          "region",
+          "community"
+        ),
+        conf = conf
+      )
+    ) |>
+    purrr::map(~ dplyr::distinct(.x))
+
+  asset_filename <-
+    conf$metadata$airtable$name |>
+    add_version(extension = "rds")
+
+  readr::write_rds(x = assets_list, file = asset_filename)
+
+  upload_cloud_file(
+    file = asset_filename,
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
+  )
+}
+
 #' Ingest Pelagic Data Systems (PDS) Trip Data
 #'
 #' @description
 #' This function handles the automated ingestion of GPS boat trip data from Pelagic Data Systems (PDS).
 #' It performs the following operations:
-#' 1. Retrieves device metadata from the configured source
-#' 2. Downloads trip data from PDS API using device IMEIs
-#' 3. Converts the data to parquet format
-#' 4. Uploads the processed file to configured cloud storage
+#' 1. Retrieves device metadata from configured cloud storage
+#' 2. Filters devices by last seen date (>= 2023-01-01)
+#' 3. Downloads all trip data from PDS API (2023-01-01 to present)
+#' 4. Filters trips to match active device IMEIs
+#' 5. Converts the data to parquet format
+#' 6. Uploads the processed file to configured cloud storage
 #'
 #' @details
 #' The function requires specific configuration in the `conf.yml` file with the following structure:
@@ -17,8 +128,11 @@
 #'   secret: "your_pds_secret"             # PDS API secret
 #'   pds_trips:
 #'     file_prefix: "pds_trips"            # Prefix for output files
+#' metadata:
+#'   airtable:
+#'     name: "metadata_file_prefix"        # Prefix for metadata file in cloud storage
 #' storage:
-#'   google:                               # Storage provider name
+#'   google:                               # Storage provider configuration
 #'     key: "google"                       # Storage provider identifier
 #'     options:
 #'       project: "project-id"             # Cloud project ID
@@ -26,19 +140,27 @@
 #'       service_account_key: "path/to/key.json"
 #' ```
 #'
-#' The function processes trips sequentially:
-#' - Retrieves device metadata using `get_metadata()`
-#' - Downloads trip data using the `get_trips()` function
-#' - Converts the data to parquet format
-#' - Uploads the resulting file to configured storage provider
+#' The function processes trips as follows:
+#' - Downloads device metadata RDS file from cloud storage
+#' - Converts device `last_seen` timestamps from Unix milliseconds to Date format
+#' - Filters to devices active since 2023-01-01
+#' - Retrieves all trips from PDS API (with `deviceInfo` and `withLastSeen` options enabled)
+#' - Filters trips to match active device IMEIs
+#' - Saves as compressed parquet file (LZ4 compression, level 12)
+#' - Uploads to configured cloud storage
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #'   See `logger::log_levels` for available options.
 #'
 #' @return None (invisible). The function performs its operations for side effects:
-#'   - Creates a parquet file locally with trip data
+#'   - Creates a versioned parquet file locally with filtered trip data
 #'   - Uploads file to configured cloud storage
 #'   - Generates logs of the process
+#'
+#' @note
+#' The PDS API does not support IMEI filtering in the request, so all trips are
+#' retrieved and filtered locally. This ensures reliable data retrieval but may
+#' result in downloading more data than needed.
 #'
 #' @examples
 #' \dontrun{
@@ -51,28 +173,46 @@
 #'
 #' @seealso
 #' * [get_trips()] for details on the PDS trip data retrieval process
-#' * [get_metadata()] for details on the device metadata retrieval
-#' * [upload_cloud_file()] for details on the cloud upload process
+#' * [cloud_object_name()] for generating cloud storage object names
+#' * [download_cloud_file()] for downloading files from cloud storage
+#' * [upload_cloud_file()] for uploading files to cloud storage
 #'
 #' @keywords workflow ingestion
 #' @export
 ingest_pds_trips <- function(log_threshold = logger::DEBUG) {
   logger::log_threshold(log_threshold)
-  pars <- read_config()
+  conf <- read_config()
 
-  devices_table <-
-    get_metadata(table = "devices")$devices |>
-    dplyr::filter(.data$state == "Installed")
+  assets <- conf$metadata$airtable$name |>
+    cloud_object_name(
+      provider = conf$storage$google$key,
+      extension = "rds",
+      options = conf$storage$google$options
+    ) |>
+    download_cloud_file(
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options
+    ) |>
+    readr::read_rds()
+
+  assets$devices <- assets$devices |>
+    dplyr::mutate(
+      last_seen = as.Date(as.POSIXct(last_seen / 1000, origin = "1970-01-01"))
+    ) |>
+    dplyr::filter(last_seen >= "2023-01-01")
 
   boats_trips <- get_trips(
-    token = pars$pds$token,
-    secret = pars$pds$secret,
+    token = conf$pds$token,
+    secret = conf$pds$secret,
     dateFrom = "2023-01-01",
     dateTo = Sys.Date(),
-    imeis = unique(devices_table$IMEI)
-  )
+    #imeis = unique(assets$devices$imei),
+    deviceInfo = TRUE,
+    withLastSeen = TRUE
+  ) |>
+    dplyr::filter(.data$IMEI %in% as.numeric(unique(assets$devices$imei)))
 
-  filename <- pars$pds$pds_trips$file_prefix %>%
+  filename <- conf$pds$pds_trips$file_prefix %>%
     add_version(extension = "parquet")
 
   arrow::write_parquet(
@@ -85,8 +225,8 @@ ingest_pds_trips <- function(log_threshold = logger::DEBUG) {
   logger::log_info("Uploading {filename} to cloud storage")
   upload_cloud_file(
     file = filename,
-    provider = pars$storage$google$key,
-    options = pars$storage$google$options
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
   )
 }
 
@@ -109,23 +249,23 @@ ingest_pds_tracks <- function(
   batch_size = NULL
 ) {
   logger::log_threshold(log_threshold)
-  pars <- read_config()
+  conf <- read_config()
 
   # Get trips file from cloud storage
   logger::log_info("Getting trips file from cloud storage...")
   pds_trips_parquet <- cloud_object_name(
-    prefix = pars$pds$pds_trips$file_prefix,
-    provider = pars$storage$google$key,
+    prefix = conf$pds$pds_trips$file_prefix,
+    provider = conf$storage$google$key,
     extension = "parquet",
-    version = pars$pds$pds_trips$version,
-    options = pars$storage$google$options
+    version = conf$pds$pds_trips$version,
+    options = conf$storage$google$options
   )
 
   logger::log_info("Downloading {pds_trips_parquet}")
   download_cloud_file(
     name = pds_trips_parquet,
-    provider = pars$storage$google$key,
-    options = pars$storage$google$options
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
   )
 
   # Read trip IDs
@@ -141,8 +281,8 @@ ingest_pds_tracks <- function(
   logger::log_info("Checking existing tracks in cloud storage...")
   existing_tracks <-
     googleCloudStorageR::gcs_list_objects(
-      bucket = pars$pds_storage$google$options$bucket,
-      prefix = pars$pds$pds_tracks$file_prefix
+      bucket = conf$pds_storage$google$options$bucket,
+      prefix = conf$pds$pds_tracks$file_prefix
     )$name
 
   # Get new trip IDs
@@ -176,14 +316,14 @@ ingest_pds_tracks <- function(
           # Create filename for this track
           track_filename <- sprintf(
             "%s_%s.parquet",
-            pars$pds$pds_tracks$file_prefix,
+            conf$pds$pds_tracks$file_prefix,
             trip_id
           )
 
           # Get track data
           track_data <- get_trip_points(
-            token = pars$pds$token,
-            secret = pars$pds$secret,
+            token = conf$pds$token,
+            secret = conf$pds$secret,
             id = as.character(trip_id),
             deviceInfo = TRUE
           )
@@ -200,8 +340,8 @@ ingest_pds_tracks <- function(
           logger::log_info("Uploading track for trip {trip_id}")
           upload_cloud_file(
             file = track_filename,
-            provider = pars$pds_storage$google$key,
-            options = pars$pds_storage$google$options
+            provider = conf$pds_storage$google$key,
+            options = conf$pds_storage$google$options
           )
 
           # Clean up local file
@@ -267,23 +407,23 @@ extract_trip_ids_from_filenames <- function(filenames) {
 #' Process Single PDS Track
 #'
 #' @param trip_id Character. The ID of the trip to process.
-#' @param pars List. Configuration parameters.
+#' @param conf List. Configuration parameters.
 #' @return List with processing status and details.
 #' @keywords internal
-process_single_track <- function(trip_id, pars) {
+process_single_track <- function(trip_id, conf) {
   tryCatch(
     {
       # Create filename for this track
       track_filename <- sprintf(
         "%s_%s.parquet",
-        pars$pds$pds_tracks$file_prefix,
+        conf$pds$pds_tracks$file_prefix,
         trip_id
       )
 
       # Get track data
       track_data <- get_trip_points(
-        token = pars$pds$token,
-        secret = pars$pds$secret,
+        token = conf$pds$token,
+        secret = conf$pds$secret,
         id = trip_id,
         deviceInfo = TRUE
       )
@@ -300,8 +440,8 @@ process_single_track <- function(trip_id, pars) {
       logger::log_info("Uploading track for trip {trip_id}")
       upload_cloud_file(
         file = track_filename,
-        provider = pars$pds_storage$google$key,
-        options = pars$pds_storage$google$options
+        provider = conf$pds_storage$google$key,
+        options = conf$pds_storage$google$options
       )
 
       # Clean up local file
@@ -792,7 +932,7 @@ get_pelagic_devices <- function(
 #' to Airtable. This function handles the complete workflow for maintaining
 #' up-to-date device information.
 #'
-#' @param pars List. Configuration parameters (defaults to read_config()).
+#' @param conf List. Configuration parameters (defaults to read_config()).
 #'   Must contain pds (username, password, customer_id) and airtable
 #'   (token, frame base_id) configuration.
 #'
@@ -821,17 +961,17 @@ get_pelagic_devices <- function(
 #' }
 #'
 #' @export
-ingest_pelagic_boats <- function(pars = NULL) {
-  if (is.null(pars)) {
-    pars <- read_config()
+ingest_pelagic_boats <- function(conf = NULL) {
+  if (is.null(conf)) {
+    conf <- read_config()
   }
 
   logger::log_info("Starting Pelagic boats data ingestion")
 
   # Authenticate with PDS
   auth_response <- pelagic_auth(
-    username = pars$pds$username,
-    password = pars$pds$password
+    username = conf$pds$username,
+    password = conf$pds$password
   )
 
   logger::log_info("Retrieved PDS authentication token")
@@ -839,7 +979,7 @@ ingest_pelagic_boats <- function(pars = NULL) {
   # Get boats data from PDS API
   boats <- get_pelagic_boats(
     token = auth_response$token,
-    customers = pars$pds$customer_id,
+    customers = conf$pds$customer_id,
     columns = c(
       "device.imei",
       "active",
@@ -931,9 +1071,9 @@ ingest_pelagic_boats <- function(pars = NULL) {
 
   # Get countries data from Airtable
   countries_df <- airtable_to_df(
-    base_id = pars$airtable$frame$base_id,
+    base_id = conf$airtable$frame$base_id,
     table_name = "Countries",
-    token = pars$airtable$token
+    token = conf$airtable$token
   )
 
   # Join boats with country IDs
@@ -967,9 +1107,9 @@ ingest_pelagic_boats <- function(pars = NULL) {
   # Sync to Airtable
   sync_result <- device_sync(
     boats_df = boats_with_country_ids,
-    base_id = pars$airtable$frame$base_id,
+    base_id = conf$airtable$frame$base_id,
     table_name = "pds_devices",
-    token = pars$airtable$token
+    token = conf$airtable$token
   )
 
   logger::log_info("Successfully completed Pelagic boats ingestion and sync")

@@ -63,38 +63,38 @@ pak::pak("WorldFishCenter/peskas.coasts")
 
 ## Configuration
 
-The package requires a `conf.yml` configuration file with the following
-structure:
+### Local Development Setup
 
-``` yaml
-pds:
-  token: "your_pds_token"
-  secret: "your_pds_secret"
-  pds_trips:
-    file_prefix: "pds_trips"
-    version: "latest"
-  pds_tracks:
-    file_prefix: "pds-tracks"
-    version: "latest"
+For local development, the package uses environment variables managed
+through a `.env` file:
 
-storage:
-  google:
-    key: "google"
-    options:
-      project: "your-project-id"
-      bucket: "your-bucket-name"
-      service_account_key: "path/to/service-account.json"
-  mongodb:
-    connection_string: "mongodb://connection-string"
-    database_name: "your_database"
-    collection:
-      wio_map: "regional_boundaries"
-      regional_metrics: "time_series_data"
-      pds_grids: "fishing_grids"
+1.  Copy the `.env.example` file to `.env`:
 
-metadata:
-  google_sheet_id: "your-google-sheet-id"
-```
+    ``` bash
+    cp .env.example .env
+    ```
+
+2.  Fill in your credentials in the `.env` file. Required environment
+    variables include:
+
+    - `PDS_TOKEN`, `PDS_SECRET`, `PDS_USERNAME`, `PDS_PASSWORD`,
+      `PDS_CUSTOMER_ID`: Pelagic Data Systems API credentials
+    - `GCP_SA_KEY`: Google Cloud service account key (JSON format)
+    - `MONGODB_CONNECTION_STRING_COASTS`,
+      `MONGODB_CONNECTION_STRING_TRACKS`: MongoDB connection strings
+    - `GOOGLE_SHEET_ID`: Google Sheets ID for metadata
+    - `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID_FRAME`,
+      `AIRTABLE_BASE_ID_TRACKS_APP`: Airtable credentials
+
+The package automatically loads these environment variables when running
+locally.
+
+### Production Deployment
+
+For production environments, set these environment variables directly in
+your deployment configuration (e.g., GitHub Secrets, Docker environment,
+etc.). The package will use them automatically without requiring a
+`.env` file.
 
 ## Main Functions
 

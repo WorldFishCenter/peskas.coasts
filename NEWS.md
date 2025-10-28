@@ -1,3 +1,70 @@
+# coasts 1.2.0
+
+## Breaking Changes
+
+### Configuration System Migration
+* **BREAKING CHANGE** - Migrated from auth folder to `.env`-based credentials management
+  - Removed `local` configuration profile from `inst/conf.yml`
+  - All environments now use environment variables loaded via `.env` file in local development
+  - Added `dotenv` package dependency for automatic `.env` file loading
+  - Created `.env.example` template with all required environment variables
+  - Updated `.gitignore` to properly handle `.env` files while tracking `.env.example`
+  - **Migration Guide**: Copy `.env.example` to `.env` and fill in credentials (see updated README)
+
+## New Features
+
+### Asset Management
+* **ENHANCED** `ingest_assets()` - Comprehensive fisheries asset metadata ingestion
+  - Added `log_threshold` parameter for configurable logging
+  - Now includes PDS device metadata from Airtable (`pds_devices` table)
+  - Retrieves 6 asset types: taxa, gear, vessels, landing sites, forms, and devices
+  - Changed output format from parquet to RDS for better R object serialization
+  - Added complete roxygen documentation following package standards
+
+### Data Ingestion Improvements
+* **ENHANCED** `ingest_pds_trips()` - Improved trip data ingestion workflow
+  - Now downloads device metadata from cloud storage instead of Google Sheets
+  - Filters devices by `last_seen` date (>= 2023-01-01) for active devices only
+  - Enhanced PDS API calls with `deviceInfo` and `withLastSeen` parameters
+  - Client-side IMEI filtering for reliable data retrieval
+  - Updated documentation with detailed configuration examples and notes
+
+## Documentation
+
+### Package Documentation
+* **ENHANCED** README with `.env`-based configuration instructions
+  - Added step-by-step local development setup guide
+  - Documented all required environment variables with descriptions
+  - Separated local and production deployment instructions
+* **UPDATED** CLAUDE.md with new configuration system details
+  - Revised Configuration System section to explain `.env` approach
+  - Updated Configuration Requirements with clear setup steps
+  - Added `dotenv` to Key Dependencies section
+* **NEW** `.env.example` - Template file for local development credentials
+  - Includes all 12 required environment variables with helpful comments
+  - Proper formatting examples for complex values (JSON keys, connection strings)
+
+### Function Documentation
+* **ENHANCED** `ingest_assets()` with comprehensive roxygen documentation
+  - Detailed @description with step-by-step operations
+  - Complete @details section with YAML configuration structure
+  - Asset type descriptions (Taxa, Gear, Vessels, Landing Sites, Forms, Devices)
+  - Added @examples, @seealso, and @keywords tags
+
+## Technical Improvements
+
+### Configuration Loading
+* **ENHANCED** `read_config()` function in `R/utils.R`
+  - Automatic detection and loading of `.env` file if present
+  - Seamless integration with existing `config::get()` workflow
+  - Informative logging when `.env` file is loaded
+
+### Development Experience
+* Simplified credentials management for local development
+* Consistent approach with other peskas packages (e.g., peskas.kenya.data.pipeline)
+* Improved security with proper `.gitignore` configuration
+* Easier onboarding for new developers with template file
+
 # coasts 1.1.0
 
 * **NEW** - Integrate (Beta) Cabo Delgado (Mozambique) estimates

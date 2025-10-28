@@ -69,9 +69,12 @@ reference:
     contents:
     - ingest_pds_trips
     - ingest_pds_tracks
+    - ingest_assets
     - get_trips
     - get_trip_points
     - get_metadata
+    - fetch_asset
+    - fetch_assets
     - ingest_pelagic_boats
     - get_pelagic_boats
     - get_pelagic_devices

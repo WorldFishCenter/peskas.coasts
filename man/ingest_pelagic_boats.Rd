@@ -4,10 +4,10 @@
 \alias{ingest_pelagic_boats}
 \title{Ingest Pelagic Boats Data and Sync to Airtable}
 \usage{
-ingest_pelagic_boats(pars = NULL)
+ingest_pelagic_boats(conf = NULL)
 }
 \arguments{
-\item{pars}{List. Configuration parameters (defaults to read_config()).
+\item{conf}{List. Configuration parameters (defaults to read_config()).
 Must contain pds (username, password, customer_id) and airtable
 (token, frame base_id) configuration.}
 }

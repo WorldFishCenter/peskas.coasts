@@ -10,7 +10,7 @@ default:
       version: latest
     pds_tracks:
       file_prefix: pds-tracks
-      version: latest
+      version: latest      
   storage:
     google:
       key: gcs
@@ -45,6 +45,8 @@ default:
       sheet_id: !expr Sys.getenv("GOOGLE_SHEET_ID")
       tables:
         - devices
+    airtable:
+      name: assets
   airtable:
     token: !expr Sys.getenv('AIRTABLE_TOKEN')
     frame:
@@ -71,39 +73,3 @@ production:
     google:
       options:
         bucket: pds-peskas-coasts
-
-local:
-  inherits: development
-  pds:
-    token: !expr readLines('auth/pds-token')
-    secret: !expr readLines('auth/pds-secret')
-    username: !expr readLines('auth/pds-username')
-    password: !expr readLines('auth/pds-password')
-    customer_id: !expr readLines('auth/pds-customer-id')
-  storage:
-    google:
-      options:
-        service_account_key: !expr readLines("auth/gcp-sa-peskas_ingestion-key.json")
-    mongodb:
-      coasts_portal:
-        connection_string: !expr readLines("auth/mongodb_connection_string_coasts")
-      tracks_app:
-        connection_string: !expr readLines("auth/mongodb_connection_string_tracks")
-  pds_storage:
-    google:
-      options:
-        service_account_key: !expr readLines("auth/gcp-sa-peskas_ingestion-key.json")
-  metadata:
-    google_sheets:
-      sheet_id: !expr readLines("auth/metadata-sheet-id")
-  airtable:
-    token: !expr readLines("auth/airtable-token")
-    frame:
-      base_id: !expr readLines("auth/airtable-base-id-frame")
-      tables:
-        countries: Countries
-        pds_devices: pds_devices
-    tracks_app:
-      base_id: !expr readLines("auth/airtable-base-id-tracks-app")
-      tables:
-        users: users

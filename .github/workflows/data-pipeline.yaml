@@ -29,6 +29,23 @@ jobs:
           image_name: r-runner-peskas-coasts
           dockerfile: Dockerfile.prod
 
+
+  ingest-static-assets:
+    name: Ingest statics assets
+    needs: build-container
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/peskas.coasts/r-runner-peskas-coasts
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call ingest_assets()
+        run: Rscript -e 'coasts::ingest_assets()'
+
   ingest-pds-trips:
     name: Ingest GPS trips
     needs: build-container

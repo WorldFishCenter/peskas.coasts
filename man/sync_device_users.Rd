@@ -4,10 +4,10 @@
 \alias{sync_device_users}
 \title{Sync Device Users to MongoDB and Update Airtable}
 \usage{
-sync_device_users(pars = NULL, seed = 123)
+sync_device_users(conf = NULL, seed = 123)
 }
 \arguments{
-\item{pars}{List. Configuration parameters (defaults to read_config()).
+\item{conf}{List. Configuration parameters (defaults to read_config()).
 Must contain airtable (token, frame and tracks_app base_ids) and storage
 (mongodb tracks_app connection_string, database_name, collection) configuration.}
 

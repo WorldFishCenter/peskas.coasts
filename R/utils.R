@@ -63,13 +63,19 @@ add_version <- function(filename, extension = "", sha_nchar = 7, sep = "__") {
 read_config <- function() {
   logger::log_info("Loading configuration file...")
 
-  pars <- config::get(
+  # Load .env file if it exists (for local development)
+  if (file.exists(".env")) {
+    logger::log_info("Loading environment variables from .env file")
+    dotenv::load_dot_env(".env")
+  }
+
+  conf <- config::get(
     config = Sys.getenv("R_CONFIG_ACTIVE", "default"),
     file = system.file("conf.yml", package = "coasts")
   )
 
-  logger::log_info("Using configutation: {attr(pars, 'config')}")
-  logger::log_debug("Running with parameters {pars}")
+  logger::log_info("Using configutation: {attr(conf, 'config')}")
+  logger::log_debug("Running with parameters {conf}")
 
-  pars
+  conf
 }

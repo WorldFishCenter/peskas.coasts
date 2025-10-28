@@ -1,10 +1,10 @@
-pars <- read_config()
+conf <- read_config()
 
 catch_events <-
   mdb_collection_pull(
-    connection_string = pars$storage$mongodb$tracks_app$connection_string,
-    collection_name = pars$storage$mongodb$tracks_app$collection$catch_events,
-    db_name = pars$storage$mongodb$tracks_app$database_name
+    connection_string = conf$storage$mongodb$tracks_app$connection_string,
+    collection_name = conf$storage$mongodb$tracks_app$collection$catch_events,
+    db_name = conf$storage$mongodb$tracks_app$database_name
   ) |>
   dplyr::as_tibble() |>
   dplyr::mutate(date = as.Date(date), tripId = as.character(tripId)) |>
@@ -24,8 +24,8 @@ boats_trips <-
   purrr::set_names() |>
   purrr::map(
     get_trips,
-    token = pars$pds$token,
-    secret = pars$pds$secret,
+    token = conf$pds$token,
+    secret = conf$pds$secret,
     dateFrom = "2025-01-01",
     dateTo = Sys.Date()
   ) |>

@@ -15,16 +15,16 @@ preprocess_pds_tracks <- function(
   grid_size = 500
 ) {
   logger::log_threshold(log_threshold)
-  pars <- read_config()
+  conf <- read_config()
 
   # Get already preprocessed tracks
   logger::log_info("Checking existing preprocessed tracks...")
   preprocessed_filename <- cloud_object_name(
-    prefix = paste0(pars$pds$pds_tracks$file_prefix, "-preprocessed"),
-    provider = pars$storage$google$key,
+    prefix = paste0(conf$pds$pds_tracks$file_prefix, "-preprocessed"),
+    provider = conf$storage$google$key,
     extension = "parquet",
-    version = pars$pds$pds_tracks$version,
-    options = pars$storage$google$options
+    version = conf$pds$pds_tracks$version,
+    options = conf$storage$google$options
   )
 
   # Get preprocessed trip IDs if file exists
@@ -32,8 +32,8 @@ preprocess_pds_tracks <- function(
     {
       download_cloud_file(
         name = preprocessed_filename,
-        provider = pars$storage$google$key,
-        options = pars$storage$google$options
+        provider = conf$storage$google$key,
+        options = conf$storage$google$options
       )
       preprocessed_data <- arrow::read_parquet(preprocessed_filename)
       unique(preprocessed_data$Trip)
@@ -47,8 +47,8 @@ preprocess_pds_tracks <- function(
   # List raw tracks
   logger::log_info("Listing raw tracks...")
   raw_tracks <- googleCloudStorageR::gcs_list_objects(
-    bucket = pars$pds_storage$google$options$bucket,
-    prefix = pars$pds$pds_tracks$file_prefix
+    bucket = conf$pds_storage$google$options$bucket,
+    prefix = conf$pds$pds_tracks$file_prefix
   )$name
 
   raw_trip_ids <- extract_trip_ids_from_filenames(raw_tracks)
@@ -72,8 +72,8 @@ preprocess_pds_tracks <- function(
     function(track_file) {
       download_cloud_file(
         name = track_file,
-        provider = pars$pds_storage$google$key,
-        options = pars$pds_storage$google$options
+        provider = conf$pds_storage$google$key,
+        options = conf$pds_storage$google$options
       )
 
       track_data <- arrow::read_parquet(track_file) %>%
@@ -96,7 +96,7 @@ preprocess_pds_tracks <- function(
   }
 
   output_filename <-
-    paste0(pars$pds$pds_tracks$file_prefix, "-preprocessed") |>
+    paste0(conf$pds$pds_tracks$file_prefix, "-preprocessed") |>
     add_version(extension = "parquet")
 
   arrow::write_parquet(
@@ -109,19 +109,21 @@ preprocess_pds_tracks <- function(
   logger::log_info("Uploading preprocessed tracks...")
   upload_cloud_file(
     file = output_filename,
-    provider = pars$storage$google$key,
-    options = pars$storage$google$options
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
   )
 
   unlink(output_filename)
-  if (exists("preprocessed_filename")) unlink(preprocessed_filename)
+  if (exists("preprocessed_filename")) {
+    unlink(preprocessed_filename)
+  }
 
   logger::log_success("Track preprocessing complete")
 
   grid_summaries <- generate_track_summaries(final_data)
 
   output_filename <-
-    paste0(pars$pds$pds_tracks$file_prefix, "-grid_summaries") |>
+    paste0(conf$pds$pds_tracks$file_prefix, "-grid_summaries") |>
     add_version(extension = "parquet")
 
   arrow::write_parquet(
@@ -134,8 +136,8 @@ preprocess_pds_tracks <- function(
   logger::log_info("Uploading preprocessed tracks...")
   upload_cloud_file(
     file = output_filename,
-    provider = pars$storage$google$key,
-    options = pars$storage$google$options
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
   )
 }
 
