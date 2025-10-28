@@ -6,11 +6,22 @@ on:
     - cron: '0 0 */2 * *'
 
 env:
-  MONGODB_CONNECTION_STRING_COASTS: ${{ secrets.MONGODB_CONNECTION_STRING_COASTS }}
-  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-  GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+  # PDS API Credentials
   PDS_TOKEN: ${{ secrets.PDS_TOKEN }}
   PDS_SECRET: ${{ secrets.PDS_SECRET }}
+  PDS_USERNAME: ${{ secrets.PDS_USERNAME }}
+  PDS_PASSWORD: ${{ secrets.PDS_PASSWORD }}
+  PDS_CUSTOMER_ID: ${{ secrets.PDS_CUSTOMER_ID }}
+  # Google Cloud Platform
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  # MongoDB Connections
+  MONGODB_CONNECTION_STRING_COASTS: ${{ secrets.MONGODB_CONNECTION_STRING_COASTS }}
+  MONGODB_CONNECTION_STRING_TRACKS: ${{ secrets.MONGODB_CONNECTION_STRING_TRACKS }}
+  # Metadata Services
+  GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+  AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+  AIRTABLE_BASE_ID_FRAME: ${{ secrets.AIRTABLE_BASE_ID_FRAME }}
+  AIRTABLE_BASE_ID_TRACKS_APP: ${{ secrets.AIRTABLE_BASE_ID_TRACKS_APP }}
 
 jobs:
   build-container:
