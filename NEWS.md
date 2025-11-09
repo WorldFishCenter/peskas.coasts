@@ -1,3 +1,37 @@
+# coasts 1.3.0
+
+## New Features
+
+### Fisher Performance Analytics
+* **NEW** `export_fishers_stats()` - Comprehensive fisher performance analysis and export
+  - Integrates catch events from tracks-app with GPS tracking data from PDS API
+  - Matches fisher-reported landings with automated trip tracking by date and device
+  - Calculates fishing efficiency metrics: CPUE (kg/hour, kg/km), search efficiency ratios
+  - Estimates fuel consumption and catch per liter efficiency
+  - Categorizes trips by distance (nearshore, mid-range, offshore)
+  - Exports aggregated fisher statistics and trip-level performance metrics to MongoDB
+
+### Automated Workflows
+* **ENHANCED** GitHub Actions data pipeline workflow
+  - Added `export-fishers-stats` job to automated pipeline
+  - Runs after track preprocessing to ensure data availability
+  - Automatically exports fisher performance data on every pipeline run
+
+### Development Experience
+* **NEW** `.Rprofile` - Interactive environment switching for local development
+  - Added helper functions: `use_prod()`, `use_local()`, `use_default()`
+  - Visual environment indicator on R session startup
+  - Quick commands reference displayed in interactive sessions
+  - Simplified testing across different configuration profiles
+
+## Configuration Updates
+
+### MongoDB Collections
+* **ENHANCED** tracks-app MongoDB configuration in `inst/conf.yml`
+  - Added `fishers-stats` collection for aggregated fisher summaries
+  - Added `fishers-performance` collection for trip-level efficiency metrics
+  - Improved data organization for analytics and reporting
+
 # coasts 1.2.0
 
 ## Breaking Changes

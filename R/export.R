@@ -177,3 +177,218 @@ export_geos <- function() {
   logger::log_success("Successfully exported geospatial data to MongoDB")
   return(invisible(NULL))
 }
+
+
+#' Export Fisher Performance Statistics to MongoDB
+#'
+#' @description
+#' Combines catch event data with GPS tracking trips to create fisher performance
+#' metrics and exports them to MongoDB for analysis.
+#'
+#' @details
+#' This function integrates two data sources:
+#' 1. Downloads catch events from tracks-app MongoDB (fisher-reported landings)
+#' 2. Retrieves corresponding GPS tracking data from PDS API
+#' 3. Matches catch events to tracking trips by date and device ID
+#' 4. Calculates fishing efficiency metrics (CPUE, fuel efficiency, search patterns)
+#' 5. Exports fisher statistics and performance metrics to MongoDB collections
+#'
+#' Performance metrics include:
+#' - CPUE (kg per hour, kg per km traveled)
+#' - Search efficiency (distance vs range ratios)
+#' - Fuel efficiency estimates
+#' - Trip categorization (nearshore/mid-range/offshore)
+#'
+#' @return None (invisible). Creates and uploads data to two MongoDB collections:
+#'   - Fisher catch statistics (aggregated summaries)
+#'   - Trip-level performance metrics
+#'
+#' @examples
+#' \dontrun{
+#' # Export fisher statistics and performance metrics
+#' export_fishers_stats()
+#' }
+#'
+#' @seealso
+#' \code{\link{export_geos}} for exporting geospatial data
+#' \code{\link{mdb_collection_push}} for MongoDB upload functionality
+#'
+#' @keywords database export fisheries performance
+#' @export
+export_fishers_stats <- function() {
+  conf <- read_config()
+
+  trips <-
+    mdb_collection_pull(
+      connection_string = conf$storage$mongodb$tracks_app$connection_string,
+      collection_name = conf$storage$mongodb$tracks_app$collection$catch_events,
+      db_name = conf$storage$mongodb$tracks_app$database_name
+    ) |>
+    dplyr::as_tibble() |>
+    dplyr::filter(is.na(.data$isAdminSubmission)) |>
+    dplyr::select(
+      -c("photos", "gps_photo", "community", "reportedAt", "createdAt")
+    ) |>
+    dplyr::mutate(
+      quantity = dplyr::if_else(.data$catch_outcome == "0", 0, .data$quantity),
+      date = lubridate::date(.data$date),
+      date = lubridate::as_datetime(.data$date)
+    )
+
+  fishers_stats <-
+    unique(trips$imei) |>
+    purrr::map_dfr(get_fisher_summaries, catch_events = trips) |>
+    dplyr::arrange(.data$imei, .data$date) |>
+    dplyr::relocate("imei", .after = "date")
+
+  ###########
+
+  pds_trips <- get_trips(
+    token = conf$pds$token,
+    secret = conf$pds$secret,
+    dateFrom = min(fishers_stats$date),
+    dateTo = Sys.Date(),
+    imeis = unique(fishers_stats$imei),
+    deviceInfo = TRUE
+  ) |>
+    janitor::clean_names() |>
+    dplyr::mutate(
+      imei = as.character(.data$imei),
+      trip = as.character(.data$trip)
+    ) |>
+    dplyr::rename(tripId = "trip")
+
+  already_matched <-
+    fishers_stats |>
+    dplyr::inner_join(
+      pds_trips,
+      by = c("tripId", "imei")
+    )
+
+  unique_trips <-
+    fishers_stats |>
+    # exclude already matched trips
+    dplyr::filter(!.data$tripId %in% unique(already_matched$tripId)) |>
+    dplyr::group_by(.data$date, .data$imei) |>
+    dplyr::mutate(
+      unique_trip_per_day = dplyr::n_distinct(.data$tripId) == 1,
+    ) |>
+    dplyr::ungroup() %>%
+    dplyr::filter(.data$unique_trip_per_day == TRUE) |>
+    dplyr::select(-"unique_trip_per_day", trip = "tripId")
+
+  unique_pds_trips <-
+    pds_trips %>%
+    # exclude already matched trips
+    dplyr::filter(!.data$tripId %in% unique(already_matched$tripId)) |>
+    # We assume the landing date to be the same as the date when the trip ended
+    dplyr::mutate(
+      date = lubridate::as_date(.data$ended),
+      tripId = as.character(.data$tripId)
+    ) %>%
+    dplyr::group_by(.data$date, .data$imei) %>%
+    dplyr::mutate(unique_trip_per_day = dplyr::n_distinct(.data$tripId) == 1) |>
+    dplyr::ungroup() %>%
+    dplyr::filter(.data$unique_trip_per_day == TRUE) |>
+    dplyr::select(-"unique_trip_per_day")
+
+  logger::log_info("Merging datasets datasets...")
+  # Only join when we have one landing and one tracking per day, otherwise we
+  # cannot do guarantee that the landing corresponds to a trip
+  merged_trips <- dplyr::full_join(
+    unique_trips,
+    unique_pds_trips,
+    by = c("date", "imei")
+  ) |>
+    # add already matched
+    dplyr::bind_rows(already_matched) |>
+    dplyr::filter(!is.na(.data$trip) & !is.na(.data$tripId))
+
+  performance_metrics <-
+    merged_trips |>
+    dplyr::select(
+      "tripId",
+      "imei",
+      "started",
+      "ended",
+      "duration_seconds",
+      "range_meters",
+      "distance_meters",
+      "fishGroup",
+      "catch_kg"
+    ) |>
+    dplyr::mutate(
+      trip_duration = as.numeric(difftime(
+        .data$ended,
+        .data$started,
+        units = "hours"
+      ))
+    ) |>
+    dplyr::mutate(
+      # Basic efficiency metrics
+      cpue_kg_per_hour = .data$catch_kg / .data$trip_duration,
+      cpue_kg_per_km = .data$catch_kg / (.data$distance_meters / 1000),
+      # Search efficiency
+      search_ratio = .data$distance_meters / .data$range_meters,
+      catch_per_search = .data$catch_kg / .data$search_ratio,
+      # Fuel estimates (rough)
+      est_fuel_liters = (.data$distance_meters / 1000) * 0.4, # ~0.4 liters/km
+      kg_per_liter = .data$catch_kg / .data$est_fuel_liters,
+      # Time efficiency
+      hour_of_day = lubridate::hour(.data$started),
+      # Distance categories for comparison
+      trip_type = dplyr::case_when(
+        .data$range_meters / 1000 < 5 ~ "nearshore",
+        .data$range_meters / 1000 < 20 ~ "mid-range",
+        TRUE ~ "offshore"
+      )
+    ) |>
+    dplyr::select(
+      "tripId",
+      "imei",
+      "started",
+      "ended",
+      "trip_duration",
+      "cpue_kg_per_hour",
+      "cpue_kg_per_km",
+      "search_ratio",
+      "catch_per_search",
+      "est_fuel_liters",
+      "kg_per_liter",
+      "hour_of_day",
+      "trip_type"
+    ) |>
+    tidyr::pivot_longer(
+      cols = c(
+        "trip_duration",
+        "cpue_kg_per_hour",
+        "cpue_kg_per_km",
+        "search_ratio",
+        "catch_per_search",
+        "est_fuel_liters",
+        "kg_per_liter",
+        "hour_of_day"
+      ),
+      names_to = "metric",
+      values_to = "value"
+    )
+
+  # Step 6: Push combined geospatial data to MongoDB with 2dsphere indexing
+  logger::log_info("Pushing combined geospatial data to MongoDB...")
+  mdb_collection_push(
+    data = fishers_stats,
+    connection_string = conf$storage$mongodb$tracks_app$connection_string,
+    collection_name = conf$storage$mongodb$tracks_app$collection$stats,
+    db_name = conf$storage$mongodb$tracks_app$database_name,
+    geo = FALSE
+  )
+
+  logger::log_info("Pushing regional time series metrics to MongoDB...")
+  mdb_collection_push(
+    data = performance_metrics,
+    connection_string = conf$storage$mongodb$tracks_app$connection_string,
+    collection_name = conf$storage$mongodb$tracks_app$collection$performances,
+    db_name = conf$storage$mongodb$tracks_app$database_name,
+    geo = FALSE
+  )
+}

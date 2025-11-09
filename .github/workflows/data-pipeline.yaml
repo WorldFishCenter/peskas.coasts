@@ -121,3 +121,19 @@ jobs:
       - name: Call export_geos()
         run: Rscript -e 'coasts::export_geos()'        
 
+  export-fishers-stats:
+    name: Export fishers stats
+    needs: preprocess-pds-tracks
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/peskas.coasts/r-runner-peskas-coasts
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call export_fishers_stats()
+        run: Rscript -e 'coasts::export_fishers_stats()'        
+

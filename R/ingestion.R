@@ -197,9 +197,12 @@ ingest_pds_trips <- function(log_threshold = logger::DEBUG) {
 
   assets$devices <- assets$devices |>
     dplyr::mutate(
-      last_seen = as.Date(as.POSIXct(last_seen / 1000, origin = "1970-01-01"))
+      last_seen = as.Date(as.POSIXct(
+        .data$last_seen / 1000,
+        origin = "1970-01-01"
+      ))
     ) |>
-    dplyr::filter(last_seen >= "2023-01-01")
+    dplyr::filter(.data$last_seen >= "2023-01-01")
 
   boats_trips <- get_trips(
     token = conf$pds$token,

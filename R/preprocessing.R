@@ -312,3 +312,33 @@ generate_track_summaries <- function(data, min_hours = 0.15, max_hours = 15) {
     ) |>
     dplyr::select(-"avg_time_mins")
 }
+
+#' Aggregate Fisher Catch Events by Trip
+#'
+#' @description
+#' Summarizes catch events for a specific fisher by trip, date, and fish group.
+#'
+#' @param catch_events Data frame containing catch event records with columns:
+#'   tripId, date, imei, fishGroup, and quantity (kg)
+#' @param fisher_imei Character string. IMEI identifier for the fisher's device
+#'
+#' @return A tibble with aggregated catch data containing:
+#'   - tripId: Trip identifier
+#'   - date: Landing date
+#'   - fishGroup: Fish species group
+#'   - imei: Device IMEI
+#'   - catch_kg: Total catch weight in kilograms per trip and fish group
+#'
+#' @keywords preprocessing
+#' @export
+get_fisher_summaries <- function(catch_events = NULL, fisher_imei = NULL) {
+  catch_events |>
+    dplyr::filter(.data$imei == fisher_imei) |>
+    dplyr::mutate() |>
+    dplyr::group_by(.data$tripId, .data$date, .data$fishGroup) |>
+    dplyr::summarise(
+      imei = dplyr::first(.data$imei),
+      catch_kg = sum(.data$quantity),
+      .groups = "drop"
+    )
+}
