@@ -89,11 +89,13 @@ reference:
     - process_single_track
     - generate_track_summaries
     - extract_trip_ids_from_filenames
+    - get_fisher_summaries
 
   - title: "Data Export & Storage"
     desc: "Functions for exporting processed data to databases and cloud storage"
     contents:
     - export_geos
+    - export_fishers_stats
     - mdb_collection_push
     - mdb_collection_pull
     - upload_cloud_file

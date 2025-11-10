@@ -241,8 +241,6 @@ export_fishers_stats <- function() {
     dplyr::arrange(.data$imei, .data$date) |>
     dplyr::relocate("imei", .after = "date")
 
-  ###########
-
   pds_trips <- get_trips(
     token = conf$pds$token,
     secret = conf$pds$secret,
