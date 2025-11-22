@@ -480,7 +480,6 @@ sync_device_users <- function(conf = NULL, seed = 123) {
   if (is.null(conf)) {
     conf <- read_config()
   }
-
   logger::log_info("Starting device users sync to MongoDB")
 
   # Set seed if provided
@@ -493,6 +492,14 @@ sync_device_users <- function(conf = NULL, seed = 123) {
     base_id = conf$airtable$tracks_app$base_id,
     table_name = "users",
     token = conf$airtable$token
+  )
+
+  #backup users
+  upload_parquet_to_cloud(
+    data = users,
+    prefix = conf$tracks_app$backup_users$file_prefix,
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
   )
 
   logger::log_info("Retrieved {nrow(users)} user records from Airtable")
@@ -533,7 +540,10 @@ sync_device_users <- function(conf = NULL, seed = 123) {
         TRUE ~ NA
       )
     ) |>
-    dplyr::left_join(users, by = c("IMEI", "Country", "Region", "Community")) |>
+    dplyr::right_join(
+      users,
+      by = c("IMEI", "Country", "Region", "Community")
+    ) |>
     dplyr::mutate(Boat = dplyr::coalesce(.data$Boat.x, .data$Boat.y)) |>
     dplyr::select(-"Boat.x", -"Boat.y")
 
@@ -611,7 +621,6 @@ sync_device_users <- function(conf = NULL, seed = 123) {
       "Region",
       "password"
     )
-
   # Push to MongoDB
   push_result <- mdb_collection_push(
     data = devices_with_passwords,
