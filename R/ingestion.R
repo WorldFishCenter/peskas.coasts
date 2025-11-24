@@ -1183,11 +1183,13 @@ backup_tracks <- function() {
     dplyr::filter(.data$IMEI %in% as.numeric(unique(assets$devices$imei)))
 
   logger::log_info("Download latest binded tracks dataframe ...")
-  latest_df <- download_parquet_from_cloud(
-    prefix = conf$tracks_app$all_tracks$file_prefix,
-    provider = conf$storage$google$key,
-    options = conf$storage$google$options
-  )
+  latest_df <-
+    download_cloud_file(
+      name = paste0(conf$tracks_app$all_tracks$file_prefix, ".parquet"),
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options
+    ) |>
+    arrow::read_parquet()
 
   # Get new trip IDs
   existing_trip_ids <- extract_trip_ids_from_filenames(unique(latest_df$Trip))
@@ -1249,16 +1251,20 @@ backup_tracks <- function() {
     dplyr::bind_rows(tracks_df, latest_df) |>
     dplyr::distinct()
 
-  parquet_filename <- add_version(
-    conf$tracks_app$all_tracks$file_prefix,
-    "parquet"
+  logger::log_info("Converting data to Parquet as {parquet_filename}...")
+
+  # Write parquet file
+  arrow::write_parquet(
+    x = binded_tracks,
+    sink = paste0(conf$tracks_app$all_tracks$file_prefix, ".parquet"),
+    compression = "lz4",
+    compression_level = 12
   )
 
-  logger::log_info("Converting json data to Parquet as {parquet_filename}...")
+  logger::log_info("Upload backup tracks to cloud")
 
-  upload_parquet_to_cloud(
-    binded_tracks,
-    conf$tracks_app$all_tracks$file_prefix,
+  upload_cloud_file(
+    file = paste0(conf$tracks_app$all_tracks$file_prefix, ".parquet"),
     provider = conf$storage$google$key,
     options = conf$storage$google$options
   )
