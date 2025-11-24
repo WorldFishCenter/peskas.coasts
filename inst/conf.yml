@@ -14,6 +14,8 @@ default:
   tracks_app:
     backup_users:
       file_prefix: backup-users
+    all_tracks:
+      file_prefix: all-tracks
   storage:
     google:
       key: gcs

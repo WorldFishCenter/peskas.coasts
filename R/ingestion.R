@@ -1123,3 +1123,143 @@ ingest_pelagic_boats <- function(conf = NULL) {
     sync_result = sync_result
   ))
 }
+
+#' Backup Pelagic Tracks (Fallback)
+#'
+#' @description
+#' Fallback pipeline to refresh the bound tracks parquet when the main ingestion is unavailable. It:
+#' 1. Loads Airtable assets, keeping East Africa devices (Zanzibar, Kenya, Mozambique, Malawi, Tanzania) active since 2024-01-01
+#' 2. Pulls the last 90 days of PDS trips and filters to those IMEIs
+#' 3. Reads the latest bound tracks parquet from cloud, finds new trip IDs, and downloads missing tracks in parallel
+#' 4. Aggregates points to 10-minute medians, binds with existing tracks, deduplicates, and uploads a versioned parquet back to cloud storage
+#'
+#' @return None (invisible). Updates the cloud parquet with any new track data.
+#'
+#' @examples
+#' \dontrun{
+#' backup_tracks()
+#' }
+#'
+#' @keywords workflow ingestion
+#' @export
+backup_tracks <- function() {
+  conf <- read_config()
+
+  assets <- conf$metadata$airtable$name |>
+    cloud_object_name(
+      provider = conf$storage$google$key,
+      extension = "rds",
+      options = conf$storage$google$options
+    ) |>
+    download_cloud_file(
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options
+    ) |>
+    readr::read_rds()
+
+  assets$devices <-
+    assets$devices |>
+    dplyr::filter(stringr::str_detect(
+      .data$customer_name,
+      "Zanzibar|Kenya|Mozambique|Malawi|Tanzania"
+    )) |>
+    dplyr::mutate(
+      last_seen = as.Date(as.POSIXct(
+        .data$last_seen / 1000,
+        origin = "1970-01-01"
+      ))
+    ) |>
+    dplyr::filter(.data$last_seen >= "2024-01-01")
+
+  boats_trips <- get_trips(
+    token = conf$pds$token,
+    secret = conf$pds$secret,
+    dateFrom = Sys.Date() - 90,
+    dateTo = Sys.Date(),
+    #imeis = unique(assets$devices$imei),
+    deviceInfo = TRUE,
+    withLastSeen = TRUE
+  ) |>
+    dplyr::filter(.data$IMEI %in% as.numeric(unique(assets$devices$imei)))
+
+  logger::log_info("Download latest binded tracks dataframe ...")
+  latest_df <- download_parquet_from_cloud(
+    prefix = conf$tracks_app$all_tracks$file_prefix,
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
+  )
+
+  # Get new trip IDs
+  existing_trip_ids <- extract_trip_ids_from_filenames(unique(latest_df$Trip))
+  new_trip_ids <- setdiff(boats_trips$Trip, existing_trip_ids)
+
+  if (length(new_trip_ids) == 0) {
+    logger::log_info("No new tracks to download")
+    return(invisible())
+  }
+
+  # Setup parallel processing
+  workers <- parallel::detectCores() - 1
+  logger::log_info("Setting up parallel processing with {workers} workers...")
+  future::plan(future::multisession, workers = workers)
+
+  logger::log_info(
+    "Processing {length(new_trip_ids)} new tracks in parallel..."
+  )
+
+  tracks_list <- furrr::future_map(
+    new_trip_ids,
+    function(trip_id) {
+      tryCatch(
+        {
+          track_data <- get_trip_points(
+            token = conf$pds$token,
+            secret = conf$pds$secret,
+            id = as.character(trip_id),
+            deviceInfo = TRUE
+          )
+        },
+        error = function(e) {
+          logger::log_error("Error processing trip {trip_id}: {e$message}")
+          NULL
+        }
+      )
+    },
+    .options = furrr::furrr_options(seed = TRUE),
+    .progress = TRUE
+  )
+
+  tracks_df <- tracks_list |>
+    purrr::compact() |>
+    dplyr::bind_rows() |>
+    dplyr::select("Time", "Trip", "Lat", "Lng") |>
+    dplyr::mutate(
+      Time = lubridate::floor_date(.data$Time, unit = "10 minutes")
+    ) |>
+    dplyr::group_by(.data$Trip, .data$Time) |>
+    dplyr::summarise(
+      Lat = stats::median(.data$Lat),
+      Lng = stats::median(.data$Lng),
+      .groups = "drop"
+    )
+
+  future::plan(future::sequential)
+
+  binded_tracks <-
+    dplyr::bind_rows(tracks_df, latest_df) |>
+    dplyr::distinct()
+
+  parquet_filename <- add_version(
+    conf$tracks_app$all_tracks$file_prefix,
+    "parquet"
+  )
+
+  logger::log_info("Converting json data to Parquet as {parquet_filename}...")
+
+  upload_parquet_to_cloud(
+    binded_tracks,
+    conf$tracks_app$all_tracks$file_prefix,
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
+  )
+}

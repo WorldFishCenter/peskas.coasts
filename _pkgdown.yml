@@ -70,6 +70,7 @@ reference:
     - ingest_pds_trips
     - ingest_pds_tracks
     - ingest_assets
+    - backup_tracks
     - get_trips
     - get_trip_points
     - get_metadata
