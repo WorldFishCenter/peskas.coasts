@@ -1247,9 +1247,17 @@ backup_tracks <- function() {
 
   future::plan(future::sequential)
 
+  tracks_df <-
+    boats_trips |>
+    dplyr::select("Trip", "IMEI") |>
+    dplyr::distinct() |>
+    dplyr::right_join(tracks_df, by = "Trip") |>
+    dplyr::select("IMEI", "Trip", "Time", "Lat", "Lng")
+
   binded_tracks <-
     dplyr::bind_rows(tracks_df, latest_df) |>
-    dplyr::distinct()
+    dplyr::distinct() |>
+    dplyr::filter(!is.na(.data$IMEI))
 
   logger::log_info("Converting data to Parquet as {parquet_filename}...")
 
