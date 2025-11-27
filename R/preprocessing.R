@@ -332,7 +332,7 @@ generate_track_summaries <- function(data, min_hours = 0.15, max_hours = 15) {
 #' @keywords preprocessing
 #' @export
 get_fisher_summaries <- function(catch_events = NULL, user_id = NULL) {
-  trips |>
+  catch_events |>
     dplyr::filter(.data$user_id == user_id) |>
     dplyr::mutate() |>
     dplyr::group_by(.data$tripId, .data$date, .data$fishGroup) |>
