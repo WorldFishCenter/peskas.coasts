@@ -4,13 +4,13 @@
 \alias{get_fisher_summaries}
 \title{Aggregate Fisher Catch Events by Trip}
 \usage{
-get_fisher_summaries(catch_events = NULL, fisher_imei = NULL)
+get_fisher_summaries(catch_events = NULL, user_id = NULL)
 }
 \arguments{
 \item{catch_events}{Data frame containing catch event records with columns:
 tripId, date, imei, fishGroup, and quantity (kg)}
 
-\item{fisher_imei}{Character string. IMEI identifier for the fisher's device}
+\item{user_id}{Character string. IMEI identifier for the fisher's device or username in case of self registered users}
 }
 \value{
 A tibble with aggregated catch data containing:

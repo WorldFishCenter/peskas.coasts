@@ -1259,7 +1259,7 @@ backup_tracks <- function() {
     dplyr::distinct() |>
     dplyr::filter(!is.na(.data$IMEI))
 
-  logger::log_info("Converting data to Parquet as {parquet_filename}...")
+  logger::log_info("Converting data to Parquet format...")
 
   # Write parquet file
   arrow::write_parquet(

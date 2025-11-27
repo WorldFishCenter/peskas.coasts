@@ -218,6 +218,25 @@ export_geos <- function() {
 export_fishers_stats <- function() {
   conf <- read_config()
 
+  self_registered_users <-
+    mdb_collection_pull(
+      connection_string = conf$storage$mongodb$tracks_app$connection_string,
+      collection_name = conf$storage$mongodb$tracks_app$collection$users,
+      db_name = conf$storage$mongodb$tracks_app$database_name
+    ) |>
+    dplyr::as_tibble() |>
+    dplyr::mutate(
+      registrationType = dplyr::if_else(
+        !is.na(.data$IMEI),
+        "imei-registered",
+        .data$registrationType
+      )
+    ) |>
+    dplyr::filter(.data$registrationType == "self-registered") |>
+    dplyr::select("username") |>
+    dplyr::pull() |>
+    unique()
+
   trips <-
     mdb_collection_pull(
       connection_string = conf$storage$mongodb$tracks_app$connection_string,
@@ -233,11 +252,19 @@ export_fishers_stats <- function() {
       quantity = dplyr::if_else(.data$catch_outcome == "0", 0, .data$quantity),
       date = lubridate::date(.data$date),
       date = lubridate::as_datetime(.data$date)
+    ) |>
+    dplyr::mutate(
+      user_id = dplyr::if_else(
+        .data$username %in% self_registered_users,
+        .data$username,
+        .data$imei
+      )
     )
 
   fishers_stats <-
-    unique(trips$imei) |>
+    unique(trips$user_id) |>
     purrr::map_dfr(get_fisher_summaries, catch_events = trips) |>
+    dplyr::distinct() |>
     dplyr::arrange(.data$imei, .data$date) |>
     dplyr::relocate("imei", .after = "date")
 
@@ -372,7 +399,7 @@ export_fishers_stats <- function() {
     )
 
   # Step 6: Push combined geospatial data to MongoDB with 2dsphere indexing
-  logger::log_info("Pushing combined geospatial data to MongoDB...")
+  logger::log_info("Pushing fisher statistics to MongoDB...")
   mdb_collection_push(
     data = fishers_stats,
     connection_string = conf$storage$mongodb$tracks_app$connection_string,
@@ -381,7 +408,7 @@ export_fishers_stats <- function() {
     geo = FALSE
   )
 
-  logger::log_info("Pushing regional time series metrics to MongoDB...")
+  logger::log_info("Pushing performance_metrics MongoDB...")
   mdb_collection_push(
     data = performance_metrics,
     connection_string = conf$storage$mongodb$tracks_app$connection_string,

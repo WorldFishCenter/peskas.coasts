@@ -320,7 +320,7 @@ generate_track_summaries <- function(data, min_hours = 0.15, max_hours = 15) {
 #'
 #' @param catch_events Data frame containing catch event records with columns:
 #'   tripId, date, imei, fishGroup, and quantity (kg)
-#' @param fisher_imei Character string. IMEI identifier for the fisher's device
+#' @param user_id Character string. IMEI identifier for the fisher's device or username in case of self registered users
 #'
 #' @return A tibble with aggregated catch data containing:
 #'   - tripId: Trip identifier
@@ -331,14 +331,17 @@ generate_track_summaries <- function(data, min_hours = 0.15, max_hours = 15) {
 #'
 #' @keywords preprocessing
 #' @export
-get_fisher_summaries <- function(catch_events = NULL, fisher_imei = NULL) {
-  catch_events |>
-    dplyr::filter(.data$imei == fisher_imei) |>
+get_fisher_summaries <- function(catch_events = NULL, user_id = NULL) {
+  trips |>
+    dplyr::filter(.data$user_id == user_id) |>
     dplyr::mutate() |>
     dplyr::group_by(.data$tripId, .data$date, .data$fishGroup) |>
     dplyr::summarise(
       imei = dplyr::first(.data$imei),
+      user_id = dplyr::first(.data$user_id),
       catch_kg = sum(.data$quantity),
       .groups = "drop"
-    )
+    ) |>
+    dplyr::select(-"imei") |>
+    dplyr::rename(imei = "user_id")
 }
