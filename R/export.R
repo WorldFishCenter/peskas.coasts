@@ -218,7 +218,7 @@ export_geos <- function() {
 export_fishers_stats <- function() {
   conf <- read_config()
 
-  self_registered_users <-
+  self_registered_users_df <-
     mdb_collection_pull(
       connection_string = conf$storage$mongodb$tracks_app$connection_string,
       collection_name = conf$storage$mongodb$tracks_app$collection$users,
@@ -229,13 +229,20 @@ export_fishers_stats <- function() {
       registrationType = dplyr::if_else(
         !is.na(.data$IMEI),
         "imei-registered",
-        .data$registrationType
+        "self-registered"
       )
     ) |>
     dplyr::filter(.data$registrationType == "self-registered") |>
-    dplyr::select("username") |>
-    dplyr::pull() |>
-    unique()
+    dplyr::select(dplyr::any_of("username"))
+
+  self_registered_users <-
+    if (length(self_registered_users_df) == 0) {
+      character(0)
+    } else {
+      self_registered_users_df |>
+        dplyr::pull() |>
+        unique()
+    }
 
   trips <-
     mdb_collection_pull(
