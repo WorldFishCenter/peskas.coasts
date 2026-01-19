@@ -62,7 +62,8 @@ jobs:
           coasts::upload_cloud_file(
             file = report_file,
             name = "reports/app_usage_report.html",
-            conf = conf
+            provider = conf$storage$google$key,
+            options = conf$storage$google$options
           )
 
           message("Report uploaded to Google Cloud Storage")
