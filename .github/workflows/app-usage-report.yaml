@@ -1,0 +1,76 @@
+name: App Usage Report
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * 1'  # Run weekly on Mondays at midnight
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  # MongoDB Connection
+  MONGODB_CONNECTION_STRING_TRACKS: ${{ secrets.MONGODB_CONNECTION_STRING_TRACKS }}
+  # Google Cloud Platform (for authentication if needed)
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+
+jobs:
+  build-container:
+    name: Build R container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Build image with cache
+        id: build-docker
+        uses: whoan/docker-build-with-cache-action@v5
+        with:
+          username: ${{ github.actor }}
+          password: "${{ secrets.GITHUB_TOKEN }}"
+          registry: docker.pkg.github.com
+          image_name: r-runner-peskas-coasts
+          dockerfile: Dockerfile.prod
+
+  generate-report:
+    name: Generate App Usage Report
+    needs: build-container
+    runs-on: ubuntu-latest
+    container:
+      image: docker.pkg.github.com/worldfishcenter/peskas.coasts/r-runner-peskas-coasts
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+
+      - name: Generate and upload app usage report
+        run: |
+          Rscript -e '
+          conf <- coasts::read_config()
+
+          # Generate report
+          report_file <- coasts::generate_app_usage_report(
+            conf = conf,
+            output_file = "app_usage_report.html",
+            countries = c("Kenya", "Zanzibar", "Mozambique"),
+            top_n = 50
+          )
+
+          # Upload to Google Cloud Storage
+          coasts::upload_cloud_file(
+            file = report_file,
+            name = "reports/app_usage_report.html",
+            conf = conf
+          )
+
+          message("Report uploaded to Google Cloud Storage")
+          '
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-usage-report-${{ github.run_number }}
+          path: app_usage_report.html
+          retention-days: 90

@@ -1,0 +1,152 @@
+---
+title: "Peskas Tracks Usage -- Analytics Report"
+date: "`r format(params$report_date, '%B %d, %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    self_contained: true
+params:
+  catch_record_usage: NULL
+  usage_summary: NULL
+  top_n: 50
+  report_date: !expr Sys.Date()
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 14,
+  fig.height = 8
+)
+
+library(dplyr)
+library(ggplot2)
+library(reactable)
+```
+
+```{css, echo=FALSE}
+.main-container {
+  max-width: 95% !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body {
+  max-width: 95% !important;
+}
+```
+
+## Executive Summary
+
+This report provides an overview of app usage (recorded catches by users) across Kenya, Zanzibar, and Mozambique.
+
+```{r summary_stats}
+total_boats <- dplyr::n_distinct(params$usage_summary$imei)
+total_catches <- sum(params$usage_summary$total_records)
+active_countries <- dplyr::n_distinct(params$usage_summary$country)
+
+avg_catches_per_boat <- round(mean(params$usage_summary$total_records), 1)
+```
+
+**Key Metrics:**
+
+-   **Total Active Boats:** `r total_boats`
+-   **Total Catch Records:** `r total_catches`
+-   **Countries:** `r active_countries`
+-   **Average Catches per Boat:** `r avg_catches_per_boat`
+
+------------------------------------------------------------------------
+
+## Usage Heatmap
+
+The heatmap below shows catch recording activity over time, with boats ranked by total usage (highest at top).
+
+```{r heatmap, fig.height=10}
+# Create heatmap
+coasts::create_usage_heatmap(params$catch_record_usage, top_n = params$top_n)
+```
+
+------------------------------------------------------------------------
+
+## Usage by Country
+
+```{r country_summary}
+country_summary <- params$usage_summary |>
+  dplyr::group_by(country) |>
+  dplyr::summarise(
+    boats = dplyr::n(),
+    total_catches = sum(total_records),
+    avg_per_boat = round(mean(total_records), 1),
+    .groups = "drop"
+  ) |>
+  dplyr::arrange(dplyr::desc(total_catches))
+
+reactable::reactable(
+  country_summary,
+  columns = list(
+    country = reactable::colDef(name = "Country", minWidth = 150),
+    boats = reactable::colDef(name = "Active Boats", align = "center"),
+    total_catches = reactable::colDef(name = "Total Catches", align = "center"),
+    avg_per_boat = reactable::colDef(name = "Avg per Boat", align = "center")
+  ),
+  striped = TRUE,
+  bordered = TRUE,
+  highlight = TRUE
+)
+```
+
+------------------------------------------------------------------------
+
+## Detailed Usage Table
+
+Searchable and filterable table showing all boats and their usage statistics.
+
+```{r usage_table}
+# Create interactive table
+coasts::create_usage_table(params$usage_summary)
+```
+
+------------------------------------------------------------------------
+
+## Top Performers
+
+```{r top_performers}
+top_10 <- params$usage_summary |>
+  dplyr::slice_head(n = 10)
+
+reactable::reactable(
+  top_10,
+  columns = list(
+    country = reactable::colDef(name = "Country", width = 100),
+    boat_name = reactable::colDef(name = "Boat", minWidth = 150),
+    total_records = reactable::colDef(
+      name = "Total Catches",
+      align = "center",
+      style = list(fontWeight = 700, color = "#2e7d32")
+    ),
+    weeks_active = reactable::colDef(name = "Weeks Active", align = "center"),
+    avg_records_per_week = reactable::colDef(
+      name = "Avg/Week",
+      align = "center",
+      format = reactable::colFormat(digits = 1)
+    )
+  ),
+  defaultColDef = reactable::colDef(
+    headerStyle = list(background = "#f5f5f5", fontWeight = 700)
+  ),
+  striped = TRUE,
+  bordered = TRUE
+)
+```
+
+------------------------------------------------------------------------
+
+::: {style="text-align: center; margin-top: 40px; color: #666; font-size: 0.9em;"}
+Report generated on `r format(Sys.time(), '%Y-%m-%d %H:%M:%S %Z')`
+:::
