@@ -302,9 +302,16 @@ generate_app_usage_report <- function(
 
   # Render report
   message("Rendering report...")
+
+  # Get absolute path for output file
+  output_path <- normalizePath(output_file, mustWork = FALSE)
+  output_dir <- dirname(output_path)
+  output_filename <- basename(output_path)
+
   rmarkdown::render(
     input = system.file("reports", "app_usage_report.Rmd", package = "coasts"),
-    output_file = output_file,
+    output_file = output_filename,
+    output_dir = output_dir,
     params = list(
       catch_record_usage = catch_record_usage,
       usage_summary = usage_summary,
@@ -314,6 +321,6 @@ generate_app_usage_report <- function(
     envir = new.env()
   )
 
-  message(sprintf("Report generated: %s", output_file))
-  invisible(output_file)
+  message(sprintf("Report generated: %s", output_path))
+  invisible(output_path)
 }
