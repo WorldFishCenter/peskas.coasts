@@ -1062,6 +1062,7 @@ ingest_pelagic_boats <- function(conf = NULL) {
         .data$customer_name == "FSSP2: Traders" ~ "Timor-Leste",
         .data$customer_name == "Kenya AABS" ~ "kenya",
         .data$customer_name == "WorldFish - India" ~ "india",
+        .data$customer_name == "Syberintel - distributor" ~ "mozambique",
         TRUE ~ NA
       ),
       country = stringr::str_to_title(.data$country)
