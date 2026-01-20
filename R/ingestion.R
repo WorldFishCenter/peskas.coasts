@@ -47,6 +47,18 @@ ingest_assets <- function(log_threshold = logger::DEBUG) {
 
   assets_list <-
     list(
+      geo = fetch_asset(
+        table_name = "districts",
+        select_cols = c(
+          "form_id",
+          "survey_label",
+          "district_code",
+          "gaul_2_name",
+          "gaul_2_code",
+          "country"
+        ),
+        conf = conf
+      ),
       taxa = fetch_asset(
         table_name = "taxa",
         select_cols = c(
