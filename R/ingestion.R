@@ -42,7 +42,6 @@
 #' @export
 ingest_assets <- function(log_threshold = logger::DEBUG) {
   logger::log_threshold(log_threshold)
-
   conf <- read_config()
 
   assets_list <-
@@ -53,6 +52,8 @@ ingest_assets <- function(log_threshold = logger::DEBUG) {
           "form_id",
           "survey_label",
           "district_code",
+          "gaul_1_name",
+          "gaul_1_code",
           "gaul_2_name",
           "gaul_2_code",
           "country"
