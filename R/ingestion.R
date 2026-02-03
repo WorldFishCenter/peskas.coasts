@@ -98,6 +98,7 @@ ingest_assets <- function(log_threshold = logger::DEBUG) {
           "imei",
           "boat_name",
           "registration_number",
+          "captain",
           "last_seen",
           "region",
           "community"
