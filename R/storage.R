@@ -1,26 +1,46 @@
 #' #' Download Parquet File from Cloud Storage
 #'
 #' This function handles the process of downloading a parquet file from cloud storage
-#' and reading it into memory.
+#' and reading it into memory. Supports downloading from different buckets configured
+#' in the configuration file.
 #'
 #' @param prefix The file prefix path in cloud storage
 #' @param provider The cloud storage provider key
 #' @param options Cloud storage provider options
+#' @param bucket_name Optional character string specifying the GCS bucket name to use.
+#'   If provided, overrides the bucket in options. Pass directly from configuration,
+#'   e.g. conf$storage$google$buckets$kenya. If NULL (default), uses the bucket
+#'   defined in options.
 #'
 #' @return A tibble containing the data from the parquet file
 #'
 #' @examples
 #' \dontrun{
+#' # Download from default bucket (backward compatible)
 #' raw_data <- download_parquet_from_cloud(
 #'   prefix = conf$ingestion$koboform$catch$legacy$raw,
 #'   provider = conf$storage$google$key,
 #'   options = conf$storage$google$options
 #' )
+#'
+#' # Download from a regional bucket
+#' kenya_data <- download_parquet_from_cloud(
+#'   prefix = "pds-trips",
+#'   provider = conf$storage$google$key,
+#'   options = conf$storage$google$options,
+#'   bucket_name = conf$storage$google$buckets$kenya
+#' )
 #' }
 #'
 #' @keywords storage
 #' @export
-download_parquet_from_cloud <- function(prefix, provider, options) {
+download_parquet_from_cloud <- function(prefix, provider, options, bucket_name = NULL) {
+  # If bucket_name is specified, override the bucket in options
+  if (!is.null(bucket_name)) {
+    options$bucket <- bucket_name
+    logger::log_info("Using bucket: {bucket_name}")
+  }
+
   # Generate cloud object name
   parquet_file <- cloud_object_name(
     prefix = prefix,
@@ -44,7 +64,8 @@ download_parquet_from_cloud <- function(prefix, provider, options) {
 #' Upload Processed Data to Cloud Storage
 #'
 #' This function handles the process of writing data to a parquet file and
-#' uploading it to cloud storage.
+#' uploading it to cloud storage. Supports uploading to different buckets configured
+#' in the configuration file.
 #'
 #' @param data The data frame or tibble to upload
 #' @param prefix The file prefix path in cloud storage
@@ -52,22 +73,43 @@ download_parquet_from_cloud <- function(prefix, provider, options) {
 #' @param options Cloud storage provider options
 #' @param compression Compression algorithm to use (default: "lz4")
 #' @param compression_level Compression level (default: 12)
+#' @param bucket_name Optional character string specifying the GCS bucket name to use.
+#'   If provided, overrides the bucket in options. Pass directly from configuration,
+#'   e.g. conf$storage$google$buckets$kenya. If NULL (default), uses the bucket
+#'   defined in options.
 #'
 #' @return Invisible NULL
 #'
 #' @keywords storage
 #' @examples
 #' \dontrun{
+#' # Upload to default bucket (backward compatible)
 #' upload_parquet_to_cloud(
 #'   data = processed_data,
 #'   prefix = conf$ingestion$koboform$catch$legacy$preprocessed,
 #'   provider = conf$storage$google$key,
 #'   options = conf$storage$google$options
 #' )
+#'
+#' # Upload to a regional bucket
+#' upload_parquet_to_cloud(
+#'   data = processed_data,
+#'   prefix = "pds-trips",
+#'   provider = conf$storage$google$key,
+#'   options = conf$storage$google$options,
+#'   bucket_name = conf$storage$google$buckets$kenya
+#' )
 #' }
 #' @export
 upload_parquet_to_cloud <- function(data, prefix, provider, options,
-                                    compression = "lz4", compression_level = 12) {
+                                    compression = "lz4", compression_level = 12,
+                                    bucket_name = NULL) {
+  # If bucket_name is specified, override the bucket in options
+  if (!is.null(bucket_name)) {
+    options$bucket <- bucket_name
+    logger::log_info("Using bucket: {bucket_name}")
+  }
+
   # Generate filename with version
   preprocessed_filename <- prefix %>%
     add_version(extension = "parquet")
@@ -746,3 +788,4 @@ get_trip_points <- function(token = NULL,
 
   return(result)
 }
+

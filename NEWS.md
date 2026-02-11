@@ -1,6 +1,24 @@
-# coasts 1.3.0
+# coasts 1.4.0
 
 ## New Features
+
+### GPS-Survey Trip Matching
+* **NEW** `merge_survey_trips()` - Downloads matched GPS and survey trip data across regions, harmonizes columns, and combines into a single dataset
+
+### Automated Workflows
+* **ENHANCED** GitHub Actions data pipeline with new `match-trips` job
+
+
+### Multi-Bucket Regional Storage
+* **ENHANCED** `download_parquet_from_cloud()` and `upload_parquet_to_cloud()` - Added `bucket_name` parameter to download/upload from regional buckets (Kenya, Mozambique, Zanzibar)
+* **ENHANCED** `inst/conf.yml` - Regional bucket configuration with environment-specific bucket names (dev vs prod)
+
+## Code Organization
+* Refactored PDS ingestion and API functions into dedicated files (`R/ingestion-pds.R`, `R/pds-api.R`)
+* Updated pkgdown reference index with tracks app and preprocessing sections
+
+# coasts 1.3.0
+
 
 ### Fisher Performance Analytics
 * **NEW** `export_fishers_stats()` - Comprehensive fisher performance analysis and export

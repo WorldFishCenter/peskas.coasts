@@ -91,6 +91,18 @@ reference:
     - generate_track_summaries
     - extract_trip_ids_from_filenames
     - get_fisher_summaries
+    - merge_survey_trips
+
+  - title: "Tracks App"
+    desc: "Functions for tracks app data and usage reporting"
+    contents:
+    - pull_catch_events
+    - pull_users_data
+    - calculate_catch_record_usage
+    - prepare_usage_summary
+    - create_usage_table
+    - create_usage_heatmap
+    - generate_app_usage_report
 
   - title: "Data Export & Storage"
     desc: "Functions for exporting processed data to databases and cloud storage"

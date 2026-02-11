@@ -10,7 +10,8 @@ upload_parquet_to_cloud(
   provider,
   options,
   compression = "lz4",
-  compression_level = 12
+  compression_level = 12,
+  bucket_name = NULL
 )
 }
 \arguments{
@@ -25,21 +26,37 @@ upload_parquet_to_cloud(
 \item{compression}{Compression algorithm to use (default: "lz4")}
 
 \item{compression_level}{Compression level (default: 12)}
+
+\item{bucket_name}{Optional character string specifying the GCS bucket name to use.
+If provided, overrides the bucket in options. Pass directly from configuration,
+e.g. conf$storage$google$buckets$kenya. If NULL (default), uses the bucket
+defined in options.}
 }
 \value{
 Invisible NULL
 }
 \description{
 This function handles the process of writing data to a parquet file and
-uploading it to cloud storage.
+uploading it to cloud storage. Supports uploading to different buckets configured
+in the configuration file.
 }
 \examples{
 \dontrun{
+# Upload to default bucket (backward compatible)
 upload_parquet_to_cloud(
   data = processed_data,
   prefix = conf$ingestion$koboform$catch$legacy$preprocessed,
   provider = conf$storage$google$key,
   options = conf$storage$google$options
+)
+
+# Upload to a regional bucket
+upload_parquet_to_cloud(
+  data = processed_data,
+  prefix = "pds-trips",
+  provider = conf$storage$google$key,
+  options = conf$storage$google$options,
+  bucket_name = conf$storage$google$buckets$kenya
 )
 }
 }

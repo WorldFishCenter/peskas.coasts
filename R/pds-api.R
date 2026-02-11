@@ -1,0 +1,657 @@
+#' Authenticate with Pelagic Analytics API
+#'
+#' @description
+#' Authenticates with the Pelagic Analytics API using username and password
+#' to obtain an access token for subsequent API calls.
+#'
+#' @param username Character. Your Pelagic Analytics username
+#' @param password Character. Your Pelagic Analytics password
+#' @param base_url Character. Base URL for the API. Default is "https://analytics.pelagicdata.com"
+#'
+#' @return List containing the access token and refresh token
+#'
+#' @examples
+#' \dontrun{
+#' auth_response <- pelagic_auth("your_username", "your_password")
+#' token <- auth_response$token
+#' }
+#'
+#' @export
+pelagic_auth <- function(
+  username,
+  password,
+  base_url = "https://analytics.pelagicdata.com"
+) {
+  # Prepare the request body
+  auth_body <- list(
+    username = username,
+    password = password
+  )
+
+  # Make the authentication request
+  response <- httr::POST(
+    url = paste0(base_url, "/api/auth/login"),
+    body = auth_body,
+    encode = "json",
+    httr::add_headers("Content-Type" = "application/json")
+  )
+
+  # Check if request was successful
+  if (httr::status_code(response) != 200) {
+    stop("Authentication failed. Status code: ", httr::status_code(response))
+  }
+
+  # Parse the response
+  auth_data <- httr::content(response, as = "parsed")
+
+  logger::log_info("Successfully authenticated with Pelagic Analytics API")
+
+  return(auth_data)
+}
+
+#' Refresh Authentication Token
+#'
+#' @description
+#' Refreshes an expired access token using the refresh token.
+#'
+#' @param refresh_token Character. Refresh token obtained from pelagic_auth()
+#' @param base_url Character. Base URL for the API. Default is "https://analytics.pelagicdata.com"
+#'
+#' @return List containing the new access token and refresh token
+#'
+#' @export
+pelagic_refresh_token <- function(
+  refresh_token,
+  base_url = "https://analytics.pelagicdata.com"
+) {
+  # This is a placeholder - you'd need to check Pelagic's API docs for the actual refresh endpoint
+  # Most APIs have something like POST /api/auth/refresh
+
+  logger::log_info("Refreshing authentication token...")
+
+  response <- httr::POST(
+    url = paste0(base_url, "/api/auth/refresh"),
+    body = list(refreshToken = refresh_token),
+    encode = "json",
+    httr::add_headers("Content-Type" = "application/json")
+  )
+
+  if (httr::status_code(response) != 200) {
+    stop("Token refresh failed. Status code: ", httr::status_code(response))
+  }
+
+  auth_data <- httr::content(response, as = "parsed")
+  logger::log_info("Successfully refreshed authentication token")
+
+  return(auth_data)
+}
+
+#' Get Boats from Pelagic Analytics API (with server-side filtering)
+#'
+#' @description
+#' Retrieves boat information from the Pelagic Analytics API for a specified customer.
+#' Supports server-side filtering to reduce data transfer and processing time.
+#'
+#' @param token Character. Access token obtained from pelagic_auth()
+#' @param customers Character vector. Customer IDs to filter by. If NULL, uses default customer.
+#' @param boats Character/Numeric vector. Boat IDs to filter by. If NULL, returns all boats.
+#' @param imeis Character/Numeric vector. IMEI numbers to filter by. If NULL, returns all devices.
+#' @param columns Character vector. Specific columns to extract. If NULL, returns all columns.
+#' @param refresh_token Character. Optional refresh token for automatic token refresh
+#' @param username Character. Optional username for re-authentication if refresh fails
+#' @param password Character. Optional password for re-authentication if refresh fails
+#' @param customer_id Character. Default customer ID if customers parameter is NULL
+#' @param base_url Character. Base URL for the API. Default is "https://analytics.pelagicdata.com"
+#'
+#' @return Data frame containing boat information
+#'
+#' @examples
+#' \dontrun{
+#' # Get all boats (default)
+#' boats_all <- get_pelagic_boats(auth_response$token)
+#'
+#' # Get boats with specific IMEIs (server-side filtering)
+#' boats_filtered <- get_pelagic_boats(
+#'   token = auth_response$token,
+#'   imeis = c("864352046XXXX", "1234567890XXXX")
+#' )
+#'
+#' # Get boats for multiple customers
+#' boats_multi_customer <- get_pelagic_boats(
+#'   token = auth_response$token,
+#'   customers = c("customer1-id", "customer2-id")
+#' )
+#'
+#' # Combine server-side filtering with column selection
+#' boats_minimal <- get_pelagic_boats(
+#'   token = auth_response$token,
+#'   imeis = "864352046XXXXX",
+#'   columns = c("id", "name", "devices.imei")
+#' )
+#' }
+#'
+#' @export
+get_pelagic_boats <- function(
+  token,
+  customers = NULL,
+  boats = NULL,
+  imeis = NULL,
+  columns = NULL,
+  refresh_token = NULL,
+  username = NULL,
+  password = NULL,
+  customer_id = NULL,
+  base_url = "https://analytics.pelagicdata.com"
+) {
+  # Helper function to make the actual API request
+  make_boats_request <- function(access_token) {
+    # Build request body with server-side filters
+    request_body <- list(
+      customers = if (is.null(customers)) {
+        list(list(entityType = "CUSTOMER", id = customer_id))
+      } else {
+        lapply(customers, function(cust_id) {
+          list(entityType = "CUSTOMER", id = cust_id)
+        })
+      },
+      boats = if (is.null(boats)) list() else as.list(boats),
+      imeis = if (is.null(imeis)) list() else as.list(as.numeric(imeis))
+    )
+
+    logger::log_info(
+      "Making API request with filters: customers={length(request_body$customers)}, boats={length(request_body$boats)}, imeis={length(request_body$imeis)}"
+    )
+
+    httr::POST(
+      url = paste0(base_url, "/api/pds/boats"),
+      body = request_body,
+      encode = "json",
+      httr::add_headers(
+        "Content-Type" = "application/json",
+        "X-Authorization" = paste("Bearer", access_token)
+      )
+    )
+  }
+
+  # Try the initial request
+  response <- make_boats_request(token)
+
+  # If we get a 401 (unauthorized), try to refresh the token
+  if (httr::status_code(response) == 401 && !is.null(refresh_token)) {
+    logger::log_info("Token expired, attempting to refresh...")
+
+    tryCatch(
+      {
+        # Try to refresh the token
+        new_auth <- pelagic_refresh_token(refresh_token, base_url)
+        response <- make_boats_request(new_auth$token)
+      },
+      error = function(e) {
+        # If refresh fails and we have username/password, re-authenticate
+        if (!is.null(username) && !is.null(password)) {
+          logger::log_info("Token refresh failed, re-authenticating...")
+          new_auth <- pelagic_auth(username, password, base_url)
+          response <<- make_boats_request(new_auth$token)
+        } else {
+          stop("Token expired and refresh failed. Please re-authenticate.")
+        }
+      }
+    )
+  }
+
+  # Check if final request was successful
+  if (httr::status_code(response) != 200) {
+    stop("Failed to retrieve boats. Status code: ", httr::status_code(response))
+  }
+
+  # Parse the response
+  boats_data <- httr::content(response, as = "parsed")
+
+  logger::log_info(
+    "Successfully retrieved boats data from Pelagic Analytics API"
+  )
+
+  # Convert to data frame if the response is a list
+  if (is.list(boats_data) && length(boats_data) > 0) {
+    # Use a recursive function to flatten nested lists safely
+    flatten_safely <- function(x, prefix = "") {
+      result <- list()
+      for (name in names(x)) {
+        col_name <- if (prefix == "") name else paste(prefix, name, sep = ".")
+        if (is.list(x[[name]]) && !is.null(names(x[[name]]))) {
+          # Recursively flatten named lists
+          result <- c(result, flatten_safely(x[[name]], col_name))
+        } else {
+          # Keep simple values as-is
+          result[[col_name]] <- x[[name]]
+        }
+      }
+      return(result)
+    }
+
+    # Convert to data frame if the response is a list
+    if (is.list(boats_data) && length(boats_data) > 0) {
+      # Use the same recursive function to flatten nested lists safely
+      flatten_safely <- function(x, prefix = "") {
+        result <- list()
+        for (name in names(x)) {
+          col_name <- if (prefix == "") name else paste(prefix, name, sep = ".")
+          if (is.list(x[[name]]) && !is.null(names(x[[name]]))) {
+            # Recursively flatten named lists
+            result <- c(result, flatten_safely(x[[name]], col_name))
+          } else {
+            # Keep simple values as-is
+            result[[col_name]] <- x[[name]]
+          }
+        }
+        return(result)
+      }
+
+      boats_df <- purrr::map_dfr(
+        boats_data,
+        ~ {
+          flattened <- flatten_safely(.)
+          df <- dplyr::as_tibble(flattened, .name_repair = "unique")
+
+          # Select only specified columns if provided
+          if (!is.null(columns)) {
+            # Find columns that match the requested names (including partial matches)
+            available_cols <- names(df)
+            selected_cols <- c()
+
+            for (col in columns) {
+              # Exact match first
+              if (col %in% available_cols) {
+                selected_cols <- c(selected_cols, col)
+              } else {
+                # Partial match (e.g., "devices" matches "devices.id", "devices.name", etc.)
+                matches <- available_cols[grepl(
+                  paste0("^", col, "(\\..*)?$"),
+                  available_cols
+                )]
+                selected_cols <- c(selected_cols, matches)
+              }
+            }
+
+            # Remove duplicates and select columns
+            selected_cols <- unique(selected_cols)
+            if (length(selected_cols) > 0) {
+              df <- df[, selected_cols, drop = FALSE]
+            } else {
+              warning(
+                "None of the requested columns were found. Available columns: ",
+                paste(available_cols, collapse = ", ")
+              )
+            }
+          }
+
+          return(df)
+        },
+        .id = "boat_index"
+      )
+
+      return(boats_df)
+    }
+
+    return(boats_data)
+  }
+}
+
+#' Get Devices from Pelagic Analytics API (with server-side filtering)
+#'
+#' @description
+#' Retrieves device information from the Pelagic Analytics API for a specified customer.
+#' Supports server-side filtering to reduce data transfer and processing time.
+#'
+#' @param token Character. Access token obtained from pelagic_auth()
+#' @param customers Character vector. Customer IDs to filter by. If NULL, uses default customer.
+#' @param boats Character/Numeric vector. Boat IDs to filter by. If NULL, returns all boats.
+#' @param imeis Character/Numeric vector. IMEI numbers to filter by. If NULL, returns all devices.
+#' @param columns Character vector. Specific columns to extract. If NULL, returns all columns.
+#' @param customer_id Character. Default customer ID if customers parameter is NULL
+#' @param base_url Character. Base URL for the API. Default is "https://analytics.pelagicdata.com"
+#'
+#' @return Data frame containing device information
+#'
+#' @examples
+#' \dontrun{
+#' # Get all devices
+#' devices_all <- get_pelagic_devices(auth_response$token)
+#'
+#' # Get device with specific IMEI (server-side filtering - much faster!)
+#' device_specific <- get_pelagic_devices(
+#'   token = auth_response$token,
+#'   imeis = "86435204XXXXX"
+#' )
+#'
+#' # Get multiple devices by IMEI
+#' devices_multiple <- get_pelagic_devices(
+#'   token = auth_response$token,
+#'   imeis = c("864352046XXXXX", "123456789XXXXX")
+#' )
+#'
+#' # Combine with column selection
+#' devices_minimal <- get_pelagic_devices(
+#'   token = auth_response$token,
+#'   imeis = "86435204XXXXX",
+#'   columns = c("id", "name", "imei", "boat.name", "lat", "lng")
+#' )
+#' }
+#'
+#' @export
+get_pelagic_devices <- function(
+  token,
+  customers = NULL,
+  boats = NULL,
+  imeis = NULL,
+  columns = NULL,
+  customer_id = NULL,
+  base_url = "https://analytics.pelagicdata.com"
+) {
+  # Prepare the request body with server-side filters
+  request_body <- list(
+    customers = if (is.null(customers)) {
+      list(list(entityType = "CUSTOMER", id = customer_id))
+    } else {
+      lapply(customers, function(cust_id) {
+        list(entityType = "CUSTOMER", id = cust_id)
+      })
+    },
+    boats = if (is.null(boats)) list() else as.list(boats),
+    imeis = if (is.null(imeis)) list() else as.list(as.numeric(imeis))
+  )
+
+  logger::log_info(
+    "Making API request with filters: customers={length(request_body$customers)}, boats={length(request_body$boats)}, imeis={length(request_body$imeis)}"
+  )
+
+  # Make the API request
+  response <- httr::POST(
+    url = paste0(base_url, "/api/pds/devices"),
+    body = request_body,
+    encode = "json",
+    httr::add_headers(
+      "Content-Type" = "application/json",
+      "X-Authorization" = paste("Bearer", token)
+    )
+  )
+
+  # Check if request was successful
+  if (httr::status_code(response) != 200) {
+    stop(
+      "Failed to retrieve devices. Status code: ",
+      httr::status_code(response)
+    )
+  }
+
+  # Parse the response
+  devices_data <- httr::content(response, as = "parsed")
+
+  logger::log_info(
+    "Successfully retrieved devices data from Pelagic Analytics API"
+  )
+
+  # Convert to data frame if the response is a list
+  if (is.list(devices_data) && length(devices_data) > 0) {
+    # Use the same recursive function to flatten nested lists safely
+    flatten_safely <- function(x, prefix = "") {
+      result <- list()
+      for (name in names(x)) {
+        col_name <- if (prefix == "") name else paste(prefix, name, sep = ".")
+        if (is.list(x[[name]]) && !is.null(names(x[[name]]))) {
+          # Recursively flatten named lists
+          result <- c(result, flatten_safely(x[[name]], col_name))
+        } else {
+          # Keep simple values as-is
+          result[[col_name]] <- x[[name]]
+        }
+      }
+      return(result)
+    }
+
+    devices_df <- purrr::map_dfr(
+      devices_data,
+      ~ {
+        flattened <- flatten_safely(.)
+        df <- dplyr::as_tibble(flattened, .name_repair = "unique")
+
+        # Select only specified columns if provided
+        if (!is.null(columns)) {
+          # Find columns that match the requested names (including partial matches)
+          available_cols <- names(df)
+          selected_cols <- c()
+
+          for (col in columns) {
+            # Exact match first
+            if (col %in% available_cols) {
+              selected_cols <- c(selected_cols, col)
+            } else {
+              # Partial match (e.g., "boat" matches "boat.id", "boat.name", etc.)
+              matches <- available_cols[grepl(
+                paste0("^", col, "(\\..*)?$"),
+                available_cols
+              )]
+              selected_cols <- c(selected_cols, matches)
+            }
+          }
+
+          # Remove duplicates and select columns
+          selected_cols <- unique(selected_cols)
+          if (length(selected_cols) > 0) {
+            df <- df[, selected_cols, drop = FALSE]
+          } else {
+            warning(
+              "None of the requested columns were found. Available columns: ",
+              paste(available_cols, collapse = ", ")
+            )
+          }
+        }
+
+        return(df)
+      },
+      .id = "device_index"
+    )
+
+    return(devices_df)
+  }
+
+  return(devices_data)
+}
+
+
+#' Ingest Pelagic Boats Data and Sync to Airtable
+#'
+#' Retrieves boat/device data from Pelagic Data Systems API, processes and cleans
+#' the data, maps country information from Airtable, and syncs the results back
+#' to Airtable. This function handles the complete workflow for maintaining
+#' up-to-date device information.
+#'
+#' @param conf List. Configuration parameters (defaults to read_config()).
+#'   Must contain pds (username, password, customer_id) and airtable
+#'   (token, frame base_id) configuration.
+#'
+#' @return List containing the authentication response and sync results.
+#'
+#' @details
+#' The function performs the following steps:
+#' 1. Authenticates with Pelagic Data Systems API
+#' 2. Retrieves boat data with device and vessel characteristics
+#' 3. Cleans and standardizes the data format
+#' 4. Maps customer names to standardized country names
+#' 5. Retrieves country IDs from Airtable Countries table
+#' 6. Syncs the processed data to the pds_devices Airtable table
+#'
+#' Country mapping includes: Egypt, Timor-Leste, Mozambique, Zanzibar, Kenya,
+#' Malaysia, Malawi, Tanzania, Bangladesh, and India.
+#'
+#' @examples
+#' \dontrun{
+#' # Using default configuration
+#' result <- ingest_pelagic_boats()
+#'
+#' # Using custom configuration
+#' custom_config <- read_config("custom_conf.yml")
+#' result <- ingest_pelagic_boats(custom_config)
+#' }
+#'
+#' @export
+ingest_pelagic_boats <- function(conf = NULL) {
+  if (is.null(conf)) {
+    conf <- read_config()
+  }
+
+  logger::log_info("Starting Pelagic boats data ingestion")
+
+  # Authenticate with PDS
+  auth_response <- pelagic_auth(
+    username = conf$pds$username,
+    password = conf$pds$password
+  )
+
+  logger::log_info("Retrieved PDS authentication token")
+
+  # Get boats data from PDS API
+  boats <- get_pelagic_boats(
+    token = auth_response$token,
+    customers = conf$pds$customer_id,
+    columns = c(
+      "device.imei",
+      "active",
+      "operationalStatus",
+      "device.boatName",
+      "device.externalId",
+      "device.externalBoatId",
+      "registrationNumber",
+      # Location/Organization
+      "device.directCustomer.name",
+      "region",
+      "community",
+      "device.timezone",
+      # Vessel characteristics
+      "vesselType",
+      "vesselSize",
+      "gearType",
+      "motorType",
+      "description",
+      # Operations
+      "captain",
+      "ownerName",
+      "deviceOwner",
+      # Device status
+      "device.lastSeen",
+      "device.batteryState",
+      "device.healthCategory"
+    )
+  ) |>
+    janitor::clean_names() |>
+    dplyr::filter(!is.na(.data$device_imei)) |>
+    dplyr::select(
+      # Device identification
+      imei = "device_imei",
+      "active",
+      last_seen = "device_last_seen",
+      boat_name = "device_boat_name",
+      external_id = "device_external_id",
+      external_boat_id = "device_external_boat_id",
+      "registration_number",
+      # Location/Organization
+      customer_name = "device_direct_customer_name",
+      "region",
+      "community",
+      "device_timezone",
+      # Vessel characteristics
+      "vessel_type",
+      "vessel_size",
+      "gear_type",
+      "motor_type",
+      "description",
+      # Operations/Ownership
+      "captain",
+      "owner_name",
+      "device_owner",
+      # Device status
+      battery_state = "device_battery_state",
+      health_category = "device_health_category"
+    ) |>
+    dplyr::distinct() |>
+    dplyr::mutate(
+      dplyr::across(dplyr::everything(), ~ dplyr::if_else(.x == "", NA, .x))
+    ) |>
+    dplyr::mutate(
+      country = dplyr::case_when(
+        .data$customer_name == "WorldFish - Egypt" ~ "egypt",
+        .data$customer_name == "MAF / WorldFish" ~ "Timor-Leste",
+        .data$customer_name == "WorldFish - Mozambique" ~ "mozambique",
+        .data$customer_name == "WorldFish - Zanzibar" ~ "zanzibar",
+        .data$customer_name == "Traders" ~ "Timor-Leste",
+        .data$customer_name == "WorldFish - Kenya" ~ "kenya",
+        .data$customer_name == "WorldFish - Malaysia" ~ "malaysia",
+        .data$customer_name == "WorldFish - Malawi" ~ "malawi",
+        .data$customer_name == "WorldFish - Tanzania AP" ~ "tanzania",
+        .data$customer_name == "Kenya" ~ "kenya",
+        .data$customer_name == "WorldFish - Bangladesh" ~ "bangladesh",
+        .data$customer_name == "FSSP2: Traders" ~ "Timor-Leste",
+        .data$customer_name == "Kenya AABS" ~ "kenya",
+        .data$customer_name == "WorldFish - India" ~ "india",
+        .data$customer_name == "Syberintel - distributor" ~ "mozambique",
+        TRUE ~ NA
+      ),
+      country = stringr::str_to_title(.data$country)
+    ) |>
+    dplyr::relocate(country = "country", .after = "customer_name")
+
+  logger::log_info(
+    "Retrieved and processed {nrow(boats)} boat records from PDS"
+  )
+
+  # Get countries data from Airtable
+  countries_df <- airtable_to_df(
+    base_id = conf$airtable$frame$base_id,
+    table_name = "Countries",
+    token = conf$airtable$token
+  )
+
+  # Join boats with country IDs
+  boats_with_country_ids <- boats %>%
+    dplyr::left_join(
+      countries_df %>%
+        dplyr::select(
+          country_name = "Country",
+          country_id = "airtable_id"
+        ),
+      by = c("country" = "country_name")
+    ) %>%
+    dplyr::mutate(
+      country = purrr::map(
+        .data$country_id,
+        ~ if (is.na(.x)) character(0) else .x
+      )
+    ) %>%
+    dplyr::select(-"country_id") |>
+    dplyr::mutate(
+      country = purrr::map(
+        .data$country,
+        ~ if (length(.x) > 0) list(.x) else list()
+      )
+    )
+
+  logger::log_info(
+    "Mapped countries for {nrow(boats_with_country_ids)} records"
+  )
+
+  # Sync to Airtable
+  sync_result <- device_sync(
+    boats_df = boats_with_country_ids,
+    base_id = conf$airtable$frame$base_id,
+    table_name = "pds_devices",
+    token = conf$airtable$token
+  )
+
+  logger::log_info("Successfully completed Pelagic boats ingestion and sync")
+
+  return(list(
+    auth_response = auth_response,
+    boats_count = nrow(boats_with_country_ids),
+    sync_result = sync_result
+  ))
+}

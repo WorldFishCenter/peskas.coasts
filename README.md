@@ -43,7 +43,7 @@ built-in currency conversion and regional harmonization capabilities.
 - **Spatial Analysis**: Grid-based summarization of fishing activity at
   multiple scales (100m-1km)
 - **Cloud Storage Integration**: Seamless upload/download from Google
-  Cloud Storage
+  Cloud Storage with multi-bucket support for regional data
 - **MongoDB Integration**: Geospatial data storage with 2dsphere
   indexing
 - **Parallel Processing**: Efficient handling of large datasets using
@@ -183,22 +183,40 @@ observations - `first_seen`/`last_seen`: Temporal extent of activity
 
 ## Cloud Storage Integration
 
-The package seamlessly integrates with Google Cloud Storage:
+The package seamlessly integrates with Google Cloud Storage and supports
+multiple buckets for regional/environment-specific data:
 
 ``` r
-# Upload processed data
-upload_cloud_file(
-  file = "processed_data.parquet",
-  provider = "google",
-  options = list(bucket = "your-bucket")
+# List available buckets
+list_storage_buckets()
+# Returns: c("kenya-prod", "mozambique-prod", "zanzibar-prod", "dev", "prod")
+
+# Download from default bucket (backward compatible)
+raw_data <- download_parquet_from_cloud(
+  prefix = "pds-trips",
+  provider = conf$storage$google$key,
+  options = conf$storage$google$options
 )
 
-# Download data for analysis
-download_cloud_file(
-  name = "pds_trips_v1.0.0.parquet",
-  provider = "google", 
-  options = list(bucket = "your-bucket")
+# Download from a specific regional bucket
+kenya_data <- download_parquet_from_cloud(
+  prefix = "pds-trips",
+  provider = conf$storage$google$key,
+  options = conf$storage$google$options,
+  bucket_name = "kenya-prod"
 )
+
+# Upload to a specific regional bucket
+upload_parquet_to_cloud(
+  data = processed_data,
+  prefix = "pds-trips-processed",
+  provider = conf$storage$google$key,
+  options = conf$storage$google$options,
+  bucket_name = "mozambique-prod"
+)
+
+# Get bucket configuration
+bucket_config <- get_bucket_config("zanzibar-prod")
 ```
 
 ## MongoDB Integration

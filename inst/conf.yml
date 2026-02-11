@@ -1,4 +1,21 @@
 default:
+  trips:
+    matched: trips-matched
+  surveys:
+    zanzibar:
+      wf:
+        validated: wf-surveys-validated
+        merged: wf-surveys-merged
+    kenya:
+      kefs:
+        validated: kefs-v2-surveys-validated
+        merged: kefs-v2-surveys-merged
+    mozambique:
+      adnap:
+        validated: wf-adnap-surveys-validated
+        merged: wf-adnap-surveys-merged
+      lurio:
+        validated: wf-lurio-surveys-validated
   pds:
     token: !expr Sys.getenv('PDS_TOKEN')
     secret: !expr Sys.getenv('PDS_SECRET')
@@ -23,6 +40,10 @@ default:
         project: peskas
         bucket: peskas-coasts
         service_account_key: !expr Sys.getenv('GCP_SA_KEY')
+      buckets:
+        kenya: kenya-dev
+        mozambique: mozambique-dev
+        zanzibar: zanzibar-dev
     mongodb:
       coasts_portal:
         connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_COASTS')
@@ -71,6 +92,10 @@ production:
     google:
       options:
         bucket: peskas-coasts
+      buckets:
+        kenya: kenya-prod
+        mozambique: mozambique-prod
+        zanzibar: zanzibar-prod
     mongodb:
       coasts_portal:
         database_name: portal

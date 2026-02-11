@@ -637,7 +637,8 @@ GPS tracks from PDS API</li>
 <li><strong>Spatial Analysis</strong>: Grid-based summarization of
 fishing activity at multiple scales (100m-1km)</li>
 <li><strong>Cloud Storage Integration</strong>: Seamless upload/download
-from Google Cloud Storage</li>
+from Google Cloud Storage with multi-bucket support for regional
+data</li>
 <li><strong>MongoDB Integration</strong>: Geospatial data storage with
 2dsphere indexing</li>
 <li><strong>Parallel Processing</strong>: Efficient handling of large
@@ -748,20 +749,38 @@ time per grid cell - <code>mean_speed</code>: Average vessel speed -
 <code>first_seen</code>/<code>last_seen</code>: Temporal extent of
 activity</p>
 <h2 id="cloud-storage-integration">Cloud Storage Integration</h2>
-<p>The package seamlessly integrates with Google Cloud Storage:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="co"># Upload processed data</span></span>
-<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="fu">upload_cloud_file</span>(</span>
-<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="at">file =</span> <span class="st">&quot;processed_data.parquet&quot;</span>,</span>
-<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="at">provider =</span> <span class="st">&quot;google&quot;</span>,</span>
-<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="at">options =</span> <span class="fu">list</span>(<span class="at">bucket =</span> <span class="st">&quot;your-bucket&quot;</span>)</span>
-<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>)</span>
-<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a></span>
-<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co"># Download data for analysis</span></span>
-<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="fu">download_cloud_file</span>(</span>
-<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>  <span class="at">name =</span> <span class="st">&quot;pds_trips_v1.0.0.parquet&quot;</span>,</span>
-<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a>  <span class="at">provider =</span> <span class="st">&quot;google&quot;</span>, </span>
-<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a>  <span class="at">options =</span> <span class="fu">list</span>(<span class="at">bucket =</span> <span class="st">&quot;your-bucket&quot;</span>)</span>
-<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a>)</span></code></pre></div>
+<p>The package seamlessly integrates with Google Cloud Storage and
+supports multiple buckets for regional/environment-specific data:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="co"># List available buckets</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="fu">list_storage_buckets</span>()</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co"># Returns: c(&quot;kenya-prod&quot;, &quot;mozambique-prod&quot;, &quot;zanzibar-prod&quot;, &quot;dev&quot;, &quot;prod&quot;)</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co"># Download from default bucket (backward compatible)</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>raw_data <span class="ot">&lt;-</span> <span class="fu">download_parquet_from_cloud</span>(</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>  <span class="at">prefix =</span> <span class="st">&quot;pds-trips&quot;</span>,</span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>  <span class="at">provider =</span> conf<span class="sc">$</span>storage<span class="sc">$</span>google<span class="sc">$</span>key,</span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>  <span class="at">options =</span> conf<span class="sc">$</span>storage<span class="sc">$</span>google<span class="sc">$</span>options</span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>)</span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co"># Download from a specific regional bucket</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a>kenya_data <span class="ot">&lt;-</span> <span class="fu">download_parquet_from_cloud</span>(</span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a>  <span class="at">prefix =</span> <span class="st">&quot;pds-trips&quot;</span>,</span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a>  <span class="at">provider =</span> conf<span class="sc">$</span>storage<span class="sc">$</span>google<span class="sc">$</span>key,</span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a>  <span class="at">options =</span> conf<span class="sc">$</span>storage<span class="sc">$</span>google<span class="sc">$</span>options,</span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a>  <span class="at">bucket_name =</span> <span class="st">&quot;kenya-prod&quot;</span></span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a>)</span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a></span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a><span class="co"># Upload to a specific regional bucket</span></span>
+<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a><span class="fu">upload_parquet_to_cloud</span>(</span>
+<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a>  <span class="at">data =</span> processed_data,</span>
+<span id="cb8-23"><a href="#cb8-23" tabindex="-1"></a>  <span class="at">prefix =</span> <span class="st">&quot;pds-trips-processed&quot;</span>,</span>
+<span id="cb8-24"><a href="#cb8-24" tabindex="-1"></a>  <span class="at">provider =</span> conf<span class="sc">$</span>storage<span class="sc">$</span>google<span class="sc">$</span>key,</span>
+<span id="cb8-25"><a href="#cb8-25" tabindex="-1"></a>  <span class="at">options =</span> conf<span class="sc">$</span>storage<span class="sc">$</span>google<span class="sc">$</span>options,</span>
+<span id="cb8-26"><a href="#cb8-26" tabindex="-1"></a>  <span class="at">bucket_name =</span> <span class="st">&quot;mozambique-prod&quot;</span></span>
+<span id="cb8-27"><a href="#cb8-27" tabindex="-1"></a>)</span>
+<span id="cb8-28"><a href="#cb8-28" tabindex="-1"></a></span>
+<span id="cb8-29"><a href="#cb8-29" tabindex="-1"></a><span class="co"># Get bucket configuration</span></span>
+<span id="cb8-30"><a href="#cb8-30" tabindex="-1"></a>bucket_config <span class="ot">&lt;-</span> <span class="fu">get_bucket_config</span>(<span class="st">&quot;zanzibar-prod&quot;</span>)</span></code></pre></div>
 <h2 id="mongodb-integration">MongoDB Integration</h2>
 <p>Geospatial data is stored in MongoDB with appropriate indexing:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Push data with geospatial indexing</span></span>
