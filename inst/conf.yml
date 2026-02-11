@@ -1,6 +1,30 @@
 default:
   trips:
     matched: trips-matched
+  api:
+    trips:
+      bucket: peskas-api-dev
+      mozambique:
+        raw:
+          file_prefix: trips-raw
+          cloud_path: mozambique/raw
+        validated:
+          file_prefix: trips-validated
+          cloud_path: mozambique/validated
+      kenya:
+        raw:
+          file_prefix: trips-raw
+          cloud_path: kenya/raw
+        validated:
+          file_prefix: trips-validated
+          cloud_path: kenya/validated
+      zanzibar:
+        raw:
+          file_prefix: trips-raw
+          cloud_path: zanzibar/raw
+        validated:
+          file_prefix: trips-validated
+          cloud_path: zanzibar/validated
   surveys:
     zanzibar:
       wf:
@@ -88,6 +112,9 @@ default:
         users: users
 
 production:
+  api:
+    trips:
+      bucket: peskas-api-prod
   storage:
     google:
       options:

@@ -49,6 +49,9 @@ download_parquet_from_cloud <- function(prefix, provider, options, bucket_name =
     options = options
   )
 
+  # Ensure local directory exists for nested paths
+  dir.create(dirname(parquet_file), recursive = TRUE, showWarnings = FALSE)
+
   # Log and download file
   logger::log_info("Retrieving {parquet_file}")
   download_cloud_file(

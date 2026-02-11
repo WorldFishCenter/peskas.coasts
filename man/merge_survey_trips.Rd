@@ -2,7 +2,7 @@
 % Please edit documentation in R/match-trips.R
 \name{merge_survey_trips}
 \alias{merge_survey_trips}
-\title{Match GPS Trips with Survey Data}
+\title{Merge GPS Trips with Survey Data}
 \usage{
 merge_survey_trips(log_threshold = logger::DEBUG)
 }
@@ -10,14 +10,11 @@ merge_survey_trips(log_threshold = logger::DEBUG)
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.}
 }
 \value{
-A data frame of combined trip records across all regions with
-  harmonized columns including country, submission_id, pds_trip,
-  landing_date, and catch information.
+Invisible NULL. Uploads merged trip data to cloud storage.
 }
 \description{
-Downloads matched GPS and survey trip data from regional buckets
-(Kenya, Mozambique, Zanzibar), filters valid records, and harmonizes
-columns into a single combined dataset.
+Combines validated API trip data with GPS-matched survey records across
+all regions and uploads the result to cloud storage.
 }
 \examples{
 \dontrun{
@@ -25,4 +22,5 @@ merged_data <- merge_survey_trips()
 }
 
 }
+\keyword{export}
 \keyword{workflow}

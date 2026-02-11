@@ -1,22 +1,19 @@
-#' Match GPS Trips with Survey Data
+#' Merge GPS Trips with Survey Data
 #'
 #' @description
-#' Downloads matched GPS and survey trip data from regional buckets
-#' (Kenya, Mozambique, Zanzibar), filters valid records, and harmonizes
-#' columns into a single combined dataset.
+#' Combines validated API trip data with GPS-matched survey records across
+#' all regions and uploads the result to cloud storage.
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #'
-#' @return A data frame of combined trip records across all regions with
-#'   harmonized columns including country, submission_id, pds_trip,
-#'   landing_date, and catch information.
+#' @return Invisible NULL. Uploads merged trip data to cloud storage.
 #'
 #' @examples
 #' \dontrun{
 #' merged_data <- merge_survey_trips()
 #' }
 #'
-#' @keywords workflow
+#' @keywords workflow export
 #' @export
 merge_survey_trips <- function(log_threshold = logger::DEBUG) {
   logger::log_threshold(log_threshold)
@@ -24,56 +21,41 @@ merge_survey_trips <- function(log_threshold = logger::DEBUG) {
 
   countries <- c("kenya", "mozambique", "zanzibar")
 
-  prefixes <- c(
+  api_prefixes <- c(
+    paste0(
+      conf$api$trips$kenya$validated$cloud_path,
+      "/",
+      conf$api$trips$kenya$validated$file_prefix
+    ),
+    paste0(
+      conf$api$trips$mozambique$validated$cloud_path,
+      "/",
+      conf$api$trips$mozambique$validated$file_prefix
+    ),
+    paste0(
+      conf$api$trips$zanzibar$validated$cloud_path,
+      "/",
+      conf$api$trips$zanzibar$validated$file_prefix
+    )
+  )
+
+  merged_prefixes <- c(
     conf$surveys$kenya$kefs$merged,
     conf$surveys$mozambique$adnap$merged,
     conf$surveys$zanzibar$wf$merged
   )
 
-  buckets <- c(
+  merged_buckets <- c(
     conf$storage$google$buckets$kenya,
     conf$storage$google$buckets$mozambique,
     conf$storage$google$buckets$zanzibar
   )
-
-  col_specs <- list(
-    c(
-      "submission_id",
-      pds_trip = "trip",
-      "landing_date",
-      "gaul_1_name",
-      "gaul_2_name",
-      alpha3_code = "sample_alpha3_code",
-      "sample_weight",
-      "sample_price",
-      "total_catch_weight",
-      "total_catch_price"
-    ),
-    c(
-      "submission_id",
-      pds_trip = "trip",
-      "landing_date",
-      "gaul_1_name",
-      "gaul_2_name",
-      "alpha3_code",
-      "catch_kg",
-      "catch_price"
-    ),
-    c(
-      "submission_id",
-      pds_trip = "trip",
-      "landing_date",
-      alpha3_code = "catch_taxon",
-      "catch_kg",
-      "catch_price"
-    )
-  )
-
+  # TO DO:ensure all have pds trip start/end/distance
   logger::log_info("Downloading merged trip data from regional buckets...")
   merged_trips <-
     purrr::map2(
-      prefixes,
-      buckets,
+      merged_prefixes,
+      merged_buckets,
       ~ download_parquet_from_cloud(
         prefix = .x,
         provider = conf$storage$google$key,
@@ -83,14 +65,48 @@ merge_survey_trips <- function(log_threshold = logger::DEBUG) {
     ) |>
     rlang::set_names(countries) |>
     purrr::map(
-      ~ dplyr::filter(.x, !is.na(.data$submission_id) & !is.na(.data$trip))
-    ) |>
-    purrr::map(
-      ~ dplyr::mutate(.x, submission_id = as.character(.data$submission_id))
+      ~ .x |>
+        dplyr::select(
+          "submission_id",
+          pds_trip = "trip"
+        ) |>
+        dplyr::mutate(
+          submission_id = as.character(.data$submission_id),
+          pds_trip = as.character(.data$pds_trip)
+        ) |>
+        dplyr::distinct()
     )
 
-  logger::log_info("Harmonizing columns across regions...")
-  matched_trips <- purrr::map2(merged_trips, col_specs, select_trip_columns) |>
+  api_trips <-
+    purrr::map(
+      api_prefixes,
+      ~ download_parquet_from_cloud(
+        prefix = .x,
+        provider = conf$storage$google$key,
+        options = conf$storage$google$options,
+        bucket_name = conf$api$trips$bucket
+      )
+    ) |>
+    rlang::set_names(countries) |>
+    purrr::map(
+      ~ .x |>
+        dplyr::rename(submission_id = "trip_id") |>
+        dplyr::mutate(
+          submission_id = stringr::str_replace(.data$submission_id, "TRIP_", "")
+        )
+    )
+
+  matched_trips <-
+    purrr::map2(
+      api_trips,
+      merged_trips,
+      ~ dplyr::left_join(.x, .y, by = "submission_id")
+    ) |>
+    purrr::map(
+      ~ .x |>
+        dplyr::filter(!is.na(.data$submission_id) & !is.na(.data$pds_trip)) |>
+        dplyr::relocate("pds_trip", .after = "submission_id")
+    ) |>
     dplyr::bind_rows(.id = "country")
 
   upload_parquet_to_cloud(
