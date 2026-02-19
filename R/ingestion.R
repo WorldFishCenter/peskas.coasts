@@ -56,7 +56,9 @@ ingest_assets <- function(log_threshold = logger::DEBUG) {
           "gaul_1_code",
           "gaul_2_name",
           "gaul_2_code",
-          "country"
+          "total_boats",
+          "country",
+          "airtable_id"
         ),
         conf = conf
       ),
@@ -100,6 +102,7 @@ ingest_assets <- function(log_threshold = logger::DEBUG) {
           "registration_number",
           "captain",
           "last_seen",
+          "gaul_2",
           "region",
           "community"
         ),
@@ -107,6 +110,15 @@ ingest_assets <- function(log_threshold = logger::DEBUG) {
       )
     ) |>
     purrr::map(~ dplyr::distinct(.x))
+
+  # Enrich devices with geo district names
+  assets_list$devices <-
+    assets_list$devices |>
+    dplyr::left_join(
+      assets_list$geo |>
+        dplyr::select("airtable_id", "gaul_2_name", "gaul_2_code"),
+      by = c("gaul_2" = "airtable_id")
+    )
 
   asset_filename <-
     conf$metadata$airtable$name |>
