@@ -74,9 +74,23 @@ read_config <- function(package = "coasts") {
     dotenv::load_dot_env(".env")
   }
 
+  # Accept both conf.yml (coasts convention) and config.yml (config package default)
+  conf_file <- system.file("conf.yml", package = package)
+  if (!nzchar(conf_file)) {
+    conf_file <- system.file("config.yml", package = package)
+  }
+
+  if (!nzchar(conf_file)) {
+    stop(
+      "No 'inst/conf.yml' or 'inst/config.yml' found in package '", package, "'. ",
+      "Downstream packages must ship their own configuration file to use coasts pipeline functions. ",
+      "See the coasts CLAUDE.md for the required configuration structure."
+    )
+  }
+
   conf <- config::get(
     config = Sys.getenv("R_CONFIG_ACTIVE", "default"),
-    file = system.file("conf.yml", package = package)
+    file = conf_file
   )
 
   logger::log_info("Using configutation: {attr(conf, 'config')}")
