@@ -126,15 +126,15 @@ export_geos <- function(package = "coasts") {
         country == "mozambique" ~ .data$mean_rpue * 0.016,
         TRUE ~ .data$mean_rpue
       ),
-      mean_rpua = dplyr::case_when(
-        country == "zanzibar" ~ .data$mean_rpua * 0.00037,
-        country == "kenya" ~ .data$mean_rpua * 0.0077,
-        country == "mozambique" ~ .data$mean_rpue * 0.016,
-        TRUE ~ .data$mean_rpue
-      ),
+      # mean_rpua = dplyr::case_when(
+      #   country == "zanzibar" ~ .data$mean_rpua * 0.00037,
+      #   country == "kenya" ~ .data$mean_rpua * 0.0077,
+      #   country == "mozambique" ~ .data$mean_rpue * 0.016,
+      #   TRUE ~ .data$mean_rpue
+      # ),
       mean_price_kg = dplyr::case_when(
-        country == "zanzibar" ~ .data$mean_price_kg * 0.00037,
-        country == "kenya" ~ .data$mean_price_kg * 0.0077,
+        country == "zanzibar" ~ .data$mean_price_kg * 0.00039,
+        country == "kenya" ~ .data$mean_price_kg * 0.0078,
         country == "mozambique" ~ .data$mean_price_kg * 0.016,
         TRUE ~ .data$mean_price_kg
       ),
