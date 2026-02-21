@@ -68,11 +68,15 @@
 #' * [download_cloud_file()] for downloading files from cloud storage
 #' * [upload_cloud_file()] for uploading files to cloud storage
 #'
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
+#'
 #' @keywords workflow ingestion
 #' @export
-ingest_pds_trips <- function(log_threshold = logger::DEBUG) {
+ingest_pds_trips <- function(log_threshold = logger::DEBUG, package = "coasts") {
   logger::log_threshold(log_threshold)
-  conf <- read_config()
+  conf <- read_config(package = package)
 
   assets <- conf$metadata$airtable$name |>
     cloud_object_name(
@@ -133,6 +137,9 @@ ingest_pds_trips <- function(log_threshold = logger::DEBUG) {
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #' @param batch_size Optional number of tracks to process. If NULL, processes all new tracks.
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
 #'
 #' @return None (invisible). The function performs its operations for side effects.
 #'
@@ -140,10 +147,11 @@ ingest_pds_trips <- function(log_threshold = logger::DEBUG) {
 #' @export
 ingest_pds_tracks <- function(
   log_threshold = logger::DEBUG,
-  batch_size = NULL
+  batch_size = NULL,
+  package = "coasts"
 ) {
   logger::log_threshold(log_threshold)
-  conf <- read_config()
+  conf <- read_config(package = package)
 
   # Get trips file from cloud storage
   logger::log_info("Getting trips file from cloud storage...")
@@ -374,10 +382,14 @@ process_single_track <- function(trip_id, conf) {
 #' backup_tracks()
 #' }
 #'
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
+#'
 #' @keywords workflow ingestion
 #' @export
-backup_tracks <- function() {
-  conf <- read_config()
+backup_tracks <- function(package = "coasts") {
+  conf <- read_config(package = package)
 
   assets <- conf$metadata$airtable$name |>
     cloud_object_name(

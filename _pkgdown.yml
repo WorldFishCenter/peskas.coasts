@@ -87,9 +87,7 @@ reference:
     contents:
     - preprocess_pds_tracks
     - preprocess_track_data
-    - process_single_track
     - generate_track_summaries
-    - extract_trip_ids_from_filenames
     - get_fisher_summaries
     - merge_survey_trips
 
@@ -104,11 +102,24 @@ reference:
     - create_usage_heatmap
     - generate_app_usage_report
 
+  - title: "Survey & Fleet Analysis"
+    desc: "Functions for summarizing survey data and modelling fleet-wide activity"
+    contents:
+    - summarize_data
+    - calculate_fishery_metrics
+    - prepare_boat_registry
+    - process_trip_data
+    - calculate_monthly_trip_stats
+    - estimate_fleet_activity
+    - calculate_district_totals
+    - generate_fleet_analysis
+
   - title: "Data Export & Storage"
     desc: "Functions for exporting processed data to databases and cloud storage"
     contents:
     - export_geos
     - export_fishers_stats
+    - export_portal
     - mdb_collection_push
     - mdb_collection_pull
     - upload_cloud_file

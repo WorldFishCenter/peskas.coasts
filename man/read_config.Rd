@@ -4,7 +4,13 @@
 \alias{read_config}
 \title{Read configuration file}
 \usage{
-read_config()
+read_config(package = "coasts")
+}
+\arguments{
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Downstream packages that ship their own `conf.yml` should
+pass their own package name here so that their configuration is loaded
+instead of the `coasts` defaults.}
 }
 \value{
 the environment parameters

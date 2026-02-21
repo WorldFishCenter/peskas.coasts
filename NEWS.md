@@ -1,3 +1,33 @@
+# coasts 1.5.0
+
+## New Features
+
+### Survey & Fleet Analysis Pipeline
+* **NEW** `summarize_data()` - End-to-end summarization of WorldFish survey data into five output tables (monthly, taxa, district, gear, grid summaries) uploaded to cloud storage as versioned parquet files
+* **NEW** `calculate_fishery_metrics()` - Transforms catch-level records into normalized fishery indicators (site-level CPUE/RPUE, predominant gear, species composition) in long format for portal consumption
+* **NEW** `generate_fleet_analysis()` - Orchestrates full fleet activity estimation pipeline and uploads aggregated results to cloud storage
+* **NEW** `prepare_boat_registry()` - Constructs a boat registry from asset metadata for scaling GPS-tracked data to fleet-wide estimates
+* **NEW** `process_trip_data()` - Processes PDS API trip records by device IMEI into per-trip summaries
+* **NEW** `calculate_monthly_trip_stats()` - Aggregates trip data to monthly statistics per district
+* **NEW** `estimate_fleet_activity()` - Scales GPS-sampled trips to fleet-wide activity estimates using boat registry sampling rates
+* **NEW** `calculate_district_totals()` - Joins fleet estimates with survey summaries to produce district-level catch and revenue totals
+
+### Data Export
+* **NEW** `export_portal()` - Downloads WorldFish summary datasets from cloud storage, joins modelled aggregate estimates, pivots to long format, and uploads all tables to MongoDB portal collections
+
+## Enhancements
+
+### Multi-Package Architecture
+* **ENHANCED** `read_config()` - Added `package` argument (default `"coasts"`). Downstream packages that ship their own `inst/conf.yml` can now call `read_config(package = "mypackage")` to load their own configuration instead of the `coasts` defaults
+* **ENHANCED** All 12 top-level pipeline functions now accept a `package` argument threaded through to `read_config()`: `ingest_pds_trips()`, `ingest_pds_tracks()`, `backup_tracks()`, `ingest_assets()`, `preprocess_pds_tracks()`, `merge_survey_trips()`, `get_metadata()`, `summarize_data()`, `export_geos()`, `export_fishers_stats()`, `export_portal()`, `generate_fleet_analysis()`
+
+### Automated Workflows
+* **ENHANCED** `app-usage-report.yaml`, `sync-devices-users.yaml`, `tracks-backup.yaml` - All jobs now carry an explicit `if: github.ref == 'refs/heads/main'` guard, ensuring workflows triggered via `workflow_dispatch` on non-main branches are safely skipped
+
+## Package Infrastructure
+* **ENHANCED** `DESCRIPTION` - Migrated `Author`/`Maintainer` fields to `Authors@R: person(...)` format (fixes R CMD check WARNING); removed spurious `LazyData: true` (no `data/` directory); added `URL` and `BugReports` fields pointing to the GitHub repository
+* **ENHANCED** `_pkgdown.yml` - Added new "Survey & Fleet Analysis" reference section; added `export_portal()` to "Data Export & Storage"; removed two non-exported internal helpers that would have caused build errors
+
 # coasts 1.4.0
 
 ## New Features

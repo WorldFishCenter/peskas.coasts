@@ -4,12 +4,20 @@
 \alias{preprocess_pds_tracks}
 \title{Preprocess Pelagic Data Systems (PDS) Track Data}
 \usage{
-preprocess_pds_tracks(log_threshold = logger::DEBUG, grid_size = 500)
+preprocess_pds_tracks(
+  log_threshold = logger::DEBUG,
+  grid_size = 500,
+  package = "coasts"
+)
 }
 \arguments{
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.}
 
 \item{grid_size}{Numeric. Size of grid cells in meters (100, 250, 500, or 1000).}
+
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 None (invisible). Creates and uploads preprocessed files.

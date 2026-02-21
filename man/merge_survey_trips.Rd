@@ -4,10 +4,14 @@
 \alias{merge_survey_trips}
 \title{Merge GPS Trips with Survey Data}
 \usage{
-merge_survey_trips(log_threshold = logger::DEBUG)
+merge_survey_trips(log_threshold = logger::DEBUG, package = "coasts")
 }
 \arguments{
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.}
+
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 Invisible NULL. Uploads merged trip data to cloud storage.

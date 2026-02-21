@@ -5,6 +5,9 @@
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #' @param grid_size Numeric. Size of grid cells in meters (100, 250, 500, or 1000).
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
 #'
 #' @return None (invisible). Creates and uploads preprocessed files.
 #'
@@ -12,10 +15,11 @@
 #' @export
 preprocess_pds_tracks <- function(
   log_threshold = logger::DEBUG,
-  grid_size = 500
+  grid_size = 500,
+  package = "coasts"
 ) {
   logger::log_threshold(log_threshold)
-  conf <- read_config()
+  conf <- read_config(package = package)
 
   # Get already preprocessed tracks
   logger::log_info("Checking existing preprocessed tracks...")

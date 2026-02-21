@@ -496,6 +496,9 @@ mdb_collection_push <- function(data = NULL, connection_string = NULL, collectio
 #' @param table Character. Name of the specific table to download. If NULL (default),
 #'   all tables specified in the configuration will be downloaded.
 #' @param log_threshold The logging threshold level. Default is logger::DEBUG.
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
 #'
 #' @return A named list containing the requested tables as data frames. If a single
 #'   table is requested, the list will contain only that table. If no table is
@@ -514,9 +517,9 @@ mdb_collection_push <- function(data = NULL, connection_string = NULL, collectio
 #' # Download a specific table
 #' catch_table <- get_metadata(table = "devices")
 #' }
-get_metadata <- function(table = NULL, log_threshold = logger::DEBUG) {
+get_metadata <- function(table = NULL, log_threshold = logger::DEBUG, package = "coasts") {
   logger::log_threshold(log_threshold)
-  conf <- read_config()
+  conf <- read_config(package = package)
 
   logger::log_info("Authenticating for google drive")
   googlesheets4::gs4_auth(

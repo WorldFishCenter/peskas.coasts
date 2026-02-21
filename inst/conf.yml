@@ -62,7 +62,7 @@ default:
       key: gcs
       options:
         project: peskas
-        bucket: peskas-coasts
+        bucket: peskas-coasts-dev
         service_account_key: !expr Sys.getenv('GCP_SA_KEY')
       buckets:
         kenya: kenya-dev
@@ -71,7 +71,7 @@ default:
     mongodb:
       coasts_portal:
         connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_COASTS')
-        database_name: portal
+        database_name: portal-dev
         collection:
           pds_grids: pds_grids
           wio_map: wio_map
@@ -127,7 +127,7 @@ production:
       coasts_portal:
         database_name: portal
       tracks_app:
-        database_name: portal-dev
+        database_name: portal-prod
   pds_storage:
     google:
       options:

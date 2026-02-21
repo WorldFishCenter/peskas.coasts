@@ -4,13 +4,17 @@
 \alias{get_metadata}
 \title{Get metadata tables}
 \usage{
-get_metadata(table = NULL, log_threshold = logger::DEBUG)
+get_metadata(table = NULL, log_threshold = logger::DEBUG, package = "coasts")
 }
 \arguments{
 \item{table}{Character. Name of the specific table to download. If NULL (default),
 all tables specified in the configuration will be downloaded.}
 
 \item{log_threshold}{The logging threshold level. Default is logger::DEBUG.}
+
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 A named list containing the requested tables as data frames. If a single

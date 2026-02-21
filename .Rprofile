@@ -27,7 +27,7 @@ show_env <- function() {
 # Show current environment on startup
 if (interactive()) {
   current <- Sys.getenv("R_CONFIG_ACTIVE", "default")
-  cat("\n\033[36mPeskas Kenya Data Pipeline\033[0m\n")
+  cat("\n\033[36mPeskas Coasts\033[0m\n")
   cat("Current environment: \033[1m", current, "\033[0m\n", sep = "")
   cat("\nQuick commands:\n")
   cat("  • use_prod()    - Switch to production\n")

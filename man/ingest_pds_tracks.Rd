@@ -4,12 +4,20 @@
 \alias{ingest_pds_tracks}
 \title{Ingest Pelagic Data Systems (PDS) Track Data}
 \usage{
-ingest_pds_tracks(log_threshold = logger::DEBUG, batch_size = NULL)
+ingest_pds_tracks(
+  log_threshold = logger::DEBUG,
+  batch_size = NULL,
+  package = "coasts"
+)
 }
 \arguments{
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.}
 
 \item{batch_size}{Optional number of tracks to process. If NULL, processes all new tracks.}
+
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 None (invisible). The function performs its operations for side effects.

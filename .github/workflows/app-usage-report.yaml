@@ -17,6 +17,7 @@ env:
 jobs:
   build-container:
     name: Build R container
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,6 +43,7 @@ jobs:
   generate-report:
     name: Generate App Usage Report
     needs: build-container
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest

@@ -4,7 +4,12 @@
 \alias{export_geos}
 \title{Export Geospatial Data and Regional Metrics to MongoDB}
 \usage{
-export_geos()
+export_geos(package = "coasts")
+}
+\arguments{
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 None (invisible). Creates and uploads data to three MongoDB collections:

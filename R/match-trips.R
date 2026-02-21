@@ -13,11 +13,15 @@
 #' merged_data <- merge_survey_trips()
 #' }
 #'
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
+#'
 #' @keywords workflow export
 #' @export
-merge_survey_trips <- function(log_threshold = logger::DEBUG) {
+merge_survey_trips <- function(log_threshold = logger::DEBUG, package = "coasts") {
   logger::log_threshold(log_threshold)
-  conf <- read_config()
+  conf <- read_config(package = package)
 
   countries <- c("kenya", "mozambique", "zanzibar")
 

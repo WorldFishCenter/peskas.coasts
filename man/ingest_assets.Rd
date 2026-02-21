@@ -4,7 +4,7 @@
 \alias{ingest_assets}
 \title{Ingest Fisheries Asset Metadata}
 \usage{
-ingest_assets(log_threshold = logger::DEBUG)
+ingest_assets(log_threshold = logger::DEBUG, package = "coasts")
 }
 \arguments{
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.
@@ -20,6 +20,10 @@ The function retrieves the following asset types from Airtable:
 
 All assets are deduplicated and stored together in a single RDS file with
 a versioned filename (includes timestamp and git SHA).}
+
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 None (invisible). The function performs its operations for side effects:
