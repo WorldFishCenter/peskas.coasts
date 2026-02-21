@@ -582,7 +582,7 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
       "date" = "date_month",
       "estimated_fishing_trips" = "estimated_total_trips",
       "estimated_catch_tn",
-      "estimated_revenue_TZS" = "estimated_total_revenue"
+      "estimated_revenue" = "estimated_total_revenue"
     )
 
   # Transform monthly summaries to long format for portal
