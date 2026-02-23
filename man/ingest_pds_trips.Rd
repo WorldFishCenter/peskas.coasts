@@ -4,11 +4,15 @@
 \alias{ingest_pds_trips}
 \title{Ingest Pelagic Data Systems (PDS) Trip Data}
 \usage{
-ingest_pds_trips(log_threshold = logger::DEBUG)
+ingest_pds_trips(log_threshold = logger::DEBUG, package = "coasts")
 }
 \arguments{
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.
 See `logger::log_levels` for available options.}
+
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 None (invisible). The function performs its operations for side effects:

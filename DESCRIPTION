@@ -1,20 +1,21 @@
 Package: coasts
 Type: Package
 Title: Coastal Fisheries Data Pipeline for Western Indian Ocean
-Version: 1.3.0
-Author: Lorenzo Longobardi
-Maintainer: Lorenzo Longobardi <l.longobardi@cgiar.org>
-Description: Provides a comprehensive data pipeline for processing and analyzing 
-    coastal fisheries data from the Western Indian Ocean (WIO) region. Integrates 
-    GPS tracking data from Pelagic Data Systems (PDS), regional fisheries metadata, 
-    and geospatial information to support fisheries research and management. 
-    Features include automated data ingestion from PDS API, spatial gridding and 
-    summarization of fishing activity patterns, MongoDB integration with geospatial 
-    indexing, and cloud storage capabilities. Supports data from Kenya and Zanzibar 
+Version: 1.5.0
+Authors@R: person("Lorenzo", "Longobardi", email = "l.longobardi@cgiar.org",
+    role = c("aut", "cre"))
+Description: Provides a comprehensive data pipeline for processing and analyzing
+    coastal fisheries data from the Western Indian Ocean (WIO) region. Integrates
+    GPS tracking data from Pelagic Data Systems (PDS), regional fisheries metadata,
+    and geospatial information to support fisheries research and management.
+    Features include automated data ingestion from PDS API, spatial gridding and
+    summarization of fishing activity patterns, MongoDB integration with geospatial
+    indexing, and cloud storage capabilities. Supports data from Kenya and Zanzibar
     fisheries with built-in currency conversion and regional harmonization.
 License: GPL (>= 3)
+URL: https://github.com/WorldFishCenter/peskas.coasts
+BugReports: https://github.com/WorldFishCenter/peskas.coasts/issues
 Encoding: UTF-8
-LazyData: true
 RoxygenNote: 7.3.2
 Imports:
     arrow,

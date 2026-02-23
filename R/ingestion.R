@@ -38,11 +38,15 @@
 #' * [add_version()] for details on the file versioning system
 #' * [upload_cloud_file()] for details on the cloud upload process
 #'
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
+#'
 #' @keywords workflow ingestion metadata
 #' @export
-ingest_assets <- function(log_threshold = logger::DEBUG) {
+ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
   logger::log_threshold(log_threshold)
-  conf <- read_config()
+  conf <- read_config(package = package)
 
   assets_list <-
     list(

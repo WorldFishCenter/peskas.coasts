@@ -56,11 +56,16 @@ add_version <- function(filename, extension = "", sha_nchar = 7, sep = "__") {
 #' Reads configuration file in `conf.yml` and adds some logging lines. Wrapped
 #' for convenience
 #'
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Downstream packages that ship their own `conf.yml` should
+#'   pass their own package name here so that their configuration is loaded
+#'   instead of the `coasts` defaults.
+#'
 #' @return the environment parameters
 #' @keywords helper
 #' @export
 #'
-read_config <- function() {
+read_config <- function(package = "coasts") {
   logger::log_info("Loading configuration file...")
 
   # Load .env file if it exists (for local development)
@@ -69,9 +74,23 @@ read_config <- function() {
     dotenv::load_dot_env(".env")
   }
 
+  # Accept both conf.yml (coasts convention) and config.yml (config package default)
+  conf_file <- system.file("conf.yml", package = package)
+  if (!nzchar(conf_file)) {
+    conf_file <- system.file("config.yml", package = package)
+  }
+
+  if (!nzchar(conf_file)) {
+    stop(
+      "No 'inst/conf.yml' or 'inst/config.yml' found in package '", package, "'. ",
+      "Downstream packages must ship their own configuration file to use coasts pipeline functions. ",
+      "See the coasts CLAUDE.md for the required configuration structure."
+    )
+  }
+
   conf <- config::get(
     config = Sys.getenv("R_CONFIG_ACTIVE", "default"),
-    file = system.file("conf.yml", package = "coasts")
+    file = conf_file
   )
 
   logger::log_info("Using configutation: {attr(conf, 'config')}")

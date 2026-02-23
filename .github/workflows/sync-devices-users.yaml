@@ -24,6 +24,7 @@ env:
 jobs:
   build-container:
     name: Build R container
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -49,6 +50,7 @@ jobs:
   ingest-pelagic-boats:
     name: Ingest Pelagic Boats Data to Airtable
     needs: build-container
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
@@ -67,6 +69,7 @@ jobs:
   sync-device-users:
     name: Sync Devices & Users to MongoDB and Airtable
     needs: ingest-pelagic-boats
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest

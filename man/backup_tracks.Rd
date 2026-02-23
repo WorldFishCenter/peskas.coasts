@@ -4,7 +4,12 @@
 \alias{backup_tracks}
 \title{Backup Pelagic Tracks (Fallback)}
 \usage{
-backup_tracks()
+backup_tracks(package = "coasts")
+}
+\arguments{
+\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
+to `"coasts"`. Pass your own package name when calling from a downstream
+package with a compatible configuration.}
 }
 \value{
 None (invisible). Updates the cloud parquet with any new track data.
