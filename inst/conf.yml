@@ -76,6 +76,10 @@ default:
           pds_grids: pds_grids
           wio_map: wio_map
           regional_metrics: regional_metrics
+          wio_gaul1: wio_gaul1
+          wio_gaul2: wio_gaul2
+          metrics_gaul1: metrics_gaul1
+          metrics_gaul2: metrics_gaul2
       tracks_app:
         connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_TRACKS')
         database_name: portal-dev

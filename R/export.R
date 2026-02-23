@@ -1,7 +1,7 @@
 #' Export Geospatial Data and Regional Metrics to MongoDB
 #'
 #' @description
-#' Downloads and processes geospatial data from two sources (Kenya and Zanzibar),
+#' Downloads and processes geospatial data from different countries,
 #' harmonizes their structures, applies currency conversions to regional time series
 #' metrics, and exports all data to MongoDB collections with appropriate indexing.
 #'
@@ -9,15 +9,13 @@
 #' This function performs several key operations:
 #'
 #' **Geospatial Data Processing:**
-#' 1. Downloads GeoJSON files for Kenya and Zanzibar regions from cloud storage
+#' 1. Downloads GeoJSON files for Kenya, Mozambique and Zanzibar regions from cloud storage
 #' 2. Reads and combines the regional boundary data into a single dataset
 #' 3. Uploads combined geospatial data to MongoDB with 2dsphere indexing for spatial queries
 #'
 #' **Regional Metrics Processing:**
 #' 4. Downloads monthly summary parquet files for both countries from cloud storage
-#' 5. Applies currency conversion factors to monetary metrics:
-#'    - Zanzibar: multiplies values by 0.00037 (TZS to USD conversion)
-#'    - Kenya: multiplies values by 0.0077 (KES to USD conversion)
+#' 5. Applies currency conversion factors to monetary metrics
 #' 6. Converts the following monetary fields: mean_rpue, mean_rpua, mean_price_kg
 #' 7. Uploads regional metrics to MongoDB without geospatial indexing
 #'
@@ -64,10 +62,10 @@ export_geos <- function(package = "coasts") {
   # Step 1: Download and read geospatial files from cloud storage
   maps <-
     c(
-      "KEN_boundaries",
-      "ZAN_boundaries",
+      "KEN_boundaries_gaul",
+      "ZAN_boundaries_gaul",
       #"CO_regions",
-      "MOZ_boundaries"
+      "MOZ_boundaries_gaul"
     ) |>
     purrr::map(
       ~ cloud_object_name(
@@ -85,14 +83,32 @@ export_geos <- function(package = "coasts") {
         options = conf$storage$google$options
       )
     ) |>
+    purrr::flatten_chr() |>
+    purrr::set_names() |>
     purrr::map(
       ~ sf::read_sf(.x)
     ) |>
-    dplyr::bind_rows() |>
-    dplyr::select(c("iso3_code", "gaul1_name", "gaul2_name", "geometry"))
+    dplyr::bind_rows(.id = "source") |>
+    dplyr::select(dplyr::any_of(c(
+      "source",
+      "iso3_code",
+      "gaul1_name",
+      "gaul2_name",
+      "geometry"
+    )))
 
-  # Step 2: Download and read time series data files from cloud storage
-  series <-
+  # define Gaul1 and Gaul2
+  maps_gaul2 <- maps |>
+    dplyr::filter(stringr::str_detect(.data$source, "gaul2")) |>
+    dplyr::select(-"source")
+
+  maps_gaul1 <- maps |>
+    dplyr::filter(stringr::str_detect(.data$source, "gaul1")) |>
+    dplyr::select(-c("source", "gaul2_name"))
+
+  map_list <- list(maps_gaul1, maps_gaul2)
+  # Step 2: Download and read time series data files from cloud storage and define gaul1 and gaul2 resolution
+  series_gaul2 <-
     c(
       "kenya_monthly_summaries_map",
       "zanzibar_monthly_summaries_map",
@@ -138,25 +154,62 @@ export_geos <- function(package = "coasts") {
         country == "mozambique" ~ .data$mean_price_kg * 0.016,
         TRUE ~ .data$mean_price_kg
       ),
+    ) |>
+    #TODO: ensure there are no data in the future and then remove this filter
+    dplyr::filter(.data$date <= Sys.Date())
+
+  series_gaul1 <-
+    series_gaul2 |>
+    dplyr::select(-c("gaul_2_name")) |>
+    dplyr::group_by(.data$country, .data$gaul1_name, .data$date) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::everything(), ~ mean(.x, na.rm = TRUE)),
+      .groups = "drop"
     )
 
+  series_list <- list(series_gaul1, series_gaul2)
+
   # Step 6: Push combined geospatial data to MongoDB with 2dsphere indexing
+  map_collection_names <- c(
+    conf$storage$mongodb$coasts_portal$collection$wio_gaul1,
+    conf$storage$mongodb$coasts_portal$collection$wio_gaul2
+  )
+
+  series_collection_names <- c(
+    conf$storage$mongodb$coasts_portal$collection$metrics_gaul1,
+    conf$storage$mongodb$coasts_portal$collection$metrics_gaul2
+  )
+
   logger::log_info("Pushing combined geospatial data to MongoDB...")
-  mdb_collection_push(
-    data = maps,
-    connection_string = conf$storage$mongodb$coasts_portal$connection_string,
-    collection_name = conf$storage$mongodb$coasts_portal$collection$wio_map,
-    db_name = conf$storage$mongodb$coasts_portal$database_name,
-    geo = TRUE # Create 2dsphere index on geometry field
+  purrr::walk2(
+    .x = map_list,
+    .y = map_collection_names,
+    .f = ~ {
+      logger::log_info(paste("Uploading", .y, "data to MongoDB"))
+      mdb_collection_push(
+        data = .x,
+        connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+        collection_name = .y,
+        db_name = conf$storage$mongodb$coasts_portal$database_name,
+        geo = TRUE
+      )
+    }
   )
 
   logger::log_info("Pushing regional time series metrics to MongoDB...")
-  mdb_collection_push(
-    data = series,
-    connection_string = conf$storage$mongodb$coasts_portal$connection_string,
-    collection_name = conf$storage$mongodb$coasts_portal$collection$regional_metrics,
-    db_name = conf$storage$mongodb$coasts_portal$database_name,
-    geo = FALSE # No geospatial indexing needed for time series
+  purrr::walk2(
+    .x = series_list,
+    .y = series_collection_names,
+    .f = ~ {
+      logger::log_info(paste("Uploading", .y, "data to MongoDB"))
+      mdb_collection_push(
+        data = .x,
+        connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+        collection_name = .y,
+        db_name = conf$storage$mongodb$coasts_portal$database_name,
+        geo = FALSE
+      )
+    }
   )
 
   # Step 7: Download and process PDS track grid summaries

@@ -18,7 +18,7 @@ None (invisible). Creates and uploads data to three MongoDB collections:
   - PDS track grid summaries
 }
 \description{
-Downloads and processes geospatial data from two sources (Kenya and Zanzibar),
+Downloads and processes geospatial data from different countries,
 harmonizes their structures, applies currency conversions to regional time series
 metrics, and exports all data to MongoDB collections with appropriate indexing.
 }
@@ -26,15 +26,13 @@ metrics, and exports all data to MongoDB collections with appropriate indexing.
 This function performs several key operations:
 
 **Geospatial Data Processing:**
-1. Downloads GeoJSON files for Kenya and Zanzibar regions from cloud storage
+1. Downloads GeoJSON files for Kenya, Mozambique and Zanzibar regions from cloud storage
 2. Reads and combines the regional boundary data into a single dataset
 3. Uploads combined geospatial data to MongoDB with 2dsphere indexing for spatial queries
 
 **Regional Metrics Processing:**
 4. Downloads monthly summary parquet files for both countries from cloud storage
-5. Applies currency conversion factors to monetary metrics:
-   - Zanzibar: multiplies values by 0.00037 (TZS to USD conversion)
-   - Kenya: multiplies values by 0.0077 (KES to USD conversion)
+5. Applies currency conversion factors to monetary metrics
 6. Converts the following monetary fields: mean_rpue, mean_rpua, mean_price_kg
 7. Uploads regional metrics to MongoDB without geospatial indexing
 
