@@ -540,7 +540,7 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
   conf <- read_config(package = package)
 
   map <- cloud_object_name(
-    prefix = conf$metadata$map_boundaries$prefix,
+    prefix = prefix = conf$metadata$map_boundaries$gaul2,
     provider = conf$storage$google$key,
     options = conf$storage$google$options_coasts,
     version = "latest",
