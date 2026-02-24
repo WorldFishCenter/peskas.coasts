@@ -1,3 +1,9 @@
+# coasts 2.0.0
+
+## Refactoring
+
+Optmize package to export and process data from countries pipelines
+
 # coasts 1.5.0
 
 ## New Features
