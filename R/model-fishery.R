@@ -414,7 +414,6 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`. Pass your own package name when calling from a downstream
 #'   package with a compatible configuration.
-#'
 #' @return Invisibly returns NULL. The function's primary purpose is to:
 #'   - Generate and save aggregated analysis results to RDS file
 #'   - Upload results to cloud storage
@@ -468,10 +467,7 @@ generate_fleet_analysis <- function(log_threshold = logger::DEBUG, package = "co
     purrr::keep_at(c("devices", "geo"))
 
   devices <- assets$devices |>
-    dplyr::filter(
-      .data$customer_name %in%
-        c("WorldFish - Tanzania AP", "WorldFish - Zanzibar")
-    )
+    dplyr::filter(.data$customer_name %in% conf$pds$customers)
 
   regions <-
     assets$geo |>
