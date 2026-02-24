@@ -449,7 +449,10 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #'
 #' @keywords workflow analysis pipeline
 #' @export
-generate_fleet_analysis <- function(log_threshold = logger::DEBUG, package = "coasts") {
+generate_fleet_analysis <- function(
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
   conf <- read_config(package = package)
 
   assets <- cloud_object_name(
@@ -539,12 +542,24 @@ generate_fleet_analysis <- function(log_threshold = logger::DEBUG, package = "co
         na.rm = TRUE
       ),
       total_estimated_revenue = sum(
-        .data$estimated_total_revenue,
+        .data$estimated_total_catch_kg,
         na.rm = TRUE
       ),
       avg_monthly_catch_kg = mean(.data$estimated_total_catch_kg, na.rm = TRUE),
       avg_monthly_revenue = mean(.data$estimated_total_revenue, na.rm = TRUE),
       .groups = "drop"
+    ) |>
+    dplyr::mutate(
+      total_estimated_catch_kg = dplyr::if_else(
+        .data$total_estimated_catch_kg == 0,
+        NA_real_,
+        .data$total_estimated_catch_kg
+      ),
+      total_estimated_revenue = dplyr::if_else(
+        .data$total_estimated_revenue == 0,
+        NA_real_,
+        .data$total_estimated_revenue
+      )
     )
 
   # Prepare aggregated results
