@@ -62,10 +62,12 @@ export_geos <- function(package = "coasts") {
   # Step 1: Download and read geospatial files from cloud storage
   maps <-
     c(
-      "KEN_boundaries_gaul",
-      "ZAN_boundaries_gaul",
-      #"CO_regions",
-      "MOZ_boundaries_gaul"
+      "KEN_boundaries_gaul1",
+      "ZAN_boundaries_gaul1",
+      "MOZ_boundaries_gaul1",
+      "KEN_boundaries_gaul2",
+      "ZAN_boundaries_gaul2",
+      "MOZ_boundaries_gaul2"
     ) |>
     purrr::map(
       ~ cloud_object_name(
