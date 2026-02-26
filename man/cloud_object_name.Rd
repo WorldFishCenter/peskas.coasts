@@ -2,7 +2,7 @@
 % Please edit documentation in R/storage.R
 \name{cloud_object_name}
 \alias{cloud_object_name}
-\title{Retrieve Full Name of Versioned Cloud Object}
+\title{Generate Cloud Object Name}
 \usage{
 cloud_object_name(
   prefix,
@@ -14,40 +14,26 @@ cloud_object_name(
 )
 }
 \arguments{
-\item{prefix}{A string indicating the object's prefix.}
+\item{prefix}{A character string specifying the file prefix.}
 
-\item{version}{A string specifying the version ("latest" or a specific version string).}
+\item{version}{A character string specifying the version. Default is "latest".}
 
-\item{extension}{The file extension to filter by. An empty string ("") includes all extensions.}
+\item{extension}{A character string specifying the file extension.}
 
-\item{provider}{A character string specifying the cloud provider ("gcs" or "aws").}
+\item{provider}{A character string specifying the cloud storage provider.}
 
-\item{exact_match}{A logical indicating whether to match the prefix exactly.}
+\item{exact_match}{A logical value indicating whether to match prefix exactly.}
 
-\item{options}{A named list of provider-specific options including the bucket and authentication details.}
+\item{options}{A named list of cloud storage provider options.}
 }
 \value{
-A vector of names of objects matching the criteria.
+A character string with the full object name, or `character(0)` if
+  no matching objects are found.
 }
 \description{
-Gets the full name(s) of object(s) in cloud storage matching the specified prefix, version, and file extension.
+Generates the full object name for a versioned file in cloud storage.
+When `version = "latest"`, returns the most recently updated object
+matching the prefix and extension.
 }
-\details{
-For GCS, the options list should include:
-- `bucket`: The bucket name.
-- `service_account_key`: The authentication JSON contents, if not previously authenticated.
-}
-\examples{
-\dontrun{
-authentication_details <- readLines("path/to/json_file.json")
-cloud_object_name(
-  "prefix",
-  "latest",
-  "json",
-  "gcs",
-  list(service_account_key = authentication_details, bucket = "my-bucket")
-)
-#'
-}
-}
+\keyword{internal}
 \keyword{storage}

@@ -2,7 +2,7 @@
 % Please edit documentation in R/storage.R
 \name{upload_parquet_to_cloud}
 \alias{upload_parquet_to_cloud}
-\title{Upload Processed Data to Cloud Storage}
+\title{Upload Data as Parquet File to Cloud Storage}
 \usage{
 upload_parquet_to_cloud(
   data,
@@ -15,48 +15,35 @@ upload_parquet_to_cloud(
 )
 }
 \arguments{
-\item{data}{The data frame or tibble to upload}
+\item{data}{A data frame containing the data to be uploaded.}
 
-\item{prefix}{The file prefix path in cloud storage}
+\item{prefix}{A character string specifying the file prefix path.}
 
-\item{provider}{The cloud storage provider key}
+\item{provider}{A character string specifying the cloud storage provider key.}
 
-\item{options}{Cloud storage provider options}
+\item{options}{A named list of cloud storage provider options.}
 
-\item{compression}{Compression algorithm to use (default: "lz4")}
+\item{compression}{A character string specifying compression type. Default is "lz4".}
 
-\item{compression_level}{Compression level (default: 12)}
+\item{compression_level}{An integer specifying compression level. Default is 12.}
 
-\item{bucket_name}{Optional character string specifying the GCS bucket name to use.
-If provided, overrides the bucket in options. Pass directly from configuration,
-e.g. conf$storage$google$buckets$kenya. If NULL (default), uses the bucket
-defined in options.}
+\item{bucket_name}{Optional character string specifying the GCS bucket name.
+If provided, overrides the bucket in `options`. If NULL (default), uses the
+bucket defined in `options`.}
 }
 \value{
-Invisible NULL
+Invisible NULL (called for side effects).
 }
 \description{
-This function handles the process of writing data to a parquet file and
-uploading it to cloud storage. Supports uploading to different buckets configured
-in the configuration file.
+Writes a data frame to a versioned Parquet file and uploads it to cloud storage.
 }
 \examples{
 \dontrun{
-# Upload to default bucket (backward compatible)
 upload_parquet_to_cloud(
-  data = processed_data,
-  prefix = conf$ingestion$koboform$catch$legacy$preprocessed,
+  data = survey_data,
+  prefix = "raw-data/survey-data",
   provider = conf$storage$google$key,
   options = conf$storage$google$options
-)
-
-# Upload to a regional bucket
-upload_parquet_to_cloud(
-  data = processed_data,
-  prefix = "pds-trips",
-  provider = conf$storage$google$key,
-  options = conf$storage$google$options,
-  bucket_name = conf$storage$google$buckets$kenya
 )
 }
 }

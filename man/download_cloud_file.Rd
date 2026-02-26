@@ -2,40 +2,23 @@
 % Please edit documentation in R/storage.R
 \name{download_cloud_file}
 \alias{download_cloud_file}
-\title{Download Object from Cloud Storage}
+\title{Download File from Cloud Storage}
 \usage{
 download_cloud_file(name, provider, options, file = name)
 }
 \arguments{
-\item{name}{The name of the object in the storage bucket.}
+\item{name}{A character vector of object names in cloud storage.}
 
-\item{provider}{A character string specifying the cloud provider ("gcs" or "aws").}
+\item{provider}{A character string specifying the cloud storage provider.}
 
-\item{options}{A named list of provider-specific options including the bucket and authentication details.}
+\item{options}{A named list of cloud storage provider options.}
 
-\item{file}{(Optional) The local path to save the downloaded object. If not specified, the object name is used.}
+\item{file}{A character vector of local file paths. Defaults to object names.}
 }
 \value{
-The path to the downloaded file.
+A character vector of local file paths.
 }
 \description{
-Downloads an object from cloud storage to a local file.
-}
-\details{
-For GCS, the options list should include:
-- `bucket`: The name of the bucket from which the object is downloaded.
-- `service_account_key`: The authentication JSON contents, if not previously authenticated.
-}
-\examples{
-\dontrun{
-authentication_details <- readLines("path/to/json_file.json")
-download_cloud_file(
-  "object_name.json",
-  "gcs",
-  list(service_account_key = authentication_details, bucket = "my-bucket"),
-  "local_path/to/save/object.json"
-)
-}
-
+Downloads one or more files from cloud storage.
 }
 \keyword{storage}

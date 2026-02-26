@@ -9,23 +9,14 @@ cloud_storage_authenticate(provider, options)
 \arguments{
 \item{provider}{A character string specifying the cloud provider ("gcs" or "aws").}
 
-\item{options}{A named list of options specific to the cloud provider (see details).}
+\item{options}{A named list of options specific to the cloud provider. For
+GCS, must include `service_account_key`.}
+}
+\value{
+Invisible NULL (called for side effects).
 }
 \description{
-This function is primarily used internally by other functions to establish authentication
-with specified cloud providers such as Google Cloud Services (GCS) or Amazon Web Services (AWS).
-}
-\details{
-For GCS, the options list must include:
-- `service_account_key`: The contents of the authentication JSON file from your Google Project.
-
-This function wraps [googleCloudStorageR::gcs_auth()] to handle GCS authentication.
-}
-\examples{
-\dontrun{
-authentication_details <- readLines("path/to/json_file.json")
-cloud_storage_authenticate("gcs", list(service_account_key = authentication_details))
-#'
-}
+Establishes authentication with the specified cloud provider. Skips
+re-authentication if a valid token already exists.
 }
 \keyword{storage}

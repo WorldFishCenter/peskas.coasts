@@ -1,52 +1,48 @@
-#' #' Download Parquet File from Cloud Storage
+#' Download Parquet File from Cloud Storage
 #'
-#' This function handles the process of downloading a parquet file from cloud storage
-#' and reading it into memory. Supports downloading from different buckets configured
-#' in the configuration file.
+#' Downloads a Parquet file from cloud storage and loads it into memory.
+#' The local file is automatically cleaned up after reading.
 #'
-#' @param prefix The file prefix path in cloud storage
-#' @param provider The cloud storage provider key
-#' @param options Cloud storage provider options
-#' @param bucket_name Optional character string specifying the GCS bucket name to use.
-#'   If provided, overrides the bucket in options. Pass directly from configuration,
-#'   e.g. conf$storage$google$buckets$kenya. If NULL (default), uses the bucket
-#'   defined in options.
+#' @param prefix A character string specifying the file prefix path in cloud storage.
+#' @param provider A character string specifying the cloud storage provider key.
+#' @param options A named list of cloud storage provider options.
+#' @param bucket_name Optional character string specifying the GCS bucket name.
+#'   If provided, overrides the bucket in `options`. If NULL (default), uses the
+#'   bucket defined in `options`.
 #'
-#' @return A tibble containing the data from the parquet file
+#' @return A tibble containing the data from the Parquet file.
+#'
+#' @keywords storage
+#' @export
 #'
 #' @examples
 #' \dontrun{
-#' # Download from default bucket (backward compatible)
-#' raw_data <- download_parquet_from_cloud(
-#'   prefix = conf$ingestion$koboform$catch$legacy$raw,
+#' # Download from default bucket
+#' data <- download_parquet_from_cloud(
+#'   prefix = "raw-data/survey-data",
 #'   provider = conf$storage$google$key,
 #'   options = conf$storage$google$options
 #' )
 #'
-#' # Download from a regional bucket
-#' kenya_data <- download_parquet_from_cloud(
+#' # Download from a specific bucket
+#' data <- download_parquet_from_cloud(
 #'   prefix = "pds-trips",
 #'   provider = conf$storage$google$key,
 #'   options = conf$storage$google$options,
-#'   bucket_name = conf$storage$google$buckets$kenya
+#'   bucket_name = conf$storage$google$buckets$mozambique
 #' )
 #' }
-#'
-#' @keywords storage
-#' @export
 download_parquet_from_cloud <- function(
   prefix,
   provider,
   options,
   bucket_name = NULL
 ) {
-  # If bucket_name is specified, override the bucket in options
   if (!is.null(bucket_name)) {
     options$bucket <- bucket_name
     logger::log_info("Using bucket: {bucket_name}")
   }
 
-  # Generate cloud object name
   parquet_file <- cloud_object_name(
     prefix = prefix,
     provider = provider,
@@ -57,7 +53,6 @@ download_parquet_from_cloud <- function(
   # Ensure local directory exists for nested paths
   dir.create(dirname(parquet_file), recursive = TRUE, showWarnings = FALSE)
 
-  # Log and download file
   logger::log_info("Retrieving {parquet_file}")
   download_cloud_file(
     name = parquet_file,
@@ -65,50 +60,48 @@ download_parquet_from_cloud <- function(
     options = options
   )
 
-  # Read parquet file
+  on.exit(
+    {
+      unlink(parquet_file)
+      parent <- dirname(parquet_file)
+      if (parent != "." && length(list.files(parent)) == 0) {
+        unlink(parent, recursive = TRUE)
+      }
+    },
+    add = TRUE
+  )
+
   arrow::read_parquet(file = parquet_file)
 }
 
-#' Upload Processed Data to Cloud Storage
+#' Upload Data as Parquet File to Cloud Storage
 #'
-#' This function handles the process of writing data to a parquet file and
-#' uploading it to cloud storage. Supports uploading to different buckets configured
-#' in the configuration file.
+#' Writes a data frame to a versioned Parquet file and uploads it to cloud storage.
 #'
-#' @param data The data frame or tibble to upload
-#' @param prefix The file prefix path in cloud storage
-#' @param provider The cloud storage provider key
-#' @param options Cloud storage provider options
-#' @param compression Compression algorithm to use (default: "lz4")
-#' @param compression_level Compression level (default: 12)
-#' @param bucket_name Optional character string specifying the GCS bucket name to use.
-#'   If provided, overrides the bucket in options. Pass directly from configuration,
-#'   e.g. conf$storage$google$buckets$kenya. If NULL (default), uses the bucket
-#'   defined in options.
+#' @param data A data frame containing the data to be uploaded.
+#' @param prefix A character string specifying the file prefix path.
+#' @param provider A character string specifying the cloud storage provider key.
+#' @param options A named list of cloud storage provider options.
+#' @param compression A character string specifying compression type. Default is "lz4".
+#' @param compression_level An integer specifying compression level. Default is 12.
+#' @param bucket_name Optional character string specifying the GCS bucket name.
+#'   If provided, overrides the bucket in `options`. If NULL (default), uses the
+#'   bucket defined in `options`.
 #'
-#' @return Invisible NULL
+#' @return Invisible NULL (called for side effects).
 #'
 #' @keywords storage
+#' @export
+#'
 #' @examples
 #' \dontrun{
-#' # Upload to default bucket (backward compatible)
 #' upload_parquet_to_cloud(
-#'   data = processed_data,
-#'   prefix = conf$ingestion$koboform$catch$legacy$preprocessed,
+#'   data = survey_data,
+#'   prefix = "raw-data/survey-data",
 #'   provider = conf$storage$google$key,
 #'   options = conf$storage$google$options
 #' )
-#'
-#' # Upload to a regional bucket
-#' upload_parquet_to_cloud(
-#'   data = processed_data,
-#'   prefix = "pds-trips",
-#'   provider = conf$storage$google$key,
-#'   options = conf$storage$google$options,
-#'   bucket_name = conf$storage$google$buckets$kenya
-#' )
 #' }
-#' @export
 upload_parquet_to_cloud <- function(
   data,
   prefix,
@@ -118,17 +111,14 @@ upload_parquet_to_cloud <- function(
   compression_level = 12,
   bucket_name = NULL
 ) {
-  # If bucket_name is specified, override the bucket in options
   if (!is.null(bucket_name)) {
     options$bucket <- bucket_name
     logger::log_info("Using bucket: {bucket_name}")
   }
 
-  # Generate filename with version
   preprocessed_filename <- prefix %>%
     add_version(extension = "parquet")
 
-  # Write parquet file
   arrow::write_parquet(
     x = data,
     sink = preprocessed_filename,
@@ -136,7 +126,6 @@ upload_parquet_to_cloud <- function(
     compression_level = compression_level
   )
 
-  # Log and upload file
   logger::log_info("Uploading {preprocessed_filename} to cloud storage")
   upload_cloud_file(
     file = preprocessed_filename,
@@ -146,74 +135,25 @@ upload_parquet_to_cloud <- function(
 
   invisible(NULL)
 }
-#'
-#' Authenticate to a Cloud Storage Provider
-#'
-#' This function is primarily used internally by other functions to establish authentication
-#' with specified cloud providers such as Google Cloud Services (GCS) or Amazon Web Services (AWS).
-#'
-#' @param provider A character string specifying the cloud provider ("gcs" or "aws").
-#' @param options A named list of options specific to the cloud provider (see details).
-#'
-#' @details For GCS, the options list must include:
-#' - `service_account_key`: The contents of the authentication JSON file from your Google Project.
-#'
-#' This function wraps [googleCloudStorageR::gcs_auth()] to handle GCS authentication.
-#'
-#' @export
-#' @keywords storage
-#' @examples
-#' \dontrun{
-#' authentication_details <- readLines("path/to/json_file.json")
-#' cloud_storage_authenticate("gcs", list(service_account_key = authentication_details))
-#' #'
-#' }
-cloud_storage_authenticate <- function(provider, options) {
-  if ("gcs" %in% provider) {
-    # Only need to authenticate if there is no token for downstream requests
-    if (isFALSE(googleAuthR::gar_has_token())) {
-      service_account_key <- options$service_account_key
-      temp_auth_file <- tempfile(fileext = "json")
-      writeLines(service_account_key, temp_auth_file)
-      googleCloudStorageR::gcs_auth(json_file = temp_auth_file)
-    }
-  }
-}
-
 #' Upload File to Cloud Storage
 #'
-#' Uploads a local file to a specified cloud storage bucket, supporting both single and multiple files.
+#' Uploads one or more local files to a cloud storage bucket.
 #'
-#' @param file A character vector specifying the path(s) of the file(s) to upload.
-#' @param provider A character string specifying the cloud provider ("gcs" or "aws").
-#' @param options A named list of provider-specific options including the bucket and authentication details.
-#' @param name (Optional) The name to assign to the file in the cloud. If not specified, the local file name is used.
+#' @param file A character vector of file paths to upload.
+#' @param provider A character string specifying the cloud storage provider.
+#' @param options A named list of cloud storage provider options.
+#' @param name A character vector of names to assign files in cloud storage.
+#'   Defaults to local filenames.
 #'
-#' @details For GCS, the options list must include:
-#' - `bucket`: The name of the bucket to which files are uploaded.
-#' - `service_account_key`: The authentication JSON contents, if not previously authenticated.
+#' @return A list of upload metadata.
 #'
-#' This function utilizes [googleCloudStorageR::gcs_upload()] for file uploads to GCS.
-#'
-#' @return A list of metadata objects for the uploaded files if successful.
-#' @export
 #' @keywords storage
-#' @examples
-#' \dontrun{
-#' authentication_details <- readLines("path/to/json_file.json")
-#' upload_cloud_file(
-#'   "path/to/local_file.csv",
-#'   "gcs",
-#'   list(service_account_key = authentication_details, bucket = "my-bucket")
-#' )
-#' }
-#'
+#' @export
 upload_cloud_file <- function(file, provider, options, name = file) {
   cloud_storage_authenticate(provider, options)
 
   out <- list()
   if ("gcs" %in% provider) {
-    # Iterate over multiple files (and names)
     google_output <- purrr::map2(
       file,
       name,
@@ -230,37 +170,56 @@ upload_cloud_file <- function(file, provider, options, name = file) {
 
   out
 }
-
-#' Retrieve Full Name of Versioned Cloud Object
+#' Download File from Cloud Storage
 #'
-#' Gets the full name(s) of object(s) in cloud storage matching the specified prefix, version, and file extension.
+#' Downloads one or more files from cloud storage.
 #'
-#' @param prefix A string indicating the object's prefix.
-#' @param version A string specifying the version ("latest" or a specific version string).
-#' @param extension The file extension to filter by. An empty string ("") includes all extensions.
-#' @param provider A character string specifying the cloud provider ("gcs" or "aws").
-#' @param exact_match A logical indicating whether to match the prefix exactly.
-#' @param options A named list of provider-specific options including the bucket and authentication details.
+#' @param name A character vector of object names in cloud storage.
+#' @param provider A character string specifying the cloud storage provider.
+#' @param options A named list of cloud storage provider options.
+#' @param file A character vector of local file paths. Defaults to object names.
 #'
-#' @details For GCS, the options list should include:
-#' - `bucket`: The bucket name.
-#' - `service_account_key`: The authentication JSON contents, if not previously authenticated.
+#' @return A character vector of local file paths.
 #'
-#' @return A vector of names of objects matching the criteria.
-#' @export
 #' @keywords storage
-#' @examples
-#' \dontrun{
-#' authentication_details <- readLines("path/to/json_file.json")
-#' cloud_object_name(
-#'   "prefix",
-#'   "latest",
-#'   "json",
-#'   "gcs",
-#'   list(service_account_key = authentication_details, bucket = "my-bucket")
-#' )
-#' #'
-#' }
+#' @export
+download_cloud_file <- function(name, provider, options, file = name) {
+  cloud_storage_authenticate(provider, options)
+
+  if ("gcs" %in% provider) {
+    purrr::map2(
+      name,
+      file,
+      ~ googleCloudStorageR::gcs_get_object(
+        object_name = .x,
+        bucket = options$bucket,
+        saveToDisk = .y,
+        overwrite = ifelse(is.null(options$overwrite), TRUE, options$overwrite)
+      )
+    )
+  }
+
+  file
+}
+
+#' Generate Cloud Object Name
+#'
+#' Generates the full object name for a versioned file in cloud storage.
+#' When `version = "latest"`, returns the most recently updated object
+#' matching the prefix and extension.
+#'
+#' @param prefix A character string specifying the file prefix.
+#' @param version A character string specifying the version. Default is "latest".
+#' @param extension A character string specifying the file extension.
+#' @param provider A character string specifying the cloud storage provider.
+#' @param exact_match A logical value indicating whether to match prefix exactly.
+#' @param options A named list of cloud storage provider options.
+#'
+#' @return A character string with the full object name, or `character(0)` if
+#'   no matching objects are found.
+#'
+#' @keywords storage internal
+#' @export
 cloud_object_name <- function(
   prefix,
   version = "latest",
@@ -285,7 +244,6 @@ cloud_object_name <- function(
       tidyr::separate(
         col = .data$name,
         into = c("base_name", "version", "ext"),
-        # Version is separated with the "__" string
         sep = "__",
         remove = FALSE
       ) %>%
@@ -308,153 +266,102 @@ cloud_object_name <- function(
         dplyr::filter(.data$version == this_version)
     }
 
-    selected_rows$name
+    return(selected_rows$name[1])
   }
 }
 
-
-#' Download Object from Cloud Storage
+#' Authenticate to a Cloud Storage Provider
 #'
-#' Downloads an object from cloud storage to a local file.
+#' Establishes authentication with the specified cloud provider. Skips
+#' re-authentication if a valid token already exists.
 #'
-#' @param name The name of the object in the storage bucket.
 #' @param provider A character string specifying the cloud provider ("gcs" or "aws").
-#' @param options A named list of provider-specific options including the bucket and authentication details.
-#' @param file (Optional) The local path to save the downloaded object. If not specified, the object name is used.
+#' @param options A named list of options specific to the cloud provider. For
+#'   GCS, must include `service_account_key`.
 #'
-#' @details For GCS, the options list should include:
-#' - `bucket`: The name of the bucket from which the object is downloaded.
-#' - `service_account_key`: The authentication JSON contents, if not previously authenticated.
+#' @return Invisible NULL (called for side effects).
 #'
-#' @return The path to the downloaded file.
-#' @export
 #' @keywords storage
-#' @examples
-#' \dontrun{
-#' authentication_details <- readLines("path/to/json_file.json")
-#' download_cloud_file(
-#'   "object_name.json",
-#'   "gcs",
-#'   list(service_account_key = authentication_details, bucket = "my-bucket"),
-#'   "local_path/to/save/object.json"
-#' )
-#' }
-#'
-download_cloud_file <- function(name, provider, options, file = name) {
-  cloud_storage_authenticate(provider, options)
-
+#' @export
+cloud_storage_authenticate <- function(provider, options) {
   if ("gcs" %in% provider) {
-    purrr::map2(
-      name,
-      file,
-      ~ googleCloudStorageR::gcs_get_object(
-        object_name = .x,
-        bucket = options$bucket,
-        saveToDisk = .y,
-        overwrite = ifelse(is.null(options$overwrite), TRUE, options$overwrite)
-      )
-    )
+    # Only authenticate if there is no valid token
+    if (isFALSE(googleAuthR::gar_has_token())) {
+      temp_key_file <- tempfile(fileext = ".json")
+      writeLines(options$service_account_key, temp_key_file)
+      googleCloudStorageR::gcs_auth(json_file = temp_key_file)
+      unlink(temp_key_file)
+    }
+  } else if (provider == "aws") {
+    stop("AWS authentication not yet implemented")
   }
 
-  file
+  invisible(NULL)
 }
+
 
 #' Retrieve Data from MongoDB
 #'
-#' This function connects to a MongoDB database and retrieves all documents from a specified collection,
-#' maintaining the original column order if available.
+#' Connects to a MongoDB database and retrieves all documents from a specified
+#' collection, maintaining the original column order if a metadata document
+#' is present.
 #'
-#' @param connection_string A character string specifying the MongoDB connection URL. Default is NULL.
-#' @param collection_name A character string specifying the name of the collection to query. Default is NULL.
-#' @param db_name A character string specifying the name of the database. Default is NULL.
+#' @param connection_string A character string specifying the MongoDB connection URL.
+#' @param collection_name A character string specifying the name of the collection.
+#' @param db_name A character string specifying the name of the database.
 #'
-#' @return A data frame containing all documents from the specified collection, with columns ordered
-#'         as they were when the data was originally pushed to MongoDB.
+#' @return A data frame containing all documents from the specified collection.
 #'
 #' @keywords storage
-#'
-#' @examples
-#' \dontrun{
-#' # Retrieve data from a MongoDB collection
-#' result <- mdb_collection_pull(
-#'   connection_string = "mongodb://localhost:27017",
-#'   collection_name = "my_collection",
-#'   db_name = "my_database"
-#' )
-#' }
-#'
 #' @export
 mdb_collection_pull <- function(
   connection_string = NULL,
   collection_name = NULL,
   db_name = NULL
 ) {
-  # Connect to the MongoDB collection
   collection <- mongolite::mongo(
     collection = collection_name,
     db = db_name,
     url = connection_string
   )
 
-  # Retrieve the metadata document
   metadata <- collection$find(query = '{"type": "metadata"}')
-
-  # Retrieve all data documents
   data <- collection$find(query = '{"type": {"$ne": "metadata"}}')
 
   if (nrow(metadata) > 0 && "columns" %in% names(metadata)) {
     stored_columns <- metadata$columns[[1]]
 
-    # Ensure all stored columns exist in the data
     for (col in stored_columns) {
       if (!(col %in% names(data))) {
         data[[col]] <- NA
       }
     }
 
-    # Reorder columns to match stored order, and include any extra columns at the end
     data <- data[, c(stored_columns, setdiff(names(data), stored_columns))]
   }
 
-  return(data)
+  data
 }
+
 
 #' Push Data to MongoDB Collection
 #'
-#' @description
 #' Uploads data to a MongoDB collection, optionally creating a geospatial index.
+#' For non-geo collections, stores a metadata document preserving column order
+#' (used by [mdb_collection_pull()] to restore structure).
 #'
-#' @param data A data frame or simple features (sf) object to upload.
+#' @param data A data frame or sf object to upload.
 #' @param connection_string Character. MongoDB connection string.
 #' @param collection_name Character. Name of the MongoDB collection.
 #' @param db_name Character. Name of the MongoDB database.
-#' @param geo Logical. Whether to create a 2dsphere index on the geometry field. Default is FALSE.
+#' @param geo Logical. Whether to create a 2dsphere index on the geometry field.
+#'   Default is FALSE. When TRUE, the collection is dropped entirely before
+#'   reinserting to avoid index conflicts with complex geometries.
 #'
-#' @return Logical. TRUE if successful.
+#' @return The number of data documents inserted (excluding metadata), or
+#'   invisible TRUE for geo collections.
 #'
-#' @examples
-#' \dontrun{
-#' # Push data without geospatial indexing
-#' mdb_collection_push(
-#'   data = my_data,
-#'   connection_string = "mongodb://localhost:27017",
-#'   collection_name = "mycollection",
-#'   db_name = "mydb",
-#'   geo = FALSE
-#' )
-#'
-#' # Push geospatial data with 2dsphere indexing
-#' mdb_collection_push(
-#'   data = sf_data,
-#'   connection_string = "mongodb://localhost:27017",
-#'   collection_name = "geospatial_collection",
-#'   db_name = "mydb",
-#'   geo = TRUE
-#' )
-#' }
-#'
-#' @importFrom mongolite mongo
-#' @keywords database mongodb
+#' @keywords storage
 #' @export
 mdb_collection_push <- function(
   data = NULL,
@@ -463,7 +370,6 @@ mdb_collection_push <- function(
   db_name = NULL,
   geo = FALSE
 ) {
-  # Validate inputs
   if (
     is.null(data) ||
       is.null(connection_string) ||
@@ -475,7 +381,6 @@ mdb_collection_push <- function(
     )
   }
 
-  # Connect to the MongoDB collection
   collection <- mongolite::mongo(
     collection = collection_name,
     db = db_name,
@@ -483,30 +388,20 @@ mdb_collection_push <- function(
   )
 
   if (geo) {
-    # For geo collections: drop entirely (documents + indexes) before re-inserting.
-    # collection$remove("{}") clears documents but leaves any existing 2dsphere
-    # index in place, causing MongoDB to validate every insert against it and
-    # triggering "Can't extract geo keys" for complex MultiPolygon features.
-    # Dropping the collection removes the index so the insert is unconstrained;
-    # the index is then recreated cleanly on the fresh data below.
+    # Drop entirely (documents + indexes) to avoid "Can't extract geo keys"
+    # errors with complex MultiPolygon features
     collection$drop()
 
-    # Reconnect: mongolite collection objects become invalid after drop()
+    # Reconnect: mongolite objects become invalid after drop()
     collection <- mongolite::mongo(
       collection = collection_name,
       db = db_name,
       url = connection_string
     )
-  } else {
-    collection$remove("{}")
-  }
 
-  # Insert the data
-  collection$insert(data)
+    collection$insert(data)
 
-  # Create a 2dsphere index on the geometry field if geo is TRUE
-  if (geo) {
-    # Try direct command execution for creating geospatial index
+    # Create 2dsphere index
     index_command <- sprintf(
       '{"createIndexes": "%s", "indexes": [{"key": {"geometry": "2dsphere"}, "name": "geometry_2dsphere"}]}',
       collection_name
@@ -523,103 +418,23 @@ mdb_collection_push <- function(
         )
       }
     )
+
+    return(invisible(TRUE))
   }
 
-  return(TRUE)
-}
-#' Get metadata tables
-#'
-#' Get Metadata tables from Google sheets. This function downloads
-#' the tables that include information about the fishery. You can specify
-#' a single table to download or get all available tables.
-#'
-#' The parameters needed in `conf.yml` are:
-#'
-#' ```
-#' storage:
-#'   storage_name:
-#'     key:
-#'     options:
-#'       project:
-#'       bucket:
-#'       service_account_key:
-#' metadata:
-#'   google_sheets:
-#'     sheet_id:
-#'     tables:
-#'       - table1
-#'       - table2
-#' ```
-#'
-#' @param table Character. Name of the specific table to download. If NULL (default),
-#'   all tables specified in the configuration will be downloaded.
-#' @param log_threshold The logging threshold level. Default is logger::DEBUG.
-#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
-#'   to `"coasts"`. Pass your own package name when calling from a downstream
-#'   package with a compatible configuration.
-#'
-#' @return A named list containing the requested tables as data frames. If a single
-#'   table is requested, the list will contain only that table. If no table is
-#'   specified, the list will contain all available tables.
-#'
-#' @export
-#' @keywords storage
-#'
-#' @examples
-#' \dontrun{
-#' # Ensure you have the necessary configuration in conf.yml
-#'
-#' # Download all metadata tables
-#' metadata_tables <- get_metadata()
-#'
-#' # Download a specific table
-#' catch_table <- get_metadata(table = "devices")
-#' }
-get_metadata <- function(
-  table = NULL,
-  log_threshold = logger::DEBUG,
-  package = "coasts"
-) {
-  logger::log_threshold(log_threshold)
-  conf <- read_config(package = package)
+  # Non-geo path: clear documents only, preserve collection structure
+  collection$remove("{}")
 
-  logger::log_info("Authenticating for google drive")
-  googlesheets4::gs4_auth(
-    path = conf$storage$google$options$service_account_key,
-    use_oob = TRUE
+  # Store column order metadata for mdb_collection_pull()
+  metadata <- list(
+    type = "metadata",
+    columns = names(data),
+    timestamp = Sys.time()
   )
+  collection$insert(metadata)
+  collection$insert(data)
 
-  # If table is specified, validate it exists in the configuration
-  if (!is.null(table)) {
-    if (!table %in% conf$metadata$google_sheets$tables) {
-      stop(sprintf(
-        "Table '%s' not found in configuration. Available tables: %s",
-        table,
-        paste(conf$metadata$google_sheets$tables, collapse = ", ")
-      ))
-    }
-
-    logger::log_info(sprintf("Downloading metadata table: %s", table))
-    tables <- list(googlesheets4::range_read(
-      ss = conf$metadata$google_sheets$sheet_id,
-      sheet = table,
-      col_types = "c"
-    ))
-    names(tables) <- table
-  } else {
-    logger::log_info("Downloading all metadata tables")
-    tables <- conf$metadata$google_sheets$tables %>%
-      rlang::set_names() %>%
-      purrr::map(
-        ~ googlesheets4::range_read(
-          ss = conf$metadata$google_sheets$sheet_id,
-          sheet = .x,
-          col_types = "c"
-        )
-      )
-  }
-
-  tables
+  collection$count() - 1
 }
 
 

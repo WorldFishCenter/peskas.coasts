@@ -1,3 +1,9 @@
+# coasts 2.2.0
+
+## New Features
+
+* **NEW** Upgrade and optimize all functions related to storage (google cloud and mogodb auth, download and upload). These will then
+replace the exsisting related functions for all the countries pipeline for improved manageability and centralization of common processes
 # coasts 2.1.0
 
 ## New Features

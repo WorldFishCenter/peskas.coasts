@@ -23,7 +23,6 @@ RUN install2.r --error --skipinstalled \
     git2r \
     googleAuthR \
     googleCloudStorageR \
-    googlesheets4 \
     httr2 \
     logger \
     magrittr \

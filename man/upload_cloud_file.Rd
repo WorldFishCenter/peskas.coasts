@@ -7,36 +7,19 @@
 upload_cloud_file(file, provider, options, name = file)
 }
 \arguments{
-\item{file}{A character vector specifying the path(s) of the file(s) to upload.}
+\item{file}{A character vector of file paths to upload.}
 
-\item{provider}{A character string specifying the cloud provider ("gcs" or "aws").}
+\item{provider}{A character string specifying the cloud storage provider.}
 
-\item{options}{A named list of provider-specific options including the bucket and authentication details.}
+\item{options}{A named list of cloud storage provider options.}
 
-\item{name}{(Optional) The name to assign to the file in the cloud. If not specified, the local file name is used.}
+\item{name}{A character vector of names to assign files in cloud storage.
+Defaults to local filenames.}
 }
 \value{
-A list of metadata objects for the uploaded files if successful.
+A list of upload metadata.
 }
 \description{
-Uploads a local file to a specified cloud storage bucket, supporting both single and multiple files.
-}
-\details{
-For GCS, the options list must include:
-- `bucket`: The name of the bucket to which files are uploaded.
-- `service_account_key`: The authentication JSON contents, if not previously authenticated.
-
-This function utilizes [googleCloudStorageR::gcs_upload()] for file uploads to GCS.
-}
-\examples{
-\dontrun{
-authentication_details <- readLines("path/to/json_file.json")
-upload_cloud_file(
-  "path/to/local_file.csv",
-  "gcs",
-  list(service_account_key = authentication_details, bucket = "my-bucket")
-)
-}
-
+Uploads one or more local files to a cloud storage bucket.
 }
 \keyword{storage}

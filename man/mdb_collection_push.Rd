@@ -13,7 +13,7 @@ mdb_collection_push(
 )
 }
 \arguments{
-\item{data}{A data frame or simple features (sf) object to upload.}
+\item{data}{A data frame or sf object to upload.}
 
 \item{connection_string}{Character. MongoDB connection string.}
 
@@ -21,35 +21,17 @@ mdb_collection_push(
 
 \item{db_name}{Character. Name of the MongoDB database.}
 
-\item{geo}{Logical. Whether to create a 2dsphere index on the geometry field. Default is FALSE.}
+\item{geo}{Logical. Whether to create a 2dsphere index on the geometry field.
+Default is FALSE. When TRUE, the collection is dropped entirely before
+reinserting to avoid index conflicts with complex geometries.}
 }
 \value{
-Logical. TRUE if successful.
+The number of data documents inserted (excluding metadata), or
+  invisible TRUE for geo collections.
 }
 \description{
 Uploads data to a MongoDB collection, optionally creating a geospatial index.
+For non-geo collections, stores a metadata document preserving column order
+(used by [mdb_collection_pull()] to restore structure).
 }
-\examples{
-\dontrun{
-# Push data without geospatial indexing
-mdb_collection_push(
-  data = my_data,
-  connection_string = "mongodb://localhost:27017",
-  collection_name = "mycollection",
-  db_name = "mydb",
-  geo = FALSE
-)
-
-# Push geospatial data with 2dsphere indexing
-mdb_collection_push(
-  data = sf_data,
-  connection_string = "mongodb://localhost:27017",
-  collection_name = "geospatial_collection",
-  db_name = "mydb",
-  geo = TRUE
-)
-}
-
-}
-\keyword{database}
-\keyword{mongodb}
+\keyword{storage}

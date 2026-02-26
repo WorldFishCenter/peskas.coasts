@@ -2,47 +2,44 @@
 % Please edit documentation in R/storage.R
 \name{download_parquet_from_cloud}
 \alias{download_parquet_from_cloud}
-\title{#' Download Parquet File from Cloud Storage}
+\title{Download Parquet File from Cloud Storage}
 \usage{
 download_parquet_from_cloud(prefix, provider, options, bucket_name = NULL)
 }
 \arguments{
-\item{prefix}{The file prefix path in cloud storage}
+\item{prefix}{A character string specifying the file prefix path in cloud storage.}
 
-\item{provider}{The cloud storage provider key}
+\item{provider}{A character string specifying the cloud storage provider key.}
 
-\item{options}{Cloud storage provider options}
+\item{options}{A named list of cloud storage provider options.}
 
-\item{bucket_name}{Optional character string specifying the GCS bucket name to use.
-If provided, overrides the bucket in options. Pass directly from configuration,
-e.g. conf$storage$google$buckets$kenya. If NULL (default), uses the bucket
-defined in options.}
+\item{bucket_name}{Optional character string specifying the GCS bucket name.
+If provided, overrides the bucket in `options`. If NULL (default), uses the
+bucket defined in `options`.}
 }
 \value{
-A tibble containing the data from the parquet file
+A tibble containing the data from the Parquet file.
 }
 \description{
-This function handles the process of downloading a parquet file from cloud storage
-and reading it into memory. Supports downloading from different buckets configured
-in the configuration file.
+Downloads a Parquet file from cloud storage and loads it into memory.
+The local file is automatically cleaned up after reading.
 }
 \examples{
 \dontrun{
-# Download from default bucket (backward compatible)
-raw_data <- download_parquet_from_cloud(
-  prefix = conf$ingestion$koboform$catch$legacy$raw,
+# Download from default bucket
+data <- download_parquet_from_cloud(
+  prefix = "raw-data/survey-data",
   provider = conf$storage$google$key,
   options = conf$storage$google$options
 )
 
-# Download from a regional bucket
-kenya_data <- download_parquet_from_cloud(
+# Download from a specific bucket
+data <- download_parquet_from_cloud(
   prefix = "pds-trips",
   provider = conf$storage$google$key,
   options = conf$storage$google$options,
-  bucket_name = conf$storage$google$buckets$kenya
+  bucket_name = conf$storage$google$buckets$mozambique
 )
 }
-
 }
 \keyword{storage}
