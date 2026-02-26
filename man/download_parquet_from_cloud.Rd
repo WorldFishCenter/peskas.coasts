@@ -4,7 +4,13 @@
 \alias{download_parquet_from_cloud}
 \title{Download Parquet File from Cloud Storage}
 \usage{
-download_parquet_from_cloud(prefix, provider, options, bucket_name = NULL)
+download_parquet_from_cloud(
+  prefix,
+  provider,
+  options,
+  version = "latest",
+  bucket_name = NULL
+)
 }
 \arguments{
 \item{prefix}{A character string specifying the file prefix path in cloud storage.}
@@ -12,6 +18,9 @@ download_parquet_from_cloud(prefix, provider, options, bucket_name = NULL)
 \item{provider}{A character string specifying the cloud storage provider key.}
 
 \item{options}{A named list of cloud storage provider options.}
+
+\item{version}{A character string specifying the version to retrieve.
+Default is "latest", which returns the most recently updated object.}
 
 \item{bucket_name}{Optional character string specifying the GCS bucket name.
 If provided, overrides the bucket in `options`. If NULL (default), uses the
@@ -26,11 +35,19 @@ The local file is automatically cleaned up after reading.
 }
 \examples{
 \dontrun{
-# Download from default bucket
+# Download latest version from default bucket
 data <- download_parquet_from_cloud(
   prefix = "raw-data/survey-data",
   provider = conf$storage$google$key,
   options = conf$storage$google$options
+)
+
+# Download a specific version
+data <- download_parquet_from_cloud(
+  prefix = "raw-data/survey-data",
+  provider = conf$storage$google$key,
+  options = conf$storage$google$options,
+  version = "20250101T120000"
 )
 
 # Download from a specific bucket

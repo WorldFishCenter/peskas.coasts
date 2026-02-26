@@ -6,6 +6,8 @@
 #' @param prefix A character string specifying the file prefix path in cloud storage.
 #' @param provider A character string specifying the cloud storage provider key.
 #' @param options A named list of cloud storage provider options.
+#' @param version A character string specifying the version to retrieve.
+#'   Default is "latest", which returns the most recently updated object.
 #' @param bucket_name Optional character string specifying the GCS bucket name.
 #'   If provided, overrides the bucket in `options`. If NULL (default), uses the
 #'   bucket defined in `options`.
@@ -17,11 +19,19 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Download from default bucket
+#' # Download latest version from default bucket
 #' data <- download_parquet_from_cloud(
 #'   prefix = "raw-data/survey-data",
 #'   provider = conf$storage$google$key,
 #'   options = conf$storage$google$options
+#' )
+#'
+#' # Download a specific version
+#' data <- download_parquet_from_cloud(
+#'   prefix = "raw-data/survey-data",
+#'   provider = conf$storage$google$key,
+#'   options = conf$storage$google$options,
+#'   version = "20250101T120000"
 #' )
 #'
 #' # Download from a specific bucket
@@ -36,6 +46,7 @@ download_parquet_from_cloud <- function(
   prefix,
   provider,
   options,
+  version = "latest",
   bucket_name = NULL
 ) {
   if (!is.null(bucket_name)) {
@@ -47,33 +58,24 @@ download_parquet_from_cloud <- function(
     prefix = prefix,
     provider = provider,
     extension = "parquet",
+    version = version,
     options = options
   )
 
-  # Ensure local directory exists for nested paths
-  dir.create(dirname(parquet_file), recursive = TRUE, showWarnings = FALSE)
+  local_file <- basename(parquet_file)
 
   logger::log_info("Retrieving {parquet_file}")
   download_cloud_file(
     name = parquet_file,
     provider = provider,
-    options = options
+    options = options,
+    file = local_file
   )
 
-  on.exit(
-    {
-      unlink(parquet_file)
-      parent <- dirname(parquet_file)
-      if (parent != "." && length(list.files(parent)) == 0) {
-        unlink(parent, recursive = TRUE)
-      }
-    },
-    add = TRUE
-  )
+  on.exit(unlink(local_file), add = TRUE)
 
-  arrow::read_parquet(file = parquet_file)
+  arrow::read_parquet(file = local_file)
 }
-
 #' Upload Data as Parquet File to Cloud Storage
 #'
 #' Writes a data frame to a versioned Parquet file and uploads it to cloud storage.
