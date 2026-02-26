@@ -540,7 +540,7 @@ sync_device_users <- function(conf = NULL, seed = 123) {
         TRUE ~ NA
       )
     ) |>
-    dplyr::right_join(
+    dplyr::full_join(
       users,
       by = c("IMEI", "Country", "Region", "Community")
     ) |>

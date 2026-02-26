@@ -1,3 +1,12 @@
+# coasts 2.1.0
+
+## New Features
+
+* **NEW** `get_kobo_data()` - upgraded function to pull data from kobotoolbox according to [Kobo API changes](https://community.kobotoolbox.org/t/important-changes-to-api-v2-assets-uid-asset-data-result-limits/74610). The new function will replace the exisitn g data pulling process in all the pipeline for improved manageability and centralization of common processes
+
+* **BUG FIX** Fixed bug related to the automatic generation of credentials of Peskas Tracks App.
+
+
 # coasts 2.0.0
 
 ## Refactoring
