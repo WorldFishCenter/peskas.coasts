@@ -1,3 +1,9 @@
+# coasts 2.2.1
+
+## Minor fix
+
+Add "version" argument to `download_parquet_from_cloud()`
+
 # coasts 2.2.0
 
 ## New Features
