@@ -17,12 +17,6 @@ ingest_pds_tracks(
 
 \item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
 to `"coasts"`.}
-
-\item{read_options}{Storage options for reading the trips parquet file. Defaults to
-`conf$storage$google$options`.}
-
-\item{tracks_options}{Storage options for the raw tracks bucket. Defaults to
-`conf$pds_storage$google$options`.}
 }
 \value{
 None (invisible).

@@ -106,48 +106,62 @@ read_config <- function(package = "coasts") {
 #'
 #' @description
 #' Resolves the correct Google Cloud Storage options from a configuration object
-#' based on the intended operation type. Handles both standalone (`coasts`) and
-#' downstream package contexts (e.g. `peskas.mozambique.data.pipeline`) transparently.
+#' based on the target bucket. Handles both standalone (`coasts`) and downstream
+#' package contexts (e.g. `peskas.mozambique.data.pipeline`) transparently,
+#' so workflow functions do not need to hardcode config paths.
 #'
 #' @param conf A configuration list as returned by [read_config()].
-#' @param type Character. The storage operation type. One of:
-#'   - `"read"`: reading shared assets from the coasts bucket. Uses
-#'     `conf$storage$google$options_coasts` if present (downstream packages),
-#'     falling back to `conf$storage$google$options` (coasts itself).
-#'   - `"write"`: writing pipeline outputs to the local package bucket.
-#'     Always uses `conf$storage$google$options`.
-#'   - `"tracks"`: reading/writing raw PDS track files. Always uses
-#'     `conf$pds_storage$google$options`.
+#' @param type Character. The target bucket. One of:
+#'   - `"coasts"`: the shared coasts bucket where device metadata lives.
+#'     Uses `conf$storage$google$options_coasts` if present (downstream packages),
+#'     falling back to `conf$storage$google$options` (coasts itself, where
+#'     `options` already points to the coasts bucket).
+#'   - `"country"`: the country-specific pipeline bucket where processed outputs
+#'     are written. Always uses `conf$storage$google$options`. In the coasts
+#'     package this is the same bucket as `"coasts"`.
+#'   - `"pds"`: the PDS-specific bucket where raw GPS tracks are stored.
+#'     Always uses `conf$pds_storage$google$options`, which resolves to the
+#'     correct bucket per package (`pds-peskas-coasts` in coasts,
+#'     `pds-mozambique-prod` in the Mozambique pipeline, etc.).
 #'
 #' @return A named list of Google Cloud Storage options suitable for passing
 #'   to [cloud_object_name()], [download_cloud_file()], or [upload_cloud_file()].
 #'
 #' @details
-#' The distinction between `"read"` and `"write"` exists because downstream
-#' packages maintain two storage contexts: a shared coasts bucket (where device
-#' metadata lives) and a local bucket (where pipeline outputs are written).
-#' In the coasts package itself, both resolve to the same bucket.
+#' The three bucket types map to the following storage contexts:
 #'
-#' @export
+#' | `type`     | coasts package        | downstream package         |
+#' |------------|-----------------------|----------------------------|
+#' | `"coasts"` | `peskas-coasts-dev`   | `peskas-coasts-dev`        |
+#' | `"country"`| `peskas-coasts-dev`   | `mozambique-dev`           |
+#' | `"pds"`    | `pds-peskas-coasts`   | `pds-mozambique-dev`       |
 #'
 #' @examples
 #' \dontrun{
 #' conf <- read_config(package = "peskas.mozambique.data.pipeline")
 #'
-#' read_opts  <- resolve_storage_opts(conf, "read")   # peskas-coasts bucket
-#' write_opts <- resolve_storage_opts(conf, "write")  # country bucket
-#' track_opts <- resolve_storage_opts(conf, "tracks") # pds bucket
+#' # Read device metadata from shared coasts bucket
+#' coasts_opts <- resolve_storage_opts(conf, "coasts")
+#'
+#' # Write processed output to country bucket
+#' country_opts <- resolve_storage_opts(conf, "country")
+#'
+#' # Access raw GPS tracks from PDS bucket
+#' pds_opts <- resolve_storage_opts(conf, "pds")
 #' }
 #'
 #' @seealso [read_config()], [download_cloud_file()], [upload_cloud_file()]
 #'
+#' @export
+#'
 #' @keywords internal
-resolve_storage_opts <- function(conf, type = c("read", "write", "tracks")) {
+resolve_storage_opts <- function(conf, type = c("coasts", "country", "pds")) {
   type <- match.arg(type)
   switch(
     type,
-    read = conf$storage$google$options_coasts %||% conf$storage$google$options,
-    write = conf$storage$google$options,
-    tracks = conf$pds_storage$google$options
+    coasts = conf$storage$google$options_coasts %||%
+      conf$storage$google$options,
+    country = conf$storage$google$options,
+    pds = conf$pds_storage$google$options
   )
 }

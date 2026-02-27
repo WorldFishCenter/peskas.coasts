@@ -90,10 +90,6 @@ ingest_pds_trips <- function(
 #' @param batch_size Optional number of tracks to process. If NULL, processes all new tracks.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`.
-#' @param read_options Storage options for reading the trips parquet file. Defaults to
-#'   `conf$storage$google$options`.
-#' @param tracks_options Storage options for the raw tracks bucket. Defaults to
-#'   `conf$pds_storage$google$options`.
 #'
 #' @return None (invisible).
 #'

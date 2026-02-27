@@ -1,3 +1,7 @@
+# coasts 2.2.5
+
+* **FIX** Clarify `resolve_storage_opts()` arguments
+
 # coasts 2.2.4
 
 * **FIX** Export `resolve_storage_opts()`
