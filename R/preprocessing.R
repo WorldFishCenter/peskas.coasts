@@ -20,8 +20,8 @@ preprocess_pds_tracks <- function(
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
-  tracks_opts <- resolve_storage_opts(conf, "tracks")
-  write_opts <- resolve_storage_opts(conf, "write")
+  pds_opts <- resolve_storage_opts(conf, "pds")
+  country_opts <- resolve_storage_opts(conf, "country")
 
   logger::log_info("Checking existing preprocessed tracks...")
   preprocessed_filename <- cloud_object_name(
@@ -29,7 +29,7 @@ preprocess_pds_tracks <- function(
     provider = conf$storage$google$key,
     extension = "parquet",
     version = conf$pds$pds_tracks$version,
-    options = write_opts
+    options = country_opts
   )
 
   preprocessed_trips <- tryCatch(
@@ -37,7 +37,7 @@ preprocess_pds_tracks <- function(
       download_cloud_file(
         name = preprocessed_filename,
         provider = conf$storage$google$key,
-        options = write_opts
+        options = country_opts
       )
       preprocessed_data <- arrow::read_parquet(preprocessed_filename)
       unique(preprocessed_data$Trip)
@@ -50,7 +50,7 @@ preprocess_pds_tracks <- function(
 
   logger::log_info("Listing raw tracks...")
   raw_tracks <- googleCloudStorageR::gcs_list_objects(
-    bucket = tracks_opts$bucket,
+    bucket = pds_opts$bucket,
     prefix = conf$pds$pds_tracks$file_prefix
   )$name
 
@@ -75,7 +75,7 @@ preprocess_pds_tracks <- function(
       download_cloud_file(
         name = track_file,
         provider = conf$pds_storage$google$key,
-        options = tracks_opts
+        options = pds_opts
       )
 
       track_data <- arrow::read_parquet(track_file) %>%
@@ -111,7 +111,7 @@ preprocess_pds_tracks <- function(
   upload_cloud_file(
     file = output_filename,
     provider = conf$storage$google$key,
-    options = write_opts
+    options = country_opts
   )
 
   unlink(output_filename)
@@ -136,7 +136,7 @@ preprocess_pds_tracks <- function(
   upload_cloud_file(
     file = output_filename,
     provider = conf$storage$google$key,
-    options = write_opts
+    options = country_opts
   )
 }
 

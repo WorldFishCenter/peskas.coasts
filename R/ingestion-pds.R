@@ -28,19 +28,19 @@ ingest_pds_trips <- function(
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
-  read_opts <- resolve_storage_opts(conf, "read")
-  write_opts <- resolve_storage_opts(conf, "write")
+  coasts_opts <- resolve_storage_opts(conf, "coasts")
+  country_opts <- resolve_storage_opts(conf, "country")
 
   devices <-
     conf$metadata$airtable$name |>
     cloud_object_name(
       provider = conf$storage$google$key,
       extension = "rds",
-      options = read_opts
+      options = coasts_opts
     ) |>
     download_cloud_file(
       provider = conf$storage$google$key,
-      options = read_opts
+      options = coasts_opts
     ) |>
     readr::read_rds() |>
     purrr::pluck("devices") |>
@@ -76,10 +76,9 @@ ingest_pds_trips <- function(
   upload_cloud_file(
     file = filename,
     provider = conf$storage$google$key,
-    options = write_opts
+    options = country_opts
   )
 }
-
 #' Ingest Pelagic Data Systems (PDS) Track Data
 #'
 #' @description
@@ -103,8 +102,8 @@ ingest_pds_tracks <- function(
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
-  read_opts <- resolve_storage_opts(conf, "read")
-  tracks_opts <- resolve_storage_opts(conf, "tracks")
+  country_opts <- resolve_storage_opts(conf, "country")
+  pds_opts <- resolve_storage_opts(conf, "pds")
 
   logger::log_info("Getting trips file from cloud storage...")
   pds_trips_parquet <- cloud_object_name(
@@ -112,14 +111,14 @@ ingest_pds_tracks <- function(
     provider = conf$storage$google$key,
     extension = "parquet",
     version = conf$pds$pds_trips$version,
-    options = read_opts
+    options = country_opts
   )
 
   logger::log_info("Downloading {pds_trips_parquet}")
   download_cloud_file(
     name = pds_trips_parquet,
     provider = conf$storage$google$key,
-    options = read_opts
+    options = country_opts
   )
 
   logger::log_info("Reading trip IDs...")
@@ -132,7 +131,7 @@ ingest_pds_tracks <- function(
   logger::log_info("Checking existing tracks in cloud storage...")
   existing_tracks <-
     googleCloudStorageR::gcs_list_objects(
-      bucket = tracks_opts$bucket,
+      bucket = pds_opts$bucket,
       prefix = conf$pds$pds_tracks$file_prefix
     )$name
 
@@ -184,7 +183,7 @@ ingest_pds_tracks <- function(
           upload_cloud_file(
             file = track_filename,
             provider = conf$pds_storage$google$key,
-            options = tracks_opts
+            options = pds_opts
           )
 
           unlink(track_filename)
@@ -225,7 +224,6 @@ ingest_pds_tracks <- function(
     )
   }
 }
-
 #' Extract Trip IDs from Track Filenames
 #'
 #' @param filenames Character vector of track filenames

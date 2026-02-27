@@ -1,3 +1,7 @@
+# coasts 2.2.6
+
+* **FIX** Update PDS ingestion and preprocessing according to new config paths
+
 # coasts 2.2.5
 
 * **FIX** Clarify `resolve_storage_opts()` arguments
