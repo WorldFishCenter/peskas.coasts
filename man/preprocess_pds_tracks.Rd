@@ -16,11 +16,10 @@ preprocess_pds_tracks(
 \item{grid_size}{Numeric. Size of grid cells in meters (100, 250, 500, or 1000).}
 
 \item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
-package with a compatible configuration.}
+to `"coasts"`.}
 }
 \value{
-None (invisible). Creates and uploads preprocessed files.
+None (invisible).
 }
 \description{
 Downloads raw GPS tracks and creates a gridded summary of fishing activity.

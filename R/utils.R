@@ -82,7 +82,9 @@ read_config <- function(package = "coasts") {
 
   if (!nzchar(conf_file)) {
     stop(
-      "No 'inst/conf.yml' or 'inst/config.yml' found in package '", package, "'. ",
+      "No 'inst/conf.yml' or 'inst/config.yml' found in package '",
+      package,
+      "'. ",
       "Downstream packages must ship their own configuration file to use coasts pipeline functions. ",
       "See the coasts CLAUDE.md for the required configuration structure."
     )
@@ -97,4 +99,53 @@ read_config <- function(package = "coasts") {
   logger::log_debug("Running with parameters {conf}")
 
   conf
+}
+
+
+#' Resolve Storage Options for PDS Workflows
+#'
+#' @description
+#' Resolves the correct Google Cloud Storage options from a configuration object
+#' based on the intended operation type. Handles both standalone (`coasts`) and
+#' downstream package contexts (e.g. `peskas.mozambique.data.pipeline`) transparently.
+#'
+#' @param conf A configuration list as returned by [read_config()].
+#' @param type Character. The storage operation type. One of:
+#'   - `"read"`: reading shared assets from the coasts bucket. Uses
+#'     `conf$storage$google$options_coasts` if present (downstream packages),
+#'     falling back to `conf$storage$google$options` (coasts itself).
+#'   - `"write"`: writing pipeline outputs to the local package bucket.
+#'     Always uses `conf$storage$google$options`.
+#'   - `"tracks"`: reading/writing raw PDS track files. Always uses
+#'     `conf$pds_storage$google$options`.
+#'
+#' @return A named list of Google Cloud Storage options suitable for passing
+#'   to [cloud_object_name()], [download_cloud_file()], or [upload_cloud_file()].
+#'
+#' @details
+#' The distinction between `"read"` and `"write"` exists because downstream
+#' packages maintain two storage contexts: a shared coasts bucket (where device
+#' metadata lives) and a local bucket (where pipeline outputs are written).
+#' In the coasts package itself, both resolve to the same bucket.
+#'
+#' @examples
+#' \dontrun{
+#' conf <- read_config(package = "peskas.mozambique.data.pipeline")
+#'
+#' read_opts  <- resolve_storage_opts(conf, "read")   # peskas-coasts bucket
+#' write_opts <- resolve_storage_opts(conf, "write")  # country bucket
+#' track_opts <- resolve_storage_opts(conf, "tracks") # pds bucket
+#' }
+#'
+#' @seealso [read_config()], [download_cloud_file()], [upload_cloud_file()]
+#'
+#' @keywords internal
+resolve_storage_opts <- function(conf, type = c("read", "write", "tracks")) {
+  type <- match.arg(type)
+  switch(
+    type,
+    read = conf$storage$google$options_coasts %||% conf$storage$google$options,
+    write = conf$storage$google$options,
+    tracks = conf$pds_storage$google$options
+  )
 }

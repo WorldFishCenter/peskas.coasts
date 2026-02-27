@@ -6,10 +6,9 @@
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #' @param grid_size Numeric. Size of grid cells in meters (100, 250, 500, or 1000).
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
-#'   to `"coasts"`. Pass your own package name when calling from a downstream
-#'   package with a compatible configuration.
+#'   to `"coasts"`.
 #'
-#' @return None (invisible). Creates and uploads preprocessed files.
+#' @return None (invisible).
 #'
 #' @keywords workflow preprocessing
 #' @export
@@ -21,23 +20,24 @@ preprocess_pds_tracks <- function(
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
-  # Get already preprocessed tracks
+  tracks_opts <- resolve_storage_opts(conf, "tracks")
+  write_opts <- resolve_storage_opts(conf, "write")
+
   logger::log_info("Checking existing preprocessed tracks...")
   preprocessed_filename <- cloud_object_name(
     prefix = paste0(conf$pds$pds_tracks$file_prefix, "-preprocessed"),
     provider = conf$storage$google$key,
     extension = "parquet",
     version = conf$pds$pds_tracks$version,
-    options = conf$storage$google$options
+    options = write_opts
   )
 
-  # Get preprocessed trip IDs if file exists
   preprocessed_trips <- tryCatch(
     {
       download_cloud_file(
         name = preprocessed_filename,
         provider = conf$storage$google$key,
-        options = conf$storage$google$options
+        options = write_opts
       )
       preprocessed_data <- arrow::read_parquet(preprocessed_filename)
       unique(preprocessed_data$Trip)
@@ -48,10 +48,9 @@ preprocess_pds_tracks <- function(
     }
   )
 
-  # List raw tracks
   logger::log_info("Listing raw tracks...")
   raw_tracks <- googleCloudStorageR::gcs_list_objects(
-    bucket = conf$pds_storage$google$options$bucket,
+    bucket = tracks_opts$bucket,
     prefix = conf$pds$pds_tracks$file_prefix
   )$name
 
@@ -63,7 +62,6 @@ preprocess_pds_tracks <- function(
     return(invisible())
   }
 
-  # Get raw tracks that need preprocessing
   new_tracks <- raw_tracks[raw_trip_ids %in% new_trip_ids]
 
   workers <- parallel::detectCores() - 1
@@ -77,7 +75,7 @@ preprocess_pds_tracks <- function(
       download_cloud_file(
         name = track_file,
         provider = conf$pds_storage$google$key,
-        options = conf$pds_storage$google$options
+        options = tracks_opts
       )
 
       track_data <- arrow::read_parquet(track_file) %>%
@@ -92,7 +90,6 @@ preprocess_pds_tracks <- function(
 
   future::plan(future::sequential)
 
-  # Combine with existing preprocessed data if it exists
   final_data <- if (length(preprocessed_trips) > 0) {
     dplyr::bind_rows(preprocessed_data, new_processed_data)
   } else {
@@ -114,13 +111,11 @@ preprocess_pds_tracks <- function(
   upload_cloud_file(
     file = output_filename,
     provider = conf$storage$google$key,
-    options = conf$storage$google$options
+    options = write_opts
   )
 
   unlink(output_filename)
-  if (exists("preprocessed_filename")) {
-    unlink(preprocessed_filename)
-  }
+  unlink(preprocessed_filename)
 
   logger::log_success("Track preprocessing complete")
 
@@ -137,14 +132,13 @@ preprocess_pds_tracks <- function(
     compression_level = 12
   )
 
-  logger::log_info("Uploading preprocessed tracks...")
+  logger::log_info("Uploading grid summaries...")
   upload_cloud_file(
     file = output_filename,
     provider = conf$storage$google$key,
-    options = conf$storage$google$options
+    options = write_opts
   )
 }
-
 
 #' Preprocess Track Data into Spatial Grid Summary
 #'

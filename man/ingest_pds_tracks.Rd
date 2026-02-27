@@ -16,15 +16,19 @@ ingest_pds_tracks(
 \item{batch_size}{Optional number of tracks to process. If NULL, processes all new tracks.}
 
 \item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
-package with a compatible configuration.}
+to `"coasts"`.}
+
+\item{read_options}{Storage options for reading the trips parquet file. Defaults to
+`conf$storage$google$options`.}
+
+\item{tracks_options}{Storage options for the raw tracks bucket. Defaults to
+`conf$pds_storage$google$options`.}
 }
 \value{
-None (invisible). The function performs its operations for side effects.
+None (invisible).
 }
 \description{
-This function handles the automated ingestion of GPS boat track data from Pelagic Data Systems (PDS).
-It downloads and stores only new tracks that haven't been previously uploaded to Google Cloud Storage.
+Downloads and stores only new tracks not previously uploaded to cloud storage.
 Uses parallel processing for improved performance.
 }
 \keyword{ingestion}

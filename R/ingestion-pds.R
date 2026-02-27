@@ -4,73 +4,20 @@
 #' This function handles the automated ingestion of GPS boat trip data from Pelagic Data Systems (PDS).
 #' It performs the following operations:
 #' 1. Retrieves device metadata from configured cloud storage
-#' 2. Filters devices by last seen date (>= 2023-01-01)
-#' 3. Downloads all trip data from PDS API (2023-01-01 to present)
-#' 4. Filters trips to match active device IMEIs
-#' 5. Converts the data to parquet format
-#' 6. Uploads the processed file to configured cloud storage
-#'
-#' @details
-#' The function requires specific configuration in the `conf.yml` file with the following structure:
-#'
-#' ```yaml
-#' pds:
-#'   token: "your_pds_token"               # PDS API token
-#'   secret: "your_pds_secret"             # PDS API secret
-#'   pds_trips:
-#'     file_prefix: "pds_trips"            # Prefix for output files
-#' metadata:
-#'   airtable:
-#'     name: "metadata_file_prefix"        # Prefix for metadata file in cloud storage
-#' storage:
-#'   google:                               # Storage provider configuration
-#'     key: "google"                       # Storage provider identifier
-#'     options:
-#'       project: "project-id"             # Cloud project ID
-#'       bucket: "bucket-name"             # Storage bucket name
-#'       service_account_key: "path/to/key.json"
-#' ```
-#'
-#' The function processes trips as follows:
-#' - Downloads device metadata RDS file from cloud storage
-#' - Converts device `last_seen` timestamps from Unix milliseconds to Date format
-#' - Filters to devices active since 2023-01-01
-#' - Retrieves all trips from PDS API (with `deviceInfo` and `withLastSeen` options enabled)
-#' - Filters trips to match active device IMEIs
-#' - Saves as compressed parquet file (LZ4 compression, level 12)
-#' - Uploads to configured cloud storage
+#' 2. Downloads all trip data from PDS API (2023-01-01 to present)
+#' 3. Filters trips to match active device IMEIs
+#' 4. Converts the data to parquet format
+#' 5. Uploads the processed file to configured cloud storage
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
-#'   See `logger::log_levels` for available options.
-#'
-#' @return None (invisible). The function performs its operations for side effects:
-#'   - Creates a versioned parquet file locally with filtered trip data
-#'   - Uploads file to configured cloud storage
-#'   - Generates logs of the process
-#'
-#' @note
-#' The PDS API does not support IMEI filtering in the request, so all trips are
-#' retrieved and filtered locally. This ensures reliable data retrieval but may
-#' result in downloading more data than needed.
-#'
-#' @examples
-#' \dontrun{
-#' # Run with default debug logging
-#' ingest_pds_trips()
-#'
-#' # Run with info-level logging only
-#' ingest_pds_trips(logger::INFO)
-#' }
-#'
-#' @seealso
-#' * [get_trips()] for details on the PDS trip data retrieval process
-#' * [cloud_object_name()] for generating cloud storage object names
-#' * [download_cloud_file()] for downloading files from cloud storage
-#' * [upload_cloud_file()] for uploading files to cloud storage
-#'
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`. Pass your own package name when calling from a downstream
 #'   package with a compatible configuration.
+#'
+#' @return None (invisible).
+#'
+#' @seealso [get_trips()], [cloud_object_name()], [download_cloud_file()],
+#'   [upload_cloud_file()], [resolve_storage_opts()]
 #'
 #' @keywords workflow ingestion
 #' @export
@@ -81,16 +28,19 @@ ingest_pds_trips <- function(
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
+  read_opts <- resolve_storage_opts(conf, "read")
+  write_opts <- resolve_storage_opts(conf, "write")
+
   devices <-
     conf$metadata$airtable$name |>
     cloud_object_name(
       provider = conf$storage$google$key,
       extension = "rds",
-      options = conf$storage$google$options
+      options = read_opts
     ) |>
     download_cloud_file(
       provider = conf$storage$google$key,
-      options = conf$storage$google$options
+      options = read_opts
     ) |>
     readr::read_rds() |>
     purrr::pluck("devices") |>
@@ -126,24 +76,26 @@ ingest_pds_trips <- function(
   upload_cloud_file(
     file = filename,
     provider = conf$storage$google$key,
-    options = conf$storage$google$options
+    options = write_opts
   )
 }
 
 #' Ingest Pelagic Data Systems (PDS) Track Data
 #'
 #' @description
-#' This function handles the automated ingestion of GPS boat track data from Pelagic Data Systems (PDS).
-#' It downloads and stores only new tracks that haven't been previously uploaded to Google Cloud Storage.
+#' Downloads and stores only new tracks not previously uploaded to cloud storage.
 #' Uses parallel processing for improved performance.
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #' @param batch_size Optional number of tracks to process. If NULL, processes all new tracks.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
-#'   to `"coasts"`. Pass your own package name when calling from a downstream
-#'   package with a compatible configuration.
+#'   to `"coasts"`.
+#' @param read_options Storage options for reading the trips parquet file. Defaults to
+#'   `conf$storage$google$options`.
+#' @param tracks_options Storage options for the raw tracks bucket. Defaults to
+#'   `conf$pds_storage$google$options`.
 #'
-#' @return None (invisible). The function performs its operations for side effects.
+#' @return None (invisible).
 #'
 #' @keywords workflow ingestion
 #' @export
@@ -155,41 +107,39 @@ ingest_pds_tracks <- function(
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
-  # Get trips file from cloud storage
+  read_opts <- resolve_storage_opts(conf, "read")
+  tracks_opts <- resolve_storage_opts(conf, "tracks")
+
   logger::log_info("Getting trips file from cloud storage...")
   pds_trips_parquet <- cloud_object_name(
     prefix = conf$pds$pds_trips$file_prefix,
     provider = conf$storage$google$key,
     extension = "parquet",
     version = conf$pds$pds_trips$version,
-    options = conf$storage$google$options
+    options = read_opts
   )
 
   logger::log_info("Downloading {pds_trips_parquet}")
   download_cloud_file(
     name = pds_trips_parquet,
     provider = conf$storage$google$key,
-    options = conf$storage$google$options
+    options = read_opts
   )
 
-  # Read trip IDs
   logger::log_info("Reading trip IDs...")
   trips_data <- arrow::read_parquet(file = pds_trips_parquet) %>%
     dplyr::pull("Trip") %>%
     unique()
 
-  # Clean up downloaded file
   unlink(pds_trips_parquet)
 
-  # List existing files in GCS bucket
   logger::log_info("Checking existing tracks in cloud storage...")
   existing_tracks <-
     googleCloudStorageR::gcs_list_objects(
-      bucket = conf$pds_storage$google$options$bucket,
+      bucket = tracks_opts$bucket,
       prefix = conf$pds$pds_tracks$file_prefix
     )$name
 
-  # Get new trip IDs
   existing_trip_ids <- extract_trip_ids_from_filenames(existing_tracks)
   new_trip_ids <- setdiff(trips_data, existing_trip_ids)
 
@@ -198,12 +148,10 @@ ingest_pds_tracks <- function(
     return(invisible())
   }
 
-  # Setup parallel processing
   workers <- parallel::detectCores() - 1
   logger::log_info("Setting up parallel processing with {workers} workers...")
   future::plan(future::multisession, workers = workers)
 
-  # Select tracks to process
   process_ids <- if (!is.null(batch_size)) {
     new_trip_ids[1:batch_size]
   } else {
@@ -211,20 +159,17 @@ ingest_pds_tracks <- function(
   }
   logger::log_info("Processing {length(process_ids)} new tracks in parallel...")
 
-  # Process tracks in parallel with progress bar
   results <- furrr::future_map(
     process_ids,
     function(trip_id) {
       tryCatch(
         {
-          # Create filename for this track
           track_filename <- sprintf(
             "%s_%s.parquet",
             conf$pds$pds_tracks$file_prefix,
             trip_id
           )
 
-          # Get track data
           track_data <- get_trip_points(
             token = conf$pds$token,
             secret = conf$pds$secret,
@@ -232,7 +177,6 @@ ingest_pds_tracks <- function(
             deviceInfo = TRUE
           )
 
-          # Save to parquet
           arrow::write_parquet(
             x = track_data,
             sink = track_filename,
@@ -240,15 +184,13 @@ ingest_pds_tracks <- function(
             compression_level = 12
           )
 
-          # Upload to cloud
           logger::log_info("Uploading track for trip {trip_id}")
           upload_cloud_file(
             file = track_filename,
             provider = conf$pds_storage$google$key,
-            options = conf$pds_storage$google$options
+            options = tracks_opts
           )
 
-          # Clean up local file
           unlink(track_filename)
 
           list(
@@ -258,11 +200,7 @@ ingest_pds_tracks <- function(
           )
         },
         error = function(e) {
-          list(
-            status = "error",
-            trip_id = trip_id,
-            message = e$message
-          )
+          list(status = "error", trip_id = trip_id, message = e$message)
         }
       )
     },
@@ -270,23 +208,20 @@ ingest_pds_tracks <- function(
     .progress = TRUE
   )
 
-  # Clean up parallel processing
   future::plan(future::sequential)
 
-  # Summarize results
   successes <- sum(purrr::map_chr(results, "status") == "success")
   failures <- sum(purrr::map_chr(results, "status") == "error")
 
   logger::log_info(
     "Processing complete. Successfully processed {successes} tracks."
   )
+
   if (failures > 0) {
     logger::log_warn("Failed to process {failures} tracks.")
     failed_results <- results[purrr::map_chr(results, "status") == "error"]
     failed_trips <- purrr::map_chr(failed_results, "trip_id")
     failed_messages <- purrr::map_chr(failed_results, "message")
-
-    logger::log_warn("Failed trip IDs and reasons:")
     purrr::walk2(
       failed_trips,
       failed_messages,

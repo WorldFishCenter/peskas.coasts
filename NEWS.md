@@ -1,3 +1,7 @@
+# coasts 2.2.3
+
+* **FIX** Refine pds ingestion functions to improve comatibility with country pipelines
+
 # coasts 2.2.2
 
 * **NEW** Upgrade and optimize all functions related to pds ingestion and preprocessing in order to be compatible with current countries pipelines. This means countries data flows follow the same data processing enhancing processes mangeabiity and data consistency
