@@ -128,6 +128,8 @@ read_config <- function(package = "coasts") {
 #' metadata lives) and a local bucket (where pipeline outputs are written).
 #' In the coasts package itself, both resolve to the same bucket.
 #'
+#' @export
+#'
 #' @examples
 #' \dontrun{
 #' conf <- read_config(package = "peskas.mozambique.data.pipeline")
