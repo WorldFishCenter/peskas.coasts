@@ -57,7 +57,6 @@ str(trips_stats)
 \seealso{
 * [calculate_monthly_trip_stats()] for using processed trip data
 * [get_trips()] for the underlying API call
-* [get_metadata()] for community metadata retrieval
 }
 \keyword{preprocessing}
 \keyword{workflow}

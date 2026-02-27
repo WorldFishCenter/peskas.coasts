@@ -41,6 +41,14 @@ default:
       lurio:
         validated: wf-lurio-surveys-validated
   pds:
+    customers:
+      - "WorldFish - Mozambique"
+      - "Syberintel - distributor"
+      - "Kenya"
+      - "Kenya AABS" 
+      - "WorldFish - Kenya"
+      - "WorldFish - Tanzania AP"
+      - "WorldFish - Zanzibar"
     token: !expr Sys.getenv('PDS_TOKEN')
     secret: !expr Sys.getenv('PDS_SECRET')
     username: !expr Sys.getenv('PDS_USERNAME')

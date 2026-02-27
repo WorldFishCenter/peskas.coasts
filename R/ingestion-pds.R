@@ -74,11 +74,15 @@
 #'
 #' @keywords workflow ingestion
 #' @export
-ingest_pds_trips <- function(log_threshold = logger::DEBUG, package = "coasts") {
+ingest_pds_trips <- function(
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
-  assets <- conf$metadata$airtable$name |>
+  devices <-
+    conf$metadata$airtable$name |>
     cloud_object_name(
       provider = conf$storage$google$key,
       extension = "rds",
@@ -88,27 +92,25 @@ ingest_pds_trips <- function(log_threshold = logger::DEBUG, package = "coasts") 
       provider = conf$storage$google$key,
       options = conf$storage$google$options
     ) |>
-    readr::read_rds()
-
-  assets$devices <- assets$devices |>
+    readr::read_rds() |>
+    purrr::pluck("devices") |>
     dplyr::mutate(
       last_seen = as.Date(as.POSIXct(
         .data$last_seen / 1000,
         origin = "1970-01-01"
       ))
     ) |>
-    dplyr::filter(.data$last_seen >= "2023-01-01")
+    dplyr::filter(.data$customer_name %in% conf$pds$customers)
 
   boats_trips <- get_trips(
     token = conf$pds$token,
     secret = conf$pds$secret,
     dateFrom = "2023-01-01",
     dateTo = Sys.Date(),
-    #imeis = unique(assets$devices$imei),
     deviceInfo = TRUE,
     withLastSeen = TRUE
   ) |>
-    dplyr::filter(.data$IMEI %in% as.numeric(unique(assets$devices$imei)))
+    dplyr::filter(.data$IMEI %in% as.numeric(unique(devices$imei)))
 
   filename <- conf$pds$pds_trips$file_prefix %>%
     add_version(extension = "parquet")

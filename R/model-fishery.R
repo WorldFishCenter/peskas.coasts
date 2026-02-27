@@ -21,7 +21,6 @@
 #' @examples
 #' \dontrun{
 #' # Get boat registry data from metadata
-#' metadata <- get_metadata()
 #' boat_registry <- prepare_boat_registry(boats_table = metadata$boats)
 #'
 #' # View boat counts by district
@@ -96,7 +95,6 @@ prepare_boat_registry <- function(boats_table = NULL) {
 #' @seealso
 #' * [calculate_monthly_trip_stats()] for using processed trip data
 #' * [get_trips()] for the underlying API call
-#' * [get_metadata()] for community metadata retrieval
 #'
 #' @keywords workflow preprocessing
 #' @export

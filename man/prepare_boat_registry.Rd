@@ -29,7 +29,6 @@ from GPS-tracked samples.
 \examples{
 \dontrun{
 # Get boat registry data from metadata
-metadata <- get_metadata()
 boat_registry <- prepare_boat_registry(boats_table = metadata$boats)
 
 # View boat counts by district
