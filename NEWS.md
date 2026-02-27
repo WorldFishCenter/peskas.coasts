@@ -1,3 +1,7 @@
+# coasts 2.2.4
+
+* **FIX** Export `resolve_storage_opts()`
+
 # coasts 2.2.3
 
 * **FIX** Refine pds ingestion functions to improve comatibility with country pipelines
