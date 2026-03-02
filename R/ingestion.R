@@ -326,7 +326,7 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
       ),
       sites = fetch_asset(
         table_name = "landing_sites",
-        select_cols = c("form_id", "site", "site_code", "gaul2"),
+        select_cols = c("form_id", "site", "site_code", "gaul_2_code"),
         conf = conf
       ),
       forms = fetch_asset(
