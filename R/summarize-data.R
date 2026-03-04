@@ -58,15 +58,32 @@ summarize_data <- function(log_threshold = logger::DEBUG, package = "coasts") {
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
+  asfis <- coasts::download_parquet_from_cloud(
+    prefix = "asfis",
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options
+  ) |>
+    janitor::clean_names() |>
+    dplyr::select("alpha3_code", "scientific_name", "english_name") |>
+    dplyr::distinct()
+
   # Input: validated trip data (catch-level rows, one row per catch item per trip)
-  clean_data <- download_parquet_from_cloud(
+  clean_data <- coasts::download_parquet_from_cloud(
     prefix = file.path(
       conf$api$trips$validated$cloud_path,
       conf$api$trips$validated$file_prefix
     ),
     provider = conf$storage$google$key,
     options = conf$storage$google$options_api
-  )
+  ) |>
+    dplyr::left_join(
+      asfis,
+      by = c("catch_taxon" = "alpha3_code")
+    ) |>
+    dplyr::mutate(catch_taxon = .data$scientific_name) |>
+    dplyr::select(
+      -c("scientific_name", "english_name")
+    )
 
   f_metrics <- calculate_fishery_metrics(data = clean_data)
 

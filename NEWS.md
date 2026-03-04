@@ -1,3 +1,7 @@
+# coasts 2.2.7
+
+* **IMPROVEMENT** Use scientific names rather than FAO alpha3 codes for dashboard data
+
 # coasts 2.2.6
 
 * **FIX** Update PDS ingestion and preprocessing according to new config paths
