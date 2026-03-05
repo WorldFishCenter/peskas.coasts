@@ -48,6 +48,6 @@ WORKDIR /home
 RUN Rscript -e 'remotes::install_local(dependencies = TRUE)'
 
 # Install the ssfaitk Python module into system Python (matches RETICULATE_PYTHON)
-RUN pip3 install --break-system-packages "git+https://github.com/WorldFishCenter/ssf-ai-toolkit@plug-R"
+RUN /usr/bin/python3 -m pip install --break-system-packages "git+https://github.com/WorldFishCenter/ssf-ai-toolkit@plug-R"
 
 ENTRYPOINT ["Rscript"]
