@@ -1,6 +1,6 @@
 FROM rocker/geospatial:4.5
 
-# Tidyverse system requirements
+# System dependencies
 RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     libxml2-dev \
     libcairo2-dev \
@@ -10,10 +10,15 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     libsasl2-dev \
     libsqlite3-dev \
     libssh2-1-dev \
-    unixodbc-dev && \
+    unixodbc-dev \
+    python3-dev \
+    python3-pip && \
   rm -rf /var/lib/apt/lists/*
 
-# Install imports
+# Tell reticulate which Python to use in every R session started in this image
+ENV RETICULATE_PYTHON=/usr/bin/python3
+
+# Install R packages from CRAN
 RUN install2.r --error --skipinstalled \
     arrow \
     config \
@@ -30,10 +35,16 @@ RUN install2.r --error --skipinstalled \
     parallel \
     purrr \
     readr \
+    reticulate \
     rlang \
     sf \
     stringr \
     tidyr
+
+# Install ssfaitk from GitHub.
+# This is baked into the image so the first run is fast; the workflow always
+# reinstalls it at runtime to pick up the latest model version (see model-tracks.yaml).
+RUN Rscript -e 'remotes::install_github("WorldFishCenter/ssf-ai-toolkit", ref = "R-plug")'
 
 # Install local package
 COPY . /home

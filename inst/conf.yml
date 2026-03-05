@@ -60,6 +60,9 @@ default:
     pds_tracks:
       file_prefix: pds-tracks
       version: latest      
+    pds_tracks_predicted:
+      file_prefix: predicted-pds-tracks
+      version: latest            
   tracks_app:
     backup_users:
       file_prefix: backup-users

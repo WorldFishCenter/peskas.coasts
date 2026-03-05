@@ -1,3 +1,33 @@
+# coasts 3.0.0
+
+## Fishing Activity Prediction Pipeline
+
+A new end-to-end pipeline for classifying GPS boat tracks into fishing and non-fishing activity using the `ssfaitk` statistical model, and aggregating the results into spatial effort maps.
+
+### New Workflow Functions
+
+* **NEW** `predict_pds_tracks()` - Downloads GPS tracks for all active vessels, applies the `ssfaitk` fishing activity model to each trip, and uploads fishing-only point files to cloud storage. Implements version-aware incremental processing: trips already classified with the current model version are skipped, and files from outdated model versions are automatically replaced when the model is updated.
+
+* **NEW** `aggregate_pds_effort()` - Consolidates all classified fishing tracks into a single H3 hexagonal grid representing cumulative fishing effort across the fleet. Counts fishing pings and unique trips per cell and uploads the grid as a versioned parquet file ready for portal consumption.
+
+### New Spatial Analysis Utilities
+
+* **NEW** `assign_h3_indices()` - Maps GPS coordinates to H3 hexagon cell IDs at any resolution
+* **NEW** `aggregate_h3_effort()` - Summarises fishing pings and unique vessel counts per H3 cell
+* **NEW** `rollup_h3_resolution()` - Re-aggregates effort from a fine H3 resolution to any coarser level for multi-scale analysis
+* **NEW** `create_spatial_grid()` - Converts an H3 effort table to an `sf` polygon object for mapping
+* **NEW** `prep_fishing_points()` - Projects raw GPS coordinates to a metric CRS for distance-based spatial operations
+* **NEW** `create_reference_grid()` - Generates a deterministic square or hexagonal reference grid over a study area
+* **NEW** `aggregate_daily_effort()` - Counts fishing pings per reference grid cell via spatial join
+
+### Automated Pipeline
+
+* **NEW** GitHub Actions workflow (`model-tracks.yaml`) - Runs the full fishing activity prediction and effort aggregation pipeline every two days. Always fetches the latest `ssfaitk` model version at runtime, so improvements to the underlying model are picked up automatically without rebuilding the Docker image.
+
+### Infrastructure
+
+* **ENHANCED** Docker image - Added Python environment support required by the `ssfaitk` model, including automatic Python path configuration for `reticulate`
+
 # coasts 2.2.7
 
 * **IMPROVEMENT** Use scientific names rather than FAO alpha3 codes for dashboard data

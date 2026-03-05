@@ -1,0 +1,67 @@
+name: Predict Fishing Tracks
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  PDS_TOKEN: ${{ secrets.PDS_TOKEN }}
+  PDS_SECRET: ${{ secrets.PDS_SECRET }}
+  PDS_USERNAME: ${{ secrets.PDS_USERNAME }}
+  PDS_PASSWORD: ${{ secrets.PDS_PASSWORD }}
+  PDS_CUSTOMER_ID: ${{ secrets.PDS_CUSTOMER_ID }}
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  # Explicit Python path for reticulate (mirrors the Docker ENV as a safety net)
+  RETICULATE_PYTHON: /usr/bin/python3
+
+jobs:
+  build-container:
+    name: Build R container
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: true
+          tags: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
+          cache-from: type=registry,ref=ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:buildcache
+          cache-to: type=registry,ref=ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:buildcache,mode=max
+
+  predict-tracks:
+    name: Predict Fishing Tracks
+    needs: build-container
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Update ssfaitk to latest version
+        # Always reinstall at runtime so the latest model is used regardless
+        # of when the Docker image was last built and cached.
+        run: Rscript -e 'remotes::install_github("WorldFishCenter/ssf-ai-toolkit", ref = "R-plug", upgrade = "always")'
+      - name: Call predict_pds_tracks()
+        run: Rscript -e 'coasts::predict_pds_tracks()'
+      - name: Aggregate predicted tracks to H3 grid
+        run: Rscript -e 'coasts::aggregate_pds_effort()'
+      - name: Log completion
+        run: echo "Prediction pipeline complete"
