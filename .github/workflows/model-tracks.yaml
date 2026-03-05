@@ -67,7 +67,7 @@ jobs:
       - name: Install ssfaitk Python module
         run: /usr/bin/python3 -m pip install --break-system-packages "git+https://github.com/WorldFishCenter/ssf-ai-toolkit@plug-R"
       - name: Verify ssfaitk Python module
-        run: /usr/bin/python3 -c "import ssfaitk; print('ssfaitk OK:', ssfaitk.__version__)"
+        run: /usr/bin/python3 -c "import ssfaitk; print('ssfaitk OK')"
       - name: Call predict_pds_tracks()
         run: Rscript -e 'coasts::predict_pds_tracks()'
       - name: Aggregate predicted tracks to H3 grid
