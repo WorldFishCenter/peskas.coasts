@@ -44,7 +44,7 @@ RUN install2.r --error --skipinstalled \
 # Install ssfaitk from GitHub.
 # This is baked into the image so the first run is fast; the workflow always
 # reinstalls it at runtime to pick up the latest model version (see model-tracks.yaml).
-RUN Rscript -e 'remotes::install_github("WorldFishCenter/ssf-ai-toolkit", ref = "R-plug")'
+RUN Rscript -e 'remotes::install_github("WorldFishCenter/ssf-ai-toolkit", ref = "plug-R")'
 
 # Install local package
 COPY . /home
