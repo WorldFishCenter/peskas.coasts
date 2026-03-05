@@ -56,4 +56,4 @@ Suggests:
     rmarkdown
 Config/testthat/edition: 3
 Remotes:
-    WorldFishCenter/ssf-ai-toolkit@R-plug
+    WorldFishCenter/ssf-ai-toolkit/Rplug@plug-R

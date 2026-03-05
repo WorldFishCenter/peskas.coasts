@@ -61,7 +61,7 @@ jobs:
       - name: Update ssfaitk to latest version
         # Always reinstall at runtime so the latest model is used regardless
         # of when the Docker image was last built and cached.
-        run: Rscript -e 'remotes::install_github("WorldFishCenter/ssf-ai-toolkit", ref = "plug-R", upgrade = "always")'
+        run: Rscript -e 'remotes::install_github("WorldFishCenter/ssf-ai-toolkit", ref = "plug-R", subdir = "Rplug", upgrade = "always")'
       - name: Call predict_pds_tracks()
         run: Rscript -e 'coasts::predict_pds_tracks()'
       - name: Aggregate predicted tracks to H3 grid
