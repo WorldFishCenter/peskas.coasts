@@ -46,4 +46,7 @@ COPY . /home
 WORKDIR /home
 RUN Rscript -e 'remotes::install_local(dependencies = TRUE)'
 
+# Install the ssfaitk Python module so the image is ready to predict
+RUN Rscript -e 'ssfaitk::install_ssfaitk()'
+
 ENTRYPOINT ["Rscript"]

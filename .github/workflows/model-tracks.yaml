@@ -64,6 +64,8 @@ jobs:
         env:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: Rscript -e 'remotes::install_github("WorldFishCenter/ssf-ai-toolkit", ref = "plug-R", subdir = "Rplug", upgrade = "always")'
+      - name: Install ssfaitk Python module
+        run: Rscript -e 'ssfaitk::install_ssfaitk()'
       - name: Call predict_pds_tracks()
         run: Rscript -e 'coasts::predict_pds_tracks()'
       - name: Aggregate predicted tracks to H3 grid
