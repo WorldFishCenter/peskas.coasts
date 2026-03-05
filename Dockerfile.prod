@@ -47,7 +47,7 @@ COPY . /home
 WORKDIR /home
 RUN Rscript -e 'remotes::install_local(dependencies = TRUE)'
 
-# Install the ssfaitk Python module so the image is ready to predict
-RUN Rscript -e 'ssfaitk::install_ssfaitk()'
+# Install the ssfaitk Python module into system Python (matches RETICULATE_PYTHON)
+RUN pip3 install --break-system-packages "git+https://github.com/WorldFishCenter/ssf-ai-toolkit@plug-R"
 
 ENTRYPOINT ["Rscript"]
