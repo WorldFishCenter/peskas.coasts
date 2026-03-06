@@ -1,0 +1,991 @@
+---
+title: "Peskas Coastal Fisheries Dashboard"
+subtitle: "Small-Scale Fisheries Landing Survey Analytics"
+author: "WorldFish Center — Peskas Initiative"
+date: today
+
+format:
+  dashboard:
+    theme: cosmo
+    nav-buttons:
+      - icon: github
+        href: https://github.com/WorldFishCenter/peskas.coasts
+    scrolling: true
+
+server: shiny
+
+execute:
+  echo:    false
+  warning: false
+  message: false
+---
+
+```{=html}
+<style>
+  .navbar {
+    background: #1a1f2e !important;
+    border-bottom: 2px solid #00bcd4;
+  }
+  .navbar-brand, .navbar-nav .nav-link,
+  .navbar-title, .navbar-subtitle,
+  .quarto-title-meta { color: #e0e6f0 !important; }
+  .navbar-nav .nav-link.active,
+  .navbar-nav .nav-link:hover {
+    color: #00bcd4 !important;
+    border-bottom: 2px solid #00bcd4;
+  }
+  /* Country selector injected into navbar */
+  #country-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 1rem;
+  }
+  #country-wrap label { display: none; }
+  #country-wrap select {
+    background: #2e3448 !important;
+    color: #e0e6f0 !important;
+    border: 1px solid #00bcd4 !important;
+    border-radius: 6px !important;
+    padding: 3px 28px 3px 10px !important;
+    font-size: 0.82rem !important;
+    height: 30px !important;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%2300bcd4' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 8px center !important;
+  }
+  #country-wrap select:focus { outline: none; }
+  .card {
+    border: none !important;
+    border-radius: 10px !important;
+    background-color: #242938 !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,.35) !important;
+  }
+  .card-header {
+    background: #2e3448 !important;
+    font-weight: 700 !important;
+    color: #e0e6f0 !important;
+    border-bottom: 1px solid #3a4060 !important;
+    font-size: 0.88rem !important;
+    letter-spacing: 0.03em !important;
+  }
+  body { background-color: #141824 !important; }
+  .dataTables_wrapper { font-size: 0.85rem; color: #c0c8d8; }
+  .bslib-card .card-header .bi { display: none !important; }
+  /* Hide the empty card created by the hidden country selector chunk */
+  .card:has(#country-wrap) {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+</style>
+
+<script>
+$(document).on('shiny:connected', function() {
+  // Move the country selector into the navbar
+  var wrap = document.getElementById('country-wrap');
+  var navbar = document.querySelector('.navbar-nav');
+  if (wrap && navbar) {
+    navbar.parentNode.insertBefore(wrap, navbar.nextSibling);
+    wrap.style.display = 'flex';
+  }
+});
+</script>
+```
+
+
+```{r setup}
+#| context: setup
+
+required_packages <- c(
+  "arrow", "dplyr", "tidyr", "lubridate", "stringr",
+  "tibble", "ggplot2", "ggrepel", "scales",
+  "treemapify", "viridis", "knitr", "kableExtra", "DT", "vegan", "shiny"
+)
+install_if_missing <- function(pkgs) {
+  new_pkgs <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
+  if (length(new_pkgs) > 0)
+    install.packages(new_pkgs, repos = "https://cloud.r-project.org", quiet = TRUE)
+}
+install_if_missing(required_packages)
+invisible(lapply(required_packages, library, character.only = TRUE))
+
+if (!requireNamespace("coasts", quietly = TRUE)) {
+  if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak")
+  pak::pak("WorldFishCenter/peskas.coasts")
+}
+library(coasts)
+
+pal_geo_base <- c("#29B6F6","#26C6DA","#66BB6A","#FDD835","#FB8C00",
+                  "#EF5350","#AB47BC","#7986CB","#26A69A","#EC407A",
+                  "#8BC34A","#FF7043")
+pal_ocean    <- c("#29B6F6","#26C6DA","#66BB6A","#FDD835","#FB8C00",
+                  "#EF5350","#AB47BC","#7986CB","#26A69A","#EC407A")
+
+theme_peskas <- function(base_size = 11) {
+  ggplot2::theme_minimal(base_size = base_size) %+replace%
+    ggplot2::theme(
+      text              = ggplot2::element_text(family = "sans", colour = "#c0c8d8"),
+      plot.title        = ggplot2::element_text(size = rel(1.2), face = "bold", hjust = 0,
+                                                margin = margin(b = 5), colour = "#e0e6f0"),
+      plot.subtitle     = ggplot2::element_text(size = rel(0.85), hjust = 0,
+                                                colour = "#8a9bb8", margin = margin(b = 8)),
+      plot.caption      = ggplot2::element_text(size = rel(0.68), hjust = 1,
+                                                colour = "#5a6880", margin = margin(t = 8)),
+      axis.title        = ggplot2::element_text(size = rel(0.83), face = "bold", colour = "#8a9bb8"),
+      axis.text         = ggplot2::element_text(size = rel(0.77), colour = "#8a9bb8"),
+      axis.line         = ggplot2::element_line(colour = "#3a4060", linewidth = 0.35),
+      axis.ticks        = ggplot2::element_line(colour = "#3a4060", linewidth = 0.25),
+      panel.grid.major  = ggplot2::element_line(colour = "#2e3448", linewidth = 0.25),
+      panel.grid.minor  = ggplot2::element_blank(),
+      legend.position   = "bottom",
+      legend.background = ggplot2::element_rect(fill = "#242938", colour = NA),
+      legend.title      = ggplot2::element_text(face = "bold", size = rel(0.80), colour = "#e0e6f0"),
+      legend.text       = ggplot2::element_text(size = rel(0.77), colour = "#c0c8d8"),
+      legend.key.size   = unit(0.42, "cm"),
+      strip.text        = ggplot2::element_text(face = "bold", size = rel(0.85), colour = "#e0e6f0"),
+      strip.background  = ggplot2::element_rect(fill = "#2e3448", colour = NA),
+      plot.background   = ggplot2::element_rect(fill = "#242938", colour = NA),
+      panel.background  = ggplot2::element_rect(fill = "#242938", colour = NA),
+      plot.margin       = margin(12, 12, 8, 12)
+    )
+}
+ggplot2::theme_set(theme_peskas())
+```
+
+
+```{r country-ui}
+# Hidden initially; JS moves it into the navbar
+div(id = "country-wrap", style = "display:none",
+  selectInput("country", label = NULL,
+    choices  = c("Mozambique" = "mozambique",
+                 "Kenya"      = "kenya",
+                 "Zanzibar"   = "zanzibar"),
+    selected = "mozambique", width = "140px")
+)
+```
+
+
+```{r server}
+#| context: server
+
+# ── Reactive data ─────────────────────────────────────────────────────────────
+df <- reactive({
+  req(input$country)
+  withProgress(message = paste("Loading", str_to_title(input$country), "data..."), {
+    conf         <- coasts::read_config()
+    country_conf <- conf$api$trips[[input$country]]
+    coasts::download_parquet_from_cloud(
+      prefix      = file.path(country_conf$validated$cloud_path,
+                              country_conf$validated$file_prefix),
+      provider    = conf$storage$google$key,
+      options     = conf$storage$google$options,
+      bucket_name = conf$api$trips$bucket
+    ) %>%
+      mutate(
+        landing_date    = as.Date(landing_date),
+        year            = year(landing_date),
+        month           = month(landing_date, label = TRUE, abbr = TRUE),
+        month_num       = month(landing_date),
+        week            = isoweek(landing_date),
+        province        = str_to_title(str_trim(gaul_1_name)),
+        district        = str_to_title(str_trim(gaul_2_name)),
+        gear            = str_to_title(str_trim(gear)),
+        vessel_type     = str_to_title(str_trim(vessel_type)),
+        habitat         = str_to_title(str_trim(catch_habitat)),
+        catch_use       = str_to_lower(str_trim(catch_outcome)),
+        catch_taxon     = str_to_title(str_trim(catch_taxon)),
+        catch_kg        = as.numeric(catch_kg),
+        catch_price     = as.numeric(catch_price),
+        tot_catch_kg    = as.numeric(tot_catch_kg),
+        tot_catch_price = as.numeric(tot_catch_price),
+        trip_duration   = as.numeric(trip_duration_hrs),
+        n_fishers       = as.numeric(n_fishers),
+        length          = as.numeric(length_cm),
+        cpue_kg_hr      = ifelse(trip_duration > 0, catch_kg / trip_duration, NA_real_),
+        price_per_kg    = ifelse(catch_kg > 0, catch_price / catch_kg, NA_real_)
+      ) %>%
+      filter(!is.na(catch_taxon), catch_taxon != "", !is.na(catch_kg), catch_kg > 0)
+  })
+})
+
+trips <- reactive({
+  req(df())
+  df() %>% distinct(trip_id, .keep_all = TRUE) %>%
+    select(trip_id, survey_id, landing_date, year, month, month_num, week,
+           province, district, gear, vessel_type, habitat, catch_use,
+           n_fishers, trip_duration, tot_catch_kg, tot_catch_price, cpue_kg_hr)
+})
+
+pal_geo <- reactive({
+  req(df())
+  setNames(rep_len(pal_geo_base, length(sort(unique(df()$province)))),
+           sort(unique(df()$province)))
+})
+
+pal_gear <- reactive({
+  req(df())
+  setNames(rep_len(pal_ocean, length(sort(unique(df()$gear)))),
+           sort(unique(df()$gear)))
+})
+
+month_order <- reactive({
+  req(df())
+  df() %>% distinct(month_num) %>% arrange(month_num) %>%
+    mutate(month = month(month_num, label = TRUE, abbr = TRUE)) %>%
+    pull(month) %>% as.character()
+})
+
+src_cap <- reactive({
+  req(df(), input$country)
+  paste0("Source: Peskas · ", str_to_title(input$country), " · ",
+         min(df()$landing_date, na.rm = TRUE), " – ",
+         max(df()$landing_date, na.rm = TRUE))
+})
+
+taxon_summary <- reactive({
+  req(df())
+  df() %>%
+    group_by(catch_taxon) %>%
+    summarise(total_kg = sum(catch_kg, na.rm = TRUE), n_records = n(),
+              n_trips = n_distinct(trip_id), n_sites = n_distinct(district),
+              mean_kg = mean(catch_kg, na.rm = TRUE), .groups = "drop") %>%
+    mutate(pct   = total_kg / sum(total_kg) * 100,
+           label = ifelse(pct >= 2, paste0(catch_taxon, "\n", round(pct,1), "%"), "")) %>%
+    arrange(desc(total_kg))
+})
+
+top_taxa <- reactive({
+  req(taxon_summary())
+  list(
+    top10 = taxon_summary() %>% slice_max(total_kg, n = 10),
+    top12 = taxon_summary() %>% slice_max(total_kg, n = 12) %>% pull(catch_taxon),
+    top8  = taxon_summary() %>% slice_max(total_kg, n = 8)  %>% pull(catch_taxon),
+    top5  = taxon_summary() %>% slice_max(total_kg, n = 5)  %>% pull(catch_taxon)
+  )
+})
+
+top5_data <- reactive({
+  req(df(), top_taxa())
+  df() %>% filter(catch_taxon %in% top_taxa()$top5) %>%
+    mutate(catch_taxon = factor(catch_taxon, levels = top_taxa()$top5))
+})
+
+wellbeing_data <- reactive({
+  req(trips(), df())
+  trips() %>%
+    group_by(province, district) %>%
+    summarise(n = n(), mean_catch_kg = mean(tot_catch_kg, na.rm = TRUE),
+              mean_cpue = mean(cpue_kg_hr, na.rm = TRUE),
+              pct_commercial = mean(catch_use == "sale", na.rm = TRUE), .groups = "drop") %>%
+    filter(n >= 3) %>%
+    left_join(df() %>% group_by(district) %>%
+                summarise(sp_richness = n_distinct(catch_taxon), .groups = "drop"),
+              by = "district") %>%
+    mutate(econ_score  = scales::rescale(mean_catch_kg * pct_commercial),
+           effic_score = scales::rescale(mean_cpue),
+           eco_score   = scales::rescale(sp_richness),
+           wellbeing_index = (econ_score + effic_score + eco_score) / 3)
+})
+
+# ── Overview ──────────────────────────────────────────────────────────────────
+output$p_top10 <- renderPlot({
+  req(top_taxa())
+  ggplot(top_taxa()$top10, aes(x = reorder(catch_taxon, total_kg), y = total_kg)) +
+    geom_segment(aes(xend = catch_taxon, y = 0, yend = total_kg),
+                 colour = "#29B6F6", linewidth = 1.2) +
+    geom_point(size = 5, colour = "#e0e6f0") +
+    geom_text(aes(label = paste0(round(pct, 1), "%")),
+              hjust = -0.3, size = 3.2, fontface = "bold", colour = "#FB8C00") +
+    coord_flip() +
+    scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.18))) +
+    labs(x = NULL, y = "Total Catch (kg)", caption = src_cap())
+})
+
+output$p_treemap <- renderPlot({
+  req(taxon_summary())
+  ggplot(taxon_summary(), aes(area = total_kg, fill = total_kg, label = label)) +
+    geom_treemap(colour = "#242938", linewidth = 1.2) +
+    geom_treemap_text(colour = "white", place = "centre", size = 8,
+                      fontface = "bold", reflow = TRUE) +
+    scale_fill_viridis_c(option = "mako", direction = -1, name = "Total Catch (kg)",
+                         labels = scales::comma,
+                         guide = guide_colorbar(barwidth = 8, barheight = 0.5,
+                                                title.position = "top")) +
+    labs(subtitle = "Tile area ∝ biomass", caption = src_cap())
+})
+
+output$kpi_table <- renderUI({
+  req(df(), trips())
+  tbl <- data.frame(
+    Metric = c("Total Landings","Taxa Recorded","Landing Districts",
+               "Regions / Provinces","Median CPUE (kg/hr)","Survey Trips","Survey Period"),
+    Value  = c(
+      paste0(round(sum(trips()$tot_catch_kg, na.rm=TRUE)/1000, 1), " t"),
+      as.character(n_distinct(df()$catch_taxon)),
+      as.character(n_distinct(df()$district)),
+      as.character(n_distinct(df()$province)),
+      paste0(round(median(trips()$cpue_kg_hr, na.rm=TRUE), 2), " kg/hr"),
+      scales::comma(n_distinct(df()$trip_id)),
+      paste0(min(df()$landing_date, na.rm=TRUE), " – ", max(df()$landing_date, na.rm=TRUE))
+    )
+  )
+  HTML(tbl %>%
+    kableExtra::kbl(col.names = NULL, booktabs = TRUE, format = "html") %>%
+    kableExtra::kable_styling(full_width = TRUE, font_size = 13) %>%
+    kableExtra::column_spec(1, bold = TRUE, color = "#e0e6f0") %>%
+    kableExtra::column_spec(2, color = "#29B6F6") %>% as.character())
+})
+
+output$p_diversity <- renderPlot({
+  req(df(), pal_geo())
+  diversity_mat <- df() %>%
+    group_by(province, catch_taxon) %>%
+    summarise(total_kg = sum(catch_kg, na.rm=TRUE), .groups="drop") %>%
+    pivot_wider(names_from=catch_taxon, values_from=total_kg, values_fill=0) %>%
+    tibble::column_to_rownames("province")
+  data.frame(
+    province = rownames(diversity_mat),
+    shannon  = vegan::diversity(diversity_mat, index="shannon"),
+    simpson  = vegan::diversity(diversity_mat, index="simpson"),
+    richness = vegan::specnumber(diversity_mat),
+    evenness = vegan::diversity(diversity_mat, index="shannon") /
+               log(vegan::specnumber(diversity_mat))
+  ) %>%
+    pivot_longer(-province, names_to="index", values_to="value") %>%
+    mutate(index = factor(index, levels=c("richness","shannon","simpson","evenness"),
+                          labels=c("Richness (S)","Shannon-Wiener (H')",
+                                   "Simpson (1–D)","Pielou Evenness (J')"))) %>%
+    ggplot(aes(x=reorder(province,value), y=value, fill=province)) +
+    geom_col(width=0.7, show.legend=FALSE) +
+    geom_text(aes(label=round(value,2)), hjust=-0.15, size=3,
+              fontface="bold", colour="#c0c8d8") +
+    facet_wrap(~index, scales="free_x", ncol=2) +
+    coord_flip() + scale_fill_manual(values=pal_geo()) +
+    labs(x=NULL, y=NULL, caption=src_cap())
+})
+
+# ── Catch Composition ─────────────────────────────────────────────────────────
+output$p_rarity <- renderPlot({
+  req(df())
+  rarity <- df() %>%
+    group_by(catch_taxon) %>%
+    summarise(frequency=n_distinct(trip_id), total_kg=sum(catch_kg,na.rm=TRUE),
+              n_sites=n_distinct(district), .groups="drop") %>%
+    mutate(freq_pct    = frequency / n_distinct(df()$trip_id) * 100,
+           biomass_pct = total_kg / sum(total_kg) * 100,
+           category    = case_when(
+             freq_pct>median(freq_pct) & biomass_pct>median(biomass_pct) ~ "Dominant",
+             freq_pct>median(freq_pct) & biomass_pct<=median(biomass_pct) ~ "Frequent · Low Yield",
+             freq_pct<=median(freq_pct) & biomass_pct>median(biomass_pct) ~ "Rare · High Yield",
+             TRUE ~ "Rare · Low Yield"))
+  ggplot(rarity, aes(x=freq_pct, y=biomass_pct, colour=category, size=n_sites)) +
+    geom_hline(yintercept=median(rarity$biomass_pct), linetype="dashed", colour="#5a6880") +
+    geom_vline(xintercept=median(rarity$freq_pct),    linetype="dashed", colour="#5a6880") +
+    geom_point(alpha=0.85) +
+    geom_text_repel(
+      data=rarity %>% filter(freq_pct>quantile(freq_pct,0.80) |
+                               biomass_pct>quantile(biomass_pct,0.80) |
+                               category=="Rare · High Yield"),
+      aes(label=catch_taxon), size=2.8, max.overlaps=14, seed=42, show.legend=FALSE) +
+    scale_colour_manual(values=c("Dominant"="#29B6F6","Frequent · Low Yield"="#66BB6A",
+                                  "Rare · High Yield"="#EF5350","Rare · Low Yield"="#5a6880"),
+                        name="Category") +
+    scale_size_continuous(range=c(2,8), name="Districts") +
+    scale_x_log10() + scale_y_log10() +
+    labs(x="Frequency (% trips) — log", y="Biomass (% total kg) — log", caption=src_cap()) +
+    guides(colour=guide_legend(override.aes=list(size=4,shape=16)), size="none")
+})
+
+output$p_catch_region <- renderPlot({
+  req(df(), top_taxa())
+  df() %>% filter(catch_taxon %in% top_taxa()$top8) %>%
+    group_by(province, catch_taxon) %>%
+    summarise(total_kg=sum(catch_kg,na.rm=TRUE), .groups="drop") %>%
+    group_by(province) %>% mutate(pct=total_kg/sum(total_kg)*100) %>% ungroup() %>%
+    ggplot(aes(x=reorder(province,total_kg), y=pct, fill=catch_taxon)) +
+    geom_col(position="fill", width=0.7, colour="#242938", linewidth=0.3) +
+    geom_text(aes(label=ifelse(pct>5,paste0(round(pct,0),"%"),"")),
+              position=position_fill(vjust=0.5), size=2.8, colour="white", fontface="bold") +
+    coord_flip() +
+    scale_y_continuous(labels=scales::percent_format(), expand=c(0,0)) +
+    scale_fill_manual(values=setNames(pal_ocean,top_taxa()$top8), name="Taxon") +
+    labs(x=NULL, y="% of Regional Catch",
+         subtitle="Top 8 taxa · stacked by region", caption=src_cap())
+})
+
+# ── Seasonality ───────────────────────────────────────────────────────────────
+output$p_heatmap <- renderPlot({
+  req(df(), top_taxa(), month_order())
+  df() %>% filter(catch_taxon %in% top_taxa()$top12) %>%
+    group_by(catch_taxon, month_num, month) %>%
+    summarise(total_kg=sum(catch_kg,na.rm=TRUE), .groups="drop") %>%
+    group_by(catch_taxon) %>% mutate(scaled_kg=total_kg/max(total_kg,na.rm=TRUE)) %>% ungroup() %>%
+    mutate(month=factor(as.character(month), levels=month_order())) %>%
+    ggplot(aes(x=month, y=reorder(catch_taxon,total_kg), fill=scaled_kg)) +
+    geom_tile(colour="#242938", linewidth=0.7) +
+    geom_text(aes(label=ifelse(total_kg>0,round(total_kg,0),"")), size=2.6, colour="white", fontface="bold") +
+    scale_fill_viridis_c(option="inferno", direction=-1, name="Relative Abundance",
+                         labels=scales::percent_format()) +
+    labs(x="Month", y=NULL, subtitle="Colour intensity = within-taxon peak | Values = kg",
+         caption=src_cap())
+})
+
+output$p_timeseries <- renderPlot({
+  req(trips())
+  weekly <- trips() %>% mutate(week_start=floor_date(landing_date,"week")) %>%
+    group_by(week_start) %>%
+    summarise(total_kg=sum(tot_catch_kg,na.rm=TRUE), n_trips=n(), .groups="drop")
+  sf <- max(weekly$total_kg,na.rm=TRUE) / max(weekly$n_trips,na.rm=TRUE)
+  ggplot(weekly, aes(x=week_start)) +
+    geom_col(aes(y=total_kg), fill="#29B6F6", alpha=0.55, width=6) +
+    geom_smooth(aes(y=total_kg), method="loess", span=0.3, colour="#00bcd4",
+                linewidth=1.1, se=TRUE, fill="#00bcd4", alpha=0.15) +
+    geom_line(aes(y=n_trips*sf), colour="#FB8C00", linewidth=0.8, linetype="dashed") +
+    scale_y_continuous(labels=scales::comma, name="Total Catch (kg)",
+                       sec.axis=sec_axis(~./sf, name="Number of Trips")) +
+    labs(x=NULL, subtitle="Bars = catch · Dashed = trips · Teal = LOESS trend",
+         caption=src_cap()) +
+    theme(axis.title.y.right=element_text(colour="#FB8C00"))
+})
+
+output$p_seasonal_region <- renderPlot({
+  req(df(), month_order(), pal_geo())
+  df() %>% group_by(province, month_num) %>%
+    summarise(total_kg=sum(catch_kg,na.rm=TRUE), .groups="drop") %>%
+    mutate(month=factor(as.character(month(month_num,label=TRUE,abbr=TRUE)), levels=month_order())) %>%
+    ggplot(aes(x=month, y=total_kg, colour=province, fill=province, group=province)) +
+    geom_ribbon(aes(ymin=0, ymax=total_kg), alpha=0.10, linewidth=0) +
+    geom_line(linewidth=1.1) +
+    geom_point(size=2.8, shape=21, fill="#242938", stroke=1.5) +
+    scale_colour_manual(values=pal_geo(), name="Region") +
+    scale_fill_manual(values=pal_geo(), guide="none") +
+    scale_y_continuous(labels=scales::comma, expand=expansion(mult=c(0,0.08))) +
+    labs(x="Month", y="Total Catch (kg)", subtitle="Monthly catch by region", caption=src_cap()) +
+    guides(colour=guide_legend(override.aes=list(linewidth=2,shape=NA)))
+})
+
+# ── Effort & CPUE ─────────────────────────────────────────────────────────────
+output$p_cpue_gear <- renderPlot({
+  req(trips(), pal_gear())
+  trips() %>% filter(!is.na(cpue_kg_hr), is.finite(cpue_kg_hr), cpue_kg_hr>0) %>%
+    ggplot(aes(x=reorder(gear,cpue_kg_hr,FUN=median), y=cpue_kg_hr, fill=gear)) +
+    geom_violin(alpha=0.55, colour=NA, scale="width") +
+    geom_boxplot(width=0.14, outlier.shape=NA, colour="#8a9bb8", fill="#2e3448", alpha=0.85) +
+    stat_summary(fun=median, geom="point", shape=18, size=3, colour="#FB8C00") +
+    coord_flip() + scale_y_log10(labels=scales::comma) +
+    scale_fill_manual(values=pal_gear()) +
+    labs(x=NULL, y="CPUE (kg/hr) — log scale",
+         subtitle="Violin + box | Orange diamond = median", caption=src_cap()) +
+    theme(legend.position="none")
+})
+
+output$p_cpue_monthly <- renderPlot({
+  req(trips(), month_order())
+  trips() %>% filter(!is.na(cpue_kg_hr), is.finite(cpue_kg_hr), cpue_kg_hr>0) %>%
+    group_by(month_num, month) %>%
+    summarise(median_cpue=median(cpue_kg_hr,na.rm=TRUE),
+              q25=quantile(cpue_kg_hr,0.25,na.rm=TRUE),
+              q75=quantile(cpue_kg_hr,0.75,na.rm=TRUE), n=n(), .groups="drop") %>%
+    mutate(month=factor(as.character(month), levels=month_order())) %>%
+    ggplot(aes(x=month)) +
+    geom_ribbon(aes(ymin=q25, ymax=q75, group=1), fill="#29B6F6", alpha=0.25) +
+    geom_line(aes(y=median_cpue, group=1), colour="#00bcd4", linewidth=1.2) +
+    geom_point(aes(y=median_cpue, size=n), colour="#e0e6f0", alpha=0.9) +
+    scale_size_continuous(range=c(2,6), name="Trips") +
+    labs(x="Month", y="Median CPUE (kg/hr)",
+         subtitle="IQR ribbon shows seasonal variability", caption=src_cap())
+})
+
+output$p_effort_region <- renderPlot({
+  req(trips(), pal_geo())
+  trips() %>% filter(!is.na(trip_duration), trip_duration>0) %>%
+    ggplot(aes(x=reorder(province,trip_duration,FUN=median), y=trip_duration, fill=province)) +
+    geom_violin(alpha=0.55, colour=NA, scale="width") +
+    geom_boxplot(width=0.14, outlier.shape=NA, colour="#8a9bb8", fill="#2e3448", alpha=0.85) +
+    stat_summary(fun=median, geom="point", shape=18, size=3, colour="#FB8C00") +
+    coord_flip() + scale_fill_manual(values=pal_geo()) +
+    labs(x=NULL, y="Trip Duration (hours)",
+         subtitle="Violin + box | Orange diamond = median", caption=src_cap()) +
+    theme(legend.position="none")
+})
+
+# ── Top 5 Taxa ────────────────────────────────────────────────────────────────
+output$p_top5_table <- renderUI({
+  req(top5_data(), df())
+  tbl <- top5_data() %>%
+    group_by(catch_taxon) %>%
+    summarise(total_kg=sum(catch_kg,na.rm=TRUE), n_trips=n_distinct(trip_id),
+              mean_kg=mean(catch_kg,na.rm=TRUE), median_cpue=median(cpue_kg_hr,na.rm=TRUE),
+              n_districts=n_distinct(district),
+              pct_total=sum(catch_kg,na.rm=TRUE)/sum(df()$catch_kg,na.rm=TRUE)*100,
+              .groups="drop") %>%
+    mutate(across(where(is.numeric),~round(.,2))) %>%
+    select(`Taxon`=catch_taxon, `Total kg`=total_kg, `% of Catch`=pct_total,
+           `# Trips`=n_trips, `Mean kg/record`=mean_kg,
+           `Median CPUE`=median_cpue, `# Districts`=n_districts)
+  HTML(tbl %>%
+    kableExtra::kbl(booktabs=TRUE, format="html") %>%
+    kableExtra::kable_styling(full_width=TRUE, font_size=13) %>%
+    kableExtra::column_spec(1, bold=TRUE, color="#e0e6f0") %>%
+    kableExtra::column_spec(3, bold=TRUE, color="#29B6F6") %>% as.character())
+})
+
+output$p_top5_seasonal <- renderPlot({
+  req(top5_data(), month_order(), top_taxa())
+  top5_data() %>%
+    group_by(catch_taxon, month_num, month) %>%
+    summarise(total_kg=sum(catch_kg,na.rm=TRUE), .groups="drop") %>%
+    mutate(month=factor(as.character(month), levels=month_order())) %>%
+    ggplot(aes(x=month, y=total_kg, fill=catch_taxon, group=catch_taxon)) +
+    geom_col(position="dodge", colour="#242938", linewidth=0.3) +
+    scale_fill_manual(values=setNames(pal_ocean[1:5],top_taxa()$top5), name=NULL) +
+    scale_y_continuous(labels=scales::comma) +
+    labs(x="Month", y="Total Catch (kg)",
+         subtitle="Monthly landings for the top 5 taxa", caption=src_cap())
+})
+
+output$p_top5_gear <- renderPlot({
+  req(top5_data(), pal_gear())
+  top5_data() %>%
+    group_by(catch_taxon, gear) %>%
+    summarise(total_kg=sum(catch_kg,na.rm=TRUE), .groups="drop") %>%
+    group_by(catch_taxon) %>% mutate(pct=total_kg/sum(total_kg)*100) %>% ungroup() %>%
+    ggplot(aes(x=catch_taxon, y=pct, fill=gear)) +
+    geom_col(position="fill", width=0.7, colour="#242938", linewidth=0.3) +
+    geom_text(aes(label=ifelse(pct>5,paste0(round(pct,0),"%"),"")),
+              position=position_fill(vjust=0.5), size=2.8, colour="white", fontface="bold") +
+    scale_y_continuous(labels=scales::percent_format(), expand=c(0,0)) +
+    scale_fill_manual(values=pal_gear(), name="Gear") +
+    scale_x_discrete(labels=function(x) stringr::str_wrap(x,12)) +
+    labs(x=NULL, y="% of Taxon Catch", subtitle="Gear breakdown per taxon", caption=src_cap())
+})
+
+output$p_top5_cpue <- renderPlot({
+  req(df(), top_taxa())
+  df() %>% filter(catch_taxon %in% top_taxa()$top5,
+                  !is.na(cpue_kg_hr), is.finite(cpue_kg_hr), cpue_kg_hr>0) %>%
+    mutate(catch_taxon=factor(catch_taxon,levels=top_taxa()$top5)) %>%
+    ggplot(aes(x=reorder(catch_taxon,cpue_kg_hr,FUN=median), y=cpue_kg_hr, fill=catch_taxon)) +
+    geom_violin(alpha=0.55, colour=NA, scale="width") +
+    geom_boxplot(width=0.14, outlier.shape=NA, colour="#8a9bb8", fill="#2e3448") +
+    stat_summary(fun=median, geom="point", shape=18, size=3, colour="#FB8C00") +
+    coord_flip() + scale_y_log10(labels=scales::comma) +
+    scale_fill_manual(values=setNames(pal_ocean[1:5],top_taxa()$top5)) +
+    labs(x=NULL, y="CPUE (kg/hr) — log scale",
+         subtitle="Effort efficiency per taxon", caption=src_cap()) +
+    theme(legend.position="none")
+})
+
+output$p_top5_sites <- renderPlot({
+  req(top5_data(), pal_geo())
+  top5_data() %>%
+    group_by(catch_taxon, district, province) %>%
+    summarise(total_kg=sum(catch_kg,na.rm=TRUE), .groups="drop") %>%
+    group_by(catch_taxon) %>% slice_max(total_kg,n=5) %>% ungroup() %>%
+    ggplot(aes(x=reorder(district,total_kg), y=total_kg, fill=province)) +
+    geom_col(width=0.7) +
+    facet_wrap(~catch_taxon, scales="free", ncol=1) +
+    coord_flip() + scale_fill_manual(values=pal_geo(), name="Region") +
+    scale_y_continuous(labels=scales::comma) +
+    labs(x=NULL, y="Total Catch (kg)", subtitle="Top 5 districts per taxon", caption=src_cap()) +
+    theme(strip.text=element_text(face="bold",size=7), axis.text.y=element_text(size=7))
+})
+
+# ── Length–Frequency ──────────────────────────────────────────────────────────
+output$p_lf_facets <- renderPlot({
+  req(df())
+  lf_data     <- df() %>% filter(!is.na(length), length>0)
+  top_lf_taxa <- lf_data %>% count(catch_taxon,sort=TRUE) %>% slice_head(n=9) %>% pull(catch_taxon)
+  lf_plot     <- lf_data %>% filter(catch_taxon %in% top_lf_taxa)
+  if (nrow(lf_plot)==0) {
+    ggplot() + annotate("text",x=0.5,y=0.5,label="No length data available.",
+                        size=5,colour="#8a9bb8") + theme_void()
+  } else {
+    ggplot(lf_plot, aes(x=length, fill=catch_taxon)) +
+      geom_histogram(aes(y=after_stat(density)), bins=25, colour="#242938",
+                     linewidth=0.3, alpha=0.85, show.legend=FALSE) +
+      facet_wrap(~catch_taxon, scales="free", ncol=3) +
+      scale_fill_manual(values=setNames(rep_len(pal_ocean,length(top_lf_taxa)),top_lf_taxa)) +
+      labs(x="Total Length (cm)", y="Density",
+           subtitle="Top 9 taxa by sample size", caption=src_cap())
+  }
+})
+
+output$p_lf_table <- DT::renderDT({
+  req(df())
+  lf_data <- df() %>% filter(!is.na(length), length>0)
+  if (nrow(lf_data)==0) return(DT::datatable(data.frame(Message="No length data available.")))
+  lf_data %>%
+    group_by(catch_taxon) %>%
+    summarise(n=n(), mean_cm=round(mean(length,na.rm=TRUE),1),
+              median_cm=round(median(length,na.rm=TRUE),1),
+              sd_cm=round(sd(length,na.rm=TRUE),1),
+              min_cm=round(min(length,na.rm=TRUE),1),
+              max_cm=round(max(length,na.rm=TRUE),1), .groups="drop") %>%
+    arrange(desc(n)) %>%
+    DT::datatable(rownames=FALSE,
+                  colnames=c("Taxon","n","Mean (cm)","Median (cm)","SD","Min (cm)","Max (cm)"),
+                  options=list(pageLength=10,dom="ftp"), class="compact stripe")
+})
+
+# ── Socio-Economic ────────────────────────────────────────────────────────────
+output$p_fishers_region <- renderPlot({
+  req(trips(), pal_geo())
+  trips() %>% filter(!is.na(n_fishers), n_fishers>0) %>%
+    ggplot(aes(x=reorder(province,n_fishers,FUN=median), y=n_fishers, fill=province)) +
+    geom_violin(alpha=0.55, colour=NA, scale="width") +
+    geom_boxplot(width=0.14, outlier.shape=NA, colour="#8a9bb8", fill="#2e3448") +
+    stat_summary(fun=median, geom="point", shape=18, size=3, colour="#FB8C00") +
+    coord_flip() + scale_fill_manual(values=pal_geo()) +
+    labs(x=NULL, y="Number of Fishers per Trip",
+         subtitle="Orange diamond = median", caption=src_cap()) +
+    theme(legend.position="none")
+})
+
+output$p_vessel_gear <- renderPlot({
+  req(trips(), pal_gear())
+  trips() %>% filter(!is.na(vessel_type), vessel_type!="") %>%
+    count(vessel_type,gear) %>%
+    group_by(vessel_type) %>% mutate(pct=n/sum(n)*100) %>% ungroup() %>%
+    ggplot(aes(x=reorder(vessel_type,n), y=pct, fill=gear)) +
+    geom_col(position="fill", width=0.7, colour="#242938", linewidth=0.3) +
+    geom_text(aes(label=ifelse(pct>5,paste0(round(pct,0),"%"),"")),
+              position=position_fill(vjust=0.5), size=2.8, colour="white", fontface="bold") +
+    coord_flip() +
+    scale_y_continuous(labels=scales::percent_format(), expand=c(0,0)) +
+    scale_fill_manual(values=pal_gear(), name="Gear") +
+    labs(x=NULL, y="% of Trips", subtitle="Gear type breakdown by vessel", caption=src_cap())
+})
+
+output$p_catch_use <- renderPlot({
+  req(trips(), pal_geo())
+  use_data <- trips() %>% filter(!is.na(catch_use), catch_use!="") %>%
+    count(province,catch_use) %>%
+    group_by(province) %>% mutate(pct=n/sum(n)*100) %>% ungroup()
+  if (nrow(use_data)==0) {
+    ggplot() + annotate("text",x=0.5,y=0.5,label="Catch use data not available.",
+                        size=5,colour="#8a9bb8") + theme_void()
+  } else {
+    ggplot(use_data, aes(x=reorder(province,n), y=pct, fill=catch_use)) +
+      geom_col(position="fill", width=0.7, colour="#242938", linewidth=0.3) +
+      geom_text(aes(label=ifelse(pct>3,paste0(round(pct,0),"%"),"")),
+                position=position_fill(vjust=0.5), size=3, colour="white", fontface="bold") +
+      coord_flip() +
+      scale_y_continuous(labels=scales::percent_format(), expand=c(0,0)) +
+      scale_fill_brewer(palette="Set2", name="Catch Use") +
+      labs(x=NULL, y="% of Trips", caption=src_cap())
+  }
+})
+
+# ── Market & Value Chain ──────────────────────────────────────────────────────
+output$p_price_taxon <- renderPlot({
+  req(df())
+  price_data <- df() %>% filter(!is.na(price_per_kg), is.finite(price_per_kg), price_per_kg>0)
+  if (nrow(price_data)<=10) {
+    ggplot() + annotate("text",x=0.5,y=0.5,label="Insufficient price data.",
+                        size=5,colour="#8a9bb8") + theme_void()
+  } else {
+    price_data %>%
+      group_by(catch_taxon) %>%
+      summarise(median_price=median(price_per_kg,na.rm=TRUE), n=n(),
+                total_value=sum(catch_price,na.rm=TRUE), .groups="drop") %>%
+      filter(n>=3) %>% slice_max(median_price,n=15) %>%
+      ggplot(aes(x=reorder(catch_taxon,median_price), y=median_price)) +
+      geom_segment(aes(xend=catch_taxon,y=0,yend=median_price), colour="#66BB6A", linewidth=1) +
+      geom_point(aes(size=total_value), colour="#00bcd4", alpha=0.9) +
+      coord_flip() +
+      scale_size_continuous(range=c(3,10), labels=scales::comma, name="Total Revenue") +
+      labs(x=NULL, y="Median Price per kg", subtitle="Bubble size = total revenue",
+           caption=src_cap())
+  }
+})
+
+output$p_revenue_region <- renderPlot({
+  req(df(), pal_geo())
+  rev_data <- df() %>% filter(!is.na(catch_price), catch_price>0)
+  if (nrow(rev_data)==0) {
+    ggplot() + annotate("text",x=0.5,y=0.5,label="No price data available.",
+                        size=5,colour="#8a9bb8") + theme_void()
+  } else {
+    rev_data %>%
+      group_by(province) %>%
+      summarise(total_revenue=sum(catch_price,na.rm=TRUE), n_trips=n_distinct(trip_id),
+                rev_per_trip=total_revenue/n_trips, .groups="drop") %>%
+      pivot_longer(c(total_revenue,rev_per_trip), names_to="metric", values_to="value") %>%
+      mutate(metric=recode(metric,total_revenue="Total Revenue",rev_per_trip="Revenue per Trip")) %>%
+      ggplot(aes(x=reorder(province,value), y=value, fill=province)) +
+      geom_col(width=0.7, show.legend=FALSE) + coord_flip() +
+      facet_wrap(~metric, scales="free_x") +
+      scale_fill_manual(values=pal_geo()) +
+      scale_y_continuous(labels=scales::comma) +
+      labs(x=NULL, y=NULL, caption=src_cap())
+  }
+})
+
+# ── Wellbeing ─────────────────────────────────────────────────────────────────
+output$p_wellbeing <- renderPlot({
+  req(wellbeing_data(), pal_geo())
+  wb <- wellbeing_data()
+  ggplot(wb, aes(x=reorder(district,wellbeing_index), y=wellbeing_index, fill=province)) +
+    geom_col(width=0.7) +
+    geom_hline(yintercept=mean(wb$wellbeing_index,na.rm=TRUE),
+               linetype="dashed", colour="#FB8C00") +
+    coord_flip() + scale_fill_manual(values=pal_geo(), name="Region") +
+    scale_y_continuous(labels=scales::percent_format(), limits=c(0,1)) +
+    labs(x=NULL, y="Wellbeing Index (0–1)",
+         subtitle="Economic · Efficiency · Ecological dimensions\nDashed = overall mean",
+         caption=src_cap())
+})
+
+output$p_wellbeing_scatter <- renderPlot({
+  req(wellbeing_data(), pal_geo())
+  wellbeing_data() %>%
+    select(district, province, Economic=econ_score, Efficiency=effic_score, Ecological=eco_score) %>%
+    pivot_longer(c(Economic,Efficiency,Ecological), names_to="dimension", values_to="score") %>%
+    ggplot(aes(x=dimension, y=score, colour=province)) +
+    geom_jitter(width=0.15, alpha=0.7, size=2.5) +
+    stat_summary(fun=mean, geom="crossbar", width=0.5,
+                 colour="#e0e6f0", linewidth=0.7, fatten=1.5) +
+    scale_colour_manual(values=pal_geo(), name="Region") +
+    scale_y_continuous(labels=scales::percent_format()) +
+    labs(x=NULL, y="Dimension Score (0–1)",
+         subtitle="Each point = one district · Bar = regional mean", caption=src_cap())
+})
+```
+
+
+# Overview
+
+## Row
+
+### Column {width="45%"}
+
+```{r}
+#| title: "Top 10 Taxa by Total Biomass"
+plotOutput("p_top10")
+```
+
+### Column {width="55%"}
+
+```{r}
+#| title: "Catch Composition Treemap"
+plotOutput("p_treemap")
+```
+
+## Row
+
+### Column {width="35%"}
+
+```{r}
+#| title: "Survey Summary"
+uiOutput("kpi_table")
+```
+
+### Column {width="65%"}
+
+```{r}
+#| title: "Ecological Diversity by Region"
+plotOutput("p_diversity")
+```
+
+
+# Catch Composition
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Rarity–Biomass Quadrant"
+plotOutput("p_rarity")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Catch Composition by Region"
+plotOutput("p_catch_region")
+```
+
+
+# Seasonality
+
+## Row
+
+### Column {width="55%"}
+
+```{r}
+#| title: "Seasonal Catch Calendar — Top 12 Taxa"
+plotOutput("p_heatmap")
+```
+
+### Column {width="45%"}
+
+```{r}
+#| title: "Weekly Landing Dynamics"
+plotOutput("p_timeseries")
+```
+
+## Row
+
+```{r}
+#| title: "Seasonal Landing Profiles by Region"
+plotOutput("p_seasonal_region")
+```
+
+
+# Effort & CPUE
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "CPUE by Gear Type"
+plotOutput("p_cpue_gear", height = "380px")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Monthly CPUE Dynamics"
+plotOutput("p_cpue_monthly", height = "380px")
+```
+
+## Row
+
+```{r}
+#| title: "Trip Effort by Region"
+plotOutput("p_effort_region", height = "340px")
+```
+
+
+# Top 5 Taxa
+
+## Row
+
+```{r}
+#| title: "Top 5 Taxa — Summary Statistics"
+uiOutput("p_top5_table")
+```
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Monthly Catch — Top 5 Taxa"
+plotOutput("p_top5_seasonal")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Gear Contribution per Taxon"
+plotOutput("p_top5_gear")
+```
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "CPUE Distribution — Top 5 Taxa"
+plotOutput("p_top5_cpue")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Top Landing Districts per Taxon"
+plotOutput("p_top5_sites")
+```
+
+
+# Length–Frequency
+
+## Row
+
+### Column {width="65%"}
+
+```{r}
+#| title: "Length–Frequency Distributions by Taxon"
+plotOutput("p_lf_facets")
+```
+
+### Column {width="35%"}
+
+```{r}
+#| title: "Length Summary by Taxon"
+DT::DTOutput("p_lf_table")
+```
+
+
+# Socio-Economic
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Fisher Effort by Region"
+plotOutput("p_fishers_region", height = "380px")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Vessel Type × Gear Combinations"
+plotOutput("p_vessel_gear", height = "380px")
+```
+
+## Row
+
+```{r}
+#| title: "Catch Utilisation by Region"
+plotOutput("p_catch_use", height = "340px")
+```
+
+
+# Market & Value Chain
+
+## Row
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Highest-Value Taxa by Median Price"
+plotOutput("p_price_taxon")
+```
+
+### Column {width="50%"}
+
+```{r}
+#| title: "Total Revenue by Region"
+plotOutput("p_revenue_region")
+```
+
+
+# Wellbeing Index
+
+## Row
+
+### Column {width="55%"}
+
+```{r}
+#| title: "Composite Wellbeing Index by District"
+plotOutput("p_wellbeing")
+```
+
+### Column {width="45%"}
+
+```{r}
+#| title: "Wellbeing Components by Region"
+plotOutput("p_wellbeing_scatter")
+```
+
