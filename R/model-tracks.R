@@ -5,6 +5,8 @@
 #' @return A cleaned data frame with columns `trip`, `timestamp`, `latitude`,
 #'   `longitude`, or `NULL` if the track is unavailable or too short.
 #' @keywords internal
+#' @export
+
 fetch_track_for_prediction <- function(trip_id, conf) {
   tryCatch(
     {
@@ -86,9 +88,18 @@ predict_and_upload_track <- function(
 
       if (nrow(predictions) == 0) {
         logger::log_info("Trip {trip_id}: no fishing activity detected")
+
+        arrow::write_parquet(predictions, sink = tmp_file)
+        googleCloudStorageR::gcs_upload(
+          file = tmp_file,
+          bucket = pds_opts$bucket,
+          name = glue::glue(
+            "{file_prefix}/trip_{trip_id}_v{model_version}.parquet"
+          )
+        )
+
         return(list(trip = trip_id, status = "no_fishing"))
       }
-
       arrow::write_parquet(predictions, sink = tmp_file)
 
       googleCloudStorageR::gcs_upload(
@@ -420,15 +431,22 @@ aggregate_pds_effort <- function(
   package = "coasts"
 ) {
   logger::log_threshold(log_threshold)
-  conf <- read_config(package = package)
+  conf <- read_config(package = "coasts")
 
   pds_opts <- resolve_storage_opts(conf, "pds")
   country_opts <- resolve_storage_opts(conf, "country")
 
   file_prefix <- conf$pds$pds_tracks_predicted$file_prefix
+  grid_prefix <- conf$pds$pds_tracks_h3_grid$file_prefix
+  manifest_name <- paste0(grid_prefix, "/aggregated_manifest.rds")
+
+  # --- Model version ---
+  model_version <- ssfaitk::ssfaitk_version()[[1]]
+  logger::log_info("Model version: {model_version}")
 
   logger::log_info("Listing predicted track files...")
   cloud_storage_authenticate(conf$pds_storage$google$key, pds_opts)
+
   predicted_files <- googleCloudStorageR::gcs_list_objects(
     bucket = pds_opts$bucket,
     prefix = file_prefix
@@ -439,18 +457,78 @@ aggregate_pds_effort <- function(
     return(invisible(NULL))
   }
 
-  logger::log_info(
-    "{length(predicted_files)} predicted track files to aggregate"
+  # --- Load existing grid and manifest if available ---
+  existing_grid <- NULL
+  already_aggregated <- character(0)
+
+  manifest_local <- file.path(tempdir(), "aggregated_manifest.rds")
+  grid_local <- file.path(tempdir(), "existing_grid.parquet")
+
+  tryCatch(
+    {
+      download_cloud_file(
+        name = manifest_name,
+        provider = conf$storage$google$key,
+        options = country_opts,
+        file = manifest_local
+      )
+      already_aggregated <- readr::read_rds(manifest_local)
+
+      grid_cloud_name <- cloud_object_name(
+        prefix = grid_prefix,
+        provider = conf$storage$google$key,
+        version = "latest",
+        extension = "parquet",
+        options = country_opts
+      )
+      download_cloud_file(
+        name = grid_cloud_name,
+        provider = conf$storage$google$key,
+        options = country_opts,
+        file = grid_local
+      )
+      existing_grid <- arrow::read_parquet(grid_local)
+
+      logger::log_info("Loaded existing grid with {nrow(existing_grid)} cells")
+    },
+    error = function(e) {
+      logger::log_info("No existing grid found, building from scratch")
+    }
   )
 
+  # --- Detect version change → force full rebuild ---
+  version_changed <- length(already_aggregated) > 0 &&
+    !any(grepl(paste0("v", model_version), already_aggregated))
+
+  if (version_changed) {
+    logger::log_info(
+      "Model version changed to v{model_version}, rebuilding grid from scratch"
+    )
+    already_aggregated <- character(0)
+    existing_grid <- NULL
+  }
+
+  # --- Filter to only new files ---
+  new_files <- setdiff(predicted_files, already_aggregated)
+
+  if (length(new_files) == 0) {
+    logger::log_info("No new tracks to aggregate, grid is up to date")
+    return(invisible(NULL))
+  }
+
+  logger::log_info(
+    "{length(new_files)} new files to aggregate (skipping {length(already_aggregated)} already done)"
+  )
+
+  # --- Download only new files ---
   workers <- parallel::detectCores() - 1
-  logger::log_info("Downloading tracks with {workers} workers...")
+  logger::log_info("Downloading new tracks with {workers} workers...")
   future::plan(future::multisession, workers = workers)
 
-  all_tracks <- furrr::future_map(
-    predicted_files,
+  new_tracks <- furrr::future_map(
+    new_files,
     function(f) {
-      local_file <- basename(f)
+      local_file <- file.path(tempdir(), basename(f))
       tryCatch(
         {
           download_cloud_file(
@@ -477,14 +555,26 @@ aggregate_pds_effort <- function(
 
   future::plan(future::sequential)
 
-  n_trips <- dplyr::n_distinct(all_tracks$trip)
+  if (nrow(new_tracks) == 0) {
+    logger::log_info("All new files were empty, nothing to aggregate")
+    saveRDS(c(already_aggregated, new_files), manifest_local)
+    upload_cloud_file(
+      file = manifest_local,
+      provider = conf$storage$google$key,
+      options = country_opts
+    )
+    unlink(manifest_local)
+    return(invisible(NULL))
+  }
+
+  n_trips <- dplyr::n_distinct(new_tracks$trip)
   logger::log_info(
-    "Aggregating {nrow(all_tracks)} fishing points from {n_trips} trips ",
-    "to H3 resolution {h3_res}..."
+    "Aggregating {nrow(new_tracks)} new fishing points from {n_trips} trips to H3 res {h3_res}"
   )
 
-  h3_grid <- assign_h3_indices(
-    df = all_tracks,
+  # --- Aggregate new data ---
+  new_grid <- assign_h3_indices(
+    df = new_tracks,
     lat_col = "latitude",
     lon_col = "longitude",
     h3_res = h3_res
@@ -496,7 +586,23 @@ aggregate_pds_effort <- function(
       .groups = "drop"
     )
 
-  output_filename <- paste0(file_prefix, "-h3_grid") |>
+  # --- Merge with existing grid ---
+  if (!is.null(existing_grid) && nrow(existing_grid) > 0) {
+    logger::log_info("Merging with existing grid ({nrow(existing_grid)} cells)")
+
+    h3_grid <- dplyr::bind_rows(existing_grid, new_grid) |>
+      dplyr::group_by(.data$h3_index) |>
+      dplyr::summarise(
+        fishing_pings = sum(.data$fishing_pings),
+        unique_trips = sum(.data$unique_trips),
+        .groups = "drop"
+      )
+  } else {
+    h3_grid <- new_grid
+  }
+
+  # --- Upload updated grid ---
+  output_filename <- grid_prefix |>
     add_version(extension = "parquet")
 
   arrow::write_parquet(
@@ -514,9 +620,22 @@ aggregate_pds_effort <- function(
     provider = conf$storage$google$key,
     options = country_opts
   )
-
   unlink(output_filename)
-  logger::log_success("H3 grid aggregation complete")
+
+  # --- Upload updated manifest ---
+  saveRDS(c(already_aggregated, new_files), manifest_local)
+  upload_cloud_file(
+    file = manifest_local,
+    provider = conf$storage$google$key,
+    options = country_opts
+  )
+  unlink(manifest_local)
+
+  logger::log_success(
+    "H3 grid updated: {nrow(h3_grid)} cells ({length(new_files)} new files aggregated)"
+  )
+
+  invisible(h3_grid)
 }
 
 
