@@ -10,7 +10,8 @@ predict_and_upload_track(
   file_prefix,
   model_version,
   provider,
-  pds_opts
+  pds_opts,
+  shore_distance = 0.25
 )
 }
 \arguments{
@@ -26,6 +27,8 @@ predict_and_upload_track(
 \item{provider}{Character. Cloud storage provider key (e.g. `"gcs"`).}
 
 \item{pds_opts}{Named list. Cloud storage options for the PDS bucket.}
+
+\item{shore_distance}{Numeric. Shore distance in km to use for prediction.}
 }
 \value{
 A named list with `trip`, `status`, and optionally `n_points` or

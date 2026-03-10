@@ -53,6 +53,7 @@ fetch_track_for_prediction <- function(trip_id, conf) {
 #' @param model_version Character. Model version string from `ssfaitk`.
 #' @param provider Character. Cloud storage provider key (e.g. `"gcs"`).
 #' @param pds_opts Named list. Cloud storage options for the PDS bucket.
+#' @param shore_distance Numeric. Shore distance in km to use for prediction.
 #' @return A named list with `trip`, `status`, and optionally `n_points` or
 #'   `message`.
 #' @keywords internal
@@ -62,7 +63,8 @@ predict_and_upload_track <- function(
   file_prefix,
   model_version,
   provider,
-  pds_opts
+  pds_opts,
+  shore_distance = 0.25
 ) {
   tmp_file <- file.path(
     tempdir(),
@@ -70,21 +72,27 @@ predict_and_upload_track <- function(
   )
   on.exit(if (file.exists(tmp_file)) file.remove(tmp_file), add = TRUE)
 
+  logger::log_info(
+    "Using shore distance of {shore_distance} km for trip {trip_id}"
+  )
   tryCatch(
     {
       predictions <- ssfaitk::effort_predict_statistical(
         df = track_df,
-        filter = TRUE
+        filter = TRUE,
+        config = list(shore_min_distance_km = shore_distance)
       ) |>
+        dplyr::filter(
+          .data$is_on_land == FALSE &
+            .data$is_fishing == 1L &
+            .data$is_near_shore == 0
+        ) |>
         dplyr::select(
           "trip",
           "timestamp",
           "latitude",
-          "longitude",
-          "is_fishing"
-        ) |>
-        dplyr::filter(.data$is_fishing == 1L) |>
-        dplyr::select(-"is_fishing")
+          "longitude"
+        )
 
       if (nrow(predictions) == 0) {
         logger::log_info("Trip {trip_id}: no fishing activity detected")
@@ -863,4 +871,93 @@ create_spatial_grid <- function(h3_summary_df = NULL) {
   hex_geoms <- h3jsr::cell_to_polygon(h3_summary_df$h3_index, simple = TRUE)
   sf_grid <- sf::st_sf(h3_summary_df, geometry = hex_geoms, crs = 4326)
   return(sf_grid)
+}
+
+#' Create an interactive Leaflet map of fishing grounds
+#'
+#' @param fishing_grounds An sf POLYGON object with ground_id and area_km2 columns
+#' @param title Map title
+#' @return A leaflet htmlwidget
+plot_fishing_grounds <- function(fishing_grounds, title = "Fishing Grounds") {
+  vals <- fishing_grounds$area_km2
+
+  pal <- leaflet::colorNumeric(
+    palette = c(
+      "#08306b",
+      "#2171b5",
+      "#4eb3d3",
+      "#ffff99",
+      "#fe9929",
+      "#d73027"
+    ),
+    domain = vals,
+    na.color = "transparent"
+  )
+
+  popup_html <- glue::glue(
+    "<div style='font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.5;'>
+      <strong style='font-size: 14px;'>{fishing_grounds$ground_id}</strong><br>
+      <span style='color: #666;'>Area:</span> {round(vals, 2)} km&sup2;
+    </div>"
+  )
+
+  leaflet::leaflet(
+    fishing_grounds,
+    options = leaflet::leafletOptions(zoomSnap = 0.25)
+  ) |>
+    leaflet::addProviderTiles(
+      leaflet::providers$CartoDB.DarkMatter,
+      group = "Dark"
+    ) |>
+    leaflet::addProviderTiles(
+      leaflet::providers$CartoDB.Positron,
+      group = "Light"
+    ) |>
+    leaflet::addProviderTiles(
+      leaflet::providers$Esri.WorldImagery,
+      group = "Satellite"
+    ) |>
+    leaflet::addPolygons(
+      fillColor = ~ pal(vals),
+      fillOpacity = 0.7,
+      color = "#ffffff",
+      weight = 0.5,
+      opacity = 0.5,
+      popup = popup_html,
+      highlightOptions = leaflet::highlightOptions(
+        weight = 2,
+        color = "#ffffff",
+        fillOpacity = 0.9,
+        bringToFront = TRUE
+      ),
+      group = "Fishing Grounds"
+    ) |>
+    leaflet::addLegend(
+      position = "bottomright",
+      pal = pal,
+      values = vals,
+      title = "Area (km²)",
+      opacity = 0.85
+    ) |>
+    leaflet::addLayersControl(
+      baseGroups = c("Dark", "Light", "Satellite"),
+      overlayGroups = "Fishing Grounds",
+      position = "topright",
+      options = leaflet::layersControlOptions(collapsed = FALSE)
+    ) |>
+    leaflet::addControl(
+      html = glue::glue(
+        "<div style='
+          background: rgba(0,0,0,0.7);
+          color: white;
+          padding: 8px 14px;
+          border-radius: 6px;
+          font-family: system-ui, sans-serif;
+          font-size: 15px;
+          font-weight: 600;
+        '>{title} &middot; {nrow(fishing_grounds)} areas</div>"
+      ),
+      position = "topleft"
+    ) |>
+    leaflet::addScaleBar(position = "bottomleft")
 }

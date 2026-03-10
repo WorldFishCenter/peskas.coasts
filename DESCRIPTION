@@ -46,7 +46,8 @@ Imports:
     ssfaitk,
     stringr,
     tidyr,
-    h3jsr
+    h3jsr,
+    leaflet
 Suggests:
     testthat (>= 3.0.0),
     withr,
