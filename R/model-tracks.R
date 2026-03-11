@@ -961,3 +961,157 @@ plot_fishing_grounds <- function(fishing_grounds, title = "Fishing Grounds") {
     ) |>
     leaflet::addScaleBar(position = "bottomleft")
 }
+
+#' Create an interactive Leaflet map of fishing effort on H3 grid
+#'
+#' @param grid_data An sf object with h3_index, fishing_pings, unique_trips columns
+#' @param metric Column to visualize: "fishing_pings" or "unique_trips"
+#' @param title Map title
+#' @return A leaflet htmlwidget
+plot_fishing_effort <- function(
+  grid_data,
+  metric = c("fishing_pings", "unique_trips"),
+  title = "Fishing Effort"
+) {
+  metric <- match.arg(metric)
+
+  label_name <- dplyr::case_when(
+    metric == "fishing_pings" ~ "Fishing Pings",
+    metric == "unique_trips" ~ "Unique Trips"
+  )
+
+  vals <- grid_data[[metric]]
+
+  # --- Color palette: ocean-inspired ---
+  pal <- leaflet::colorNumeric(
+    palette = c(
+      "#08306b",
+      "#2171b5",
+      "#4eb3d3",
+      "#ffff99",
+      "#fe9929",
+      "#d73027"
+    ),
+    domain = vals,
+    na.color = "transparent"
+  )
+
+  # --- Popup content ---
+  popup_html <- glue::glue(
+    "<div style='font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.5;'>
+      <strong style='font-size: 14px;'>{label_name}: {format(vals, big.mark = ',')}</strong><br>
+      <span style='color: #666;'>Fishing Pings:</span> {format(grid_data$fishing_pings, big.mark = ',')}<br>
+      <span style='color: #666;'>Unique Trips:</span> {grid_data$unique_trips}<br>
+      <span style='color: #999; font-size: 11px;'>{grid_data$h3_index}</span>
+    </div>"
+  )
+
+  # --- Build map ---
+  map <- leaflet::leaflet(
+    grid_data,
+    options = leaflet::leafletOptions(zoomSnap = 0.25)
+  ) |>
+    # Dark basemap for contrast
+    leaflet::addProviderTiles(
+      leaflet::providers$CartoDB.DarkMatter,
+      group = "Dark"
+    ) |>
+    leaflet::addProviderTiles(
+      leaflet::providers$CartoDB.Positron,
+      group = "Light"
+    ) |>
+    leaflet::addProviderTiles(
+      leaflet::providers$Esri.WorldImagery,
+      group = "Satellite"
+    ) |>
+    # H3 hexagons
+    leaflet::addPolygons(
+      fillColor = ~ pal(vals),
+      fillOpacity = 0.75,
+      color = "#ffffff",
+      weight = 0.3,
+      opacity = 0.4,
+      popup = popup_html,
+      highlightOptions = leaflet::highlightOptions(
+        weight = 2,
+        color = "#ffffff",
+        fillOpacity = 0.9,
+        bringToFront = TRUE
+      ),
+      group = label_name
+    ) |>
+    # Legend
+    leaflet::addLegend(
+      position = "bottomright",
+      pal = pal,
+      values = vals,
+      title = label_name,
+      opacity = 0.85
+    ) |>
+    # Layer controls
+    leaflet::addLayersControl(
+      baseGroups = c("Dark", "Light", "Satellite"),
+      overlayGroups = label_name,
+      position = "topright",
+      options = leaflet::layersControlOptions(collapsed = FALSE)
+    ) |>
+    # Title
+    leaflet::addControl(
+      html = glue::glue(
+        "<div style='
+          background: rgba(0,0,0,0.7);
+          color: white;
+          padding: 8px 14px;
+          border-radius: 6px;
+          font-family: system-ui, sans-serif;
+          font-size: 15px;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+        '>{title}</div>"
+      ),
+      position = "topleft"
+    ) |>
+    # Scale bar
+    leaflet::addScaleBar(position = "bottomleft") |>
+    # Minimap
+    leaflet::addMiniMap(
+      tiles = leaflet::providers$CartoDB.DarkMatter,
+      toggleDisplay = TRUE,
+      position = "bottomleft",
+      width = 120,
+      height = 120
+    )
+
+  map
+}
+
+# h3_df <-
+#   coasts::download_parquet_from_cloud(
+#     prefix = conf$pds$pds_tracks_h3_grid$file_prefix,
+#     provider = conf$storage$google$key,
+#     options = conf$storage$google$options
+#   ) |>
+#   # 1. Isolate the true fishing spots using your exact statistics
+#   dplyr::filter(
+#     unique_trips >= 3,
+#     # Let's use the Median (188) to capture broad fishing grounds.
+#     # Change to 392 if you only want the strictest high-value hotspots!
+#     fishing_pings >= 188
+#   )
+
+# map_data <- create_spatial_grid(h3_df)
+
+# fishing_grounds_poly <- map_data %>%
+#   sf::st_union() %>%
+#   sf::st_cast("POLYGON") %>%
+#   sf::st_sf() %>%
+#   dplyr::mutate(
+#     # Add a clean ID for each distinct fishing ground
+#     ground_id = paste0("FG_", dplyr::row_number()),
+#     # Calculate the area in square kilometers
+#     area_km2 = as.numeric(sf::st_area(geometry)) / 1e6
+#   ) %>%
+#   dplyr::arrange(desc(area_km2))
+
+# plot_fishing_grounds(fishing_grounds_poly)
+# plot_fishing_effort(map_data)
