@@ -78,7 +78,7 @@ summarize_data <- function(log_threshold = logger::DEBUG, package = "coasts") {
   ) |>
     dplyr::left_join(
       asfis,
-      by = c("catch_taxon" = "alpha3_code")
+      by = c("catch_taxon" = "alpha3_code", "scientific_name")
     ) |>
     dplyr::mutate(catch_taxon = .data$scientific_name) |>
     dplyr::select(
