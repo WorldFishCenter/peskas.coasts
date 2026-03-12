@@ -1,3 +1,7 @@
+# coasts 3.0.1
+
+Align export functions according to countries API schema
+
 # coasts 3.0.0
 
 ## Fishing Activity Prediction Pipeline
