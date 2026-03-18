@@ -1,3 +1,1 @@
-library(quarto)
-
-quarto::quarto_serve("peskas-dashboard-shiny.qmd")
+quarto::quarto_serve("inst/peskas-dashboard-shiny/peskas-dashboard-shiny.qmd")

@@ -1,5 +1,7 @@
-.quarto/ 
-peskas-dashboard-shiny_files/ 
-"*.html" 
-.env 
-.Rhistory 
+.quarto/
+peskas-dashboard-shiny_files/
+"*.html"
+.env
+.Rhistory
+
+/.quarto/

@@ -97,7 +97,6 @@ $(document).on('shiny:connected', function() {
 </script>
 ```
 
-
 ```{r setup}
 #| context: setup
 
@@ -157,7 +156,6 @@ theme_peskas <- function(base_size = 11) {
 ggplot2::theme_set(theme_peskas())
 ```
 
-
 ```{r country-ui}
 # Hidden initially; JS moves it into the navbar
 div(id = "country-wrap", style = "display:none",
@@ -168,7 +166,6 @@ div(id = "country-wrap", style = "display:none",
     selected = "mozambique", width = "140px")
 )
 ```
-
 
 ```{r server}
 #| context: server
@@ -804,7 +801,6 @@ output$p_wellbeing_below <- renderPlot({
 })
 ```
 
-
 # Overview
 
 ## Row
@@ -839,7 +835,6 @@ uiOutput("kpi_table")
 plotOutput("p_diversity")
 ```
 
-
 # Catch Composition
 
 ## Row
@@ -857,7 +852,6 @@ plotOutput("p_rarity")
 #| title: "Catch Composition by Region"
 plotOutput("p_catch_region")
 ```
-
 
 # Seasonality
 
@@ -884,7 +878,6 @@ plotOutput("p_timeseries")
 plotOutput("p_seasonal_region")
 ```
 
-
 # Effort & CPUE
 
 ## Row
@@ -909,7 +902,6 @@ plotOutput("p_cpue_monthly", height = "380px")
 #| title: "Trip Effort by Region"
 plotOutput("p_effort_region", height = "340px")
 ```
-
 
 # Top 5 Taxa
 
@@ -952,7 +944,6 @@ plotOutput("p_top5_cpue")
 plotOutput("p_top5_sites")
 ```
 
-
 # Length–Frequency
 
 ## Row
@@ -970,7 +961,6 @@ plotOutput("p_lf_facets")
 #| title: "Length Summary by Taxon"
 DT::DTOutput("p_lf_table")
 ```
-
 
 # Socio-Economic
 
@@ -997,7 +987,6 @@ plotOutput("p_vessel_gear", height = "380px")
 plotOutput("p_catch_use", height = "340px")
 ```
 
-
 # Market & Value Chain
 
 ## Row
@@ -1015,7 +1004,6 @@ plotOutput("p_price_taxon")
 #| title: "Total Revenue by Region"
 plotOutput("p_revenue_region")
 ```
-
 
 # Wellbeing Index
 
