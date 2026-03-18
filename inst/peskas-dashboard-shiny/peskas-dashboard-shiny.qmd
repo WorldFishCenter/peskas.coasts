@@ -532,7 +532,13 @@ output$p_top5_table <- renderUI({
     kableExtra::kbl(booktabs=TRUE, format="html") %>%
     kableExtra::kable_styling(full_width=TRUE, font_size=13) %>%
     kableExtra::column_spec(1, bold=TRUE, color="#e0e6f0") %>%
-    kableExtra::column_spec(3, bold=TRUE, color="#29B6F6") %>% as.character())
+    kableExtra::column_spec(2, color="#c0c8d8") %>%
+    kableExtra::column_spec(3, bold=TRUE, color="#29B6F6") %>%
+    kableExtra::column_spec(4, color="#c0c8d8") %>%
+    kableExtra::column_spec(5, color="#c0c8d8") %>%
+    kableExtra::column_spec(6, color="#c0c8d8") %>%
+    kableExtra::column_spec(7, color="#c0c8d8") %>%
+    as.character())
 })
 
 output$p_top5_seasonal <- renderPlot({
@@ -756,6 +762,46 @@ output$p_wellbeing_scatter <- renderPlot({
     labs(x=NULL, y="Dimension Score (0–1)",
          subtitle="Each point = one district · Bar = regional mean", caption=src_cap())
 })
+
+output$p_wellbeing_below <- renderPlot({
+  req(wellbeing_data(), pal_geo())
+  wb <- wellbeing_data()
+  overall_mean <- mean(wb$wellbeing_index, na.rm = TRUE)
+
+  below <- wb %>%
+    filter(wellbeing_index < overall_mean) %>%
+    select(district, province, Economic = econ_score,
+           Efficiency = effic_score, Ecological = eco_score) %>%
+    pivot_longer(c(Economic, Efficiency, Ecological),
+                 names_to = "dimension", values_to = "score") %>%
+    mutate(district = reorder(district, score, FUN = mean))
+
+  if (nrow(below) == 0) {
+    ggplot() + annotate("text", x = 0.5, y = 0.5,
+                        label = "All districts are above the mean index.",
+                        size = 5, colour = "#8a9bb8") + theme_void()
+  } else {
+    dim_means  <- below %>% group_by(dimension) %>%
+      summarise(mean_score = mean(score, na.rm = TRUE), .groups = "drop")
+    lowest_dim <- dim_means %>% slice_min(mean_score, n = 1) %>% pull(dimension)
+    dim_colours <- c("Economic" = "#FB8C00", "Efficiency" = "#29B6F6", "Ecological" = "#66BB6A")
+
+    ggplot(below, aes(x = district, y = score, fill = dimension)) +
+      geom_col(position = "dodge", width = 0.7, colour = "#242938", linewidth = 0.3) +
+      geom_hline(data = dim_means,
+                 aes(yintercept = mean_score, colour = dimension),
+                 linetype = "dashed", linewidth = 0.7, show.legend = FALSE) +
+      coord_flip() +
+      scale_fill_manual(values = dim_colours, name = "Dimension") +
+      scale_colour_manual(values = dim_colours) +
+      scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1)) +
+      scale_x_discrete(labels = function(x) stringr::str_wrap(x, 14)) +
+      labs(x = NULL, y = "Dimension Score (0–1)",
+           subtitle = paste0("Districts below overall mean · Primary drag: ", lowest_dim),
+           caption = src_cap()) +
+      theme(legend.position = "bottom")
+  }
+})
 ```
 
 
@@ -976,16 +1022,20 @@ plotOutput("p_revenue_region")
 ## Row
 
 ### Column {width="55%"}
-
 ```{r}
 #| title: "Composite Wellbeing Index by District"
-plotOutput("p_wellbeing")
+plotOutput("p_wellbeing", height = "420px")
 ```
 
 ### Column {width="45%"}
-
 ```{r}
 #| title: "Wellbeing Components by Region"
-plotOutput("p_wellbeing_scatter")
+plotOutput("p_wellbeing_scatter", height = "420px")
+```
+
+## Row
+```{r}
+#| title: "Below-Mean Districts — Dimension Breakdown"
+plotOutput("p_wellbeing_below", height = "380px")
 ```
 
