@@ -247,8 +247,7 @@ predict_pds_tracks <- function(
   existing_files <- tryCatch(
     googleCloudStorageR::gcs_list_objects(
       bucket = pds_opts$bucket,
-      prefix = file_prefix,
-      max_results = Inf
+      prefix = file_prefix
     ),
     error = function(e) {
       logger::log_warn("Could not list bucket: {conditionMessage(e)}")
@@ -461,8 +460,7 @@ aggregate_pds_effort <- function(
 
   predicted_files <- googleCloudStorageR::gcs_list_objects(
     bucket = pds_opts$bucket,
-    prefix = file_prefix,
-    max_results = Inf
+    prefix = file_prefix
   )$name
 
   if (length(predicted_files) == 0) {
