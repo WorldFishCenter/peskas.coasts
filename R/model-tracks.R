@@ -247,7 +247,8 @@ predict_pds_tracks <- function(
   existing_files <- tryCatch(
     googleCloudStorageR::gcs_list_objects(
       bucket = pds_opts$bucket,
-      prefix = file_prefix
+      prefix = file_prefix,
+      max_results = Inf
     ),
     error = function(e) {
       logger::log_warn("Could not list bucket: {conditionMessage(e)}")
@@ -340,6 +341,9 @@ predict_pds_tracks <- function(
   }
 
   # --- Stage 2: Sequential predict + upload in batches (Python bound) ---
+  # Force HTTP/1.1 to avoid HTTP/2 framing errors on GCS uploads in CI.
+  # curl constant: CURL_HTTP_VERSION_1_1 = 2 (not HTTP/2 which would be 3).
+  httr::set_config(httr::config(http_version = 2L))
   track_batches <- split(
     fetched_ids,
     ceiling(seq_along(fetched_ids) / batch_size)
@@ -457,7 +461,8 @@ aggregate_pds_effort <- function(
 
   predicted_files <- googleCloudStorageR::gcs_list_objects(
     bucket = pds_opts$bucket,
-    prefix = file_prefix
+    prefix = file_prefix,
+    max_results = Inf
   )$name
 
   if (length(predicted_files) == 0) {
@@ -562,6 +567,10 @@ aggregate_pds_effort <- function(
     dplyr::bind_rows()
 
   future::plan(future::sequential)
+
+  # Force HTTP/1.1 to avoid HTTP/2 framing errors on GCS uploads in CI.
+  # curl constant: CURL_HTTP_VERSION_1_1 = 2 (not HTTP/2 which would be 3).
+  httr::set_config(httr::config(http_version = 2L))
 
   if (nrow(new_tracks) == 0) {
     logger::log_info("All new files were empty, nothing to aggregate")
@@ -1084,7 +1093,8 @@ plot_fishing_effort <- function(
 
   map
 }
-
+# use_prod()
+# conf <- read_config()
 # h3_df <-
 #   coasts::download_parquet_from_cloud(
 #     prefix = conf$pds$pds_tracks_h3_grid$file_prefix,
@@ -1113,5 +1123,6 @@ plot_fishing_effort <- function(
 #   ) %>%
 #   dplyr::arrange(desc(area_km2))
 
-# plot_fishing_grounds(fishing_grounds_poly)
+# map <- plot_fishing_grounds(fishing_grounds_poly)
 # plot_fishing_effort(map_data)
+# htmlwidgets::saveWidget(map, "fishing_effort_map.html", selfcontained = TRUE)
