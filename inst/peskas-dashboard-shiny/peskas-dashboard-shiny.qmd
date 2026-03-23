@@ -730,7 +730,7 @@ output$p_revenue_region <- renderPlot({
   }
 })
 
-# ── Wellbeing ─────────────────────────────────────────────────────────────────
+# ── SSF OI ─────────────────────────────────────────────────────────────────
 output$p_wellbeing <- renderPlot({
   req(wellbeing_data(), pal_geo())
   wb <- wellbeing_data()
@@ -740,8 +740,8 @@ output$p_wellbeing <- renderPlot({
                linetype="dashed", colour="#FB8C00") +
     coord_flip() + scale_fill_manual(values=pal_geo(), name="Region") +
     scale_y_continuous(labels=scales::percent_format(), limits=c(0,1)) +
-    labs(x=NULL, y="Wellbeing Index (0–1)",
-         subtitle="Economic · Efficiency · Ecological dimensions\nDashed = overall mean",
+    labs(x=NULL, y="SSF Operational Index (0–1)",
+         subtitle="Catch output · Fishing efficiency · Species diversity (equal weights, min-max scaled)\nDashed = overall mean",
          caption=src_cap())
 })
 
@@ -757,7 +757,7 @@ output$p_wellbeing_scatter <- renderPlot({
     scale_colour_manual(values=pal_geo(), name="Region") +
     scale_y_continuous(labels=scales::percent_format()) +
     labs(x=NULL, y="Dimension Score (0–1)",
-         subtitle="Each point = one district · Bar = regional mean", caption=src_cap())
+         subtitle="Each point = one district · White bar = country mean\nScores are relative within country — not comparable across countries", caption=src_cap())
 })
 
 output$p_wellbeing_below <- renderPlot({
@@ -794,7 +794,7 @@ output$p_wellbeing_below <- renderPlot({
       scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1)) +
       scale_x_discrete(labels = function(x) stringr::str_wrap(x, 14)) +
       labs(x = NULL, y = "Dimension Score (0–1)",
-           subtitle = paste0("Districts below overall mean · Primary drag: ", lowest_dim),
+           subtitle = paste0("Districts below country mean · Primary constraint: ", lowest_dim, "\nLow scores reflect relative fishing performance, not household welfare"),
            caption = src_cap()) +
       theme(legend.position = "bottom")
   }
@@ -1005,25 +1005,25 @@ plotOutput("p_price_taxon")
 plotOutput("p_revenue_region")
 ```
 
-# Wellbeing Index
+# SSF Operational Index
 
 ## Row
 
 ### Column {width="55%"}
 ```{r}
-#| title: "Composite Wellbeing Index by District"
+#| title: "SSF Operational Index by District"
 plotOutput("p_wellbeing", height = "420px")
 ```
 
 ### Column {width="45%"}
 ```{r}
-#| title: "Wellbeing Components by Region"
+#| title: "Index Dimensions by Region"
 plotOutput("p_wellbeing_scatter", height = "420px")
 ```
 
 ## Row
 ```{r}
-#| title: "Below-Mean Districts — Dimension Breakdown"
+#| title: "Below-Mean Districts — Primary Constraint"
 plotOutput("p_wellbeing_below", height = "380px")
 ```
 
