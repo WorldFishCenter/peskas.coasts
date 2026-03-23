@@ -272,21 +272,35 @@ top5_data <- reactive({
     mutate(catch_taxon = factor(catch_taxon, levels = top_taxa()$top5))
 })
 
+safe_rescale <- function(x) {
+  r <- range(x, na.rm = TRUE)
+  if (r[1] == r[2]) return(rep(0.5, length(x)))
+  scales::rescale(x, na.rm = TRUE)
+}
+
 wellbeing_data <- reactive({
   req(trips(), df())
   trips() %>%
     group_by(province, district) %>%
-    summarise(n = n(), mean_catch_kg = mean(tot_catch_kg, na.rm = TRUE),
-              mean_cpue = mean(cpue_kg_hr, na.rm = TRUE),
-              pct_commercial = mean(catch_use == "sale", na.rm = TRUE), .groups = "drop") %>%
+    summarise(
+      n              = n(),
+      mean_catch_kg  = mean(tot_catch_kg, na.rm = TRUE),
+      mean_cpue      = mean(cpue_kg_hr, na.rm = TRUE),
+      pct_commercial = mean(catch_use == "sale", na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
     filter(n >= 3) %>%
-    left_join(df() %>% group_by(district) %>%
-                summarise(sp_richness = n_distinct(catch_taxon), .groups = "drop"),
-              by = "district") %>%
-    mutate(econ_score  = scales::rescale(mean_catch_kg * pct_commercial),
-           effic_score = scales::rescale(mean_cpue),
-           eco_score   = scales::rescale(sp_richness),
-           wellbeing_index = (econ_score + effic_score + eco_score) / 3)
+    left_join(
+      df() %>% group_by(district) %>%
+        summarise(sp_richness = n_distinct(catch_taxon), .groups = "drop"),
+      by = "district"
+    ) %>%
+    mutate(
+      econ_score      = safe_rescale(mean_catch_kg),   # drop pct_commercial multiplier
+      effic_score     = safe_rescale(mean_cpue),
+      eco_score       = safe_rescale(sp_richness),
+      wellbeing_index = (econ_score + effic_score + eco_score) / 3
+    )
 })
 
 # ── Overview ──────────────────────────────────────────────────────────────────
