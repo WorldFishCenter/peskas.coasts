@@ -5,3 +5,5 @@ peskas-dashboard-shiny_files/
 .Rhistory
 
 /.quarto/
+
+**/*.quarto_ipynb

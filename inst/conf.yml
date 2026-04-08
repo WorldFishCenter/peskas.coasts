@@ -62,6 +62,9 @@ default:
       version: latest      
     pds_tracks_predicted:
       file_prefix: predicted-pds-tracks
+      version: latest      
+    pds_tracks_h3_grid:
+      file_prefix: predicted-pds-h3_grid
       version: latest            
   tracks_app:
     backup_users:
