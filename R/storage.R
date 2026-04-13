@@ -152,9 +152,13 @@ upload_parquet_to_cloud <- function(
 #' @keywords storage
 #' @export
 upload_cloud_file <- function(file, provider, options, name = file) {
-  # Force HTTP/1.1 to avoid HTTP/2 framing errors on GCS in CI environments.
-  httr::set_config(httr::config(http_version = 2L))
-  cloud_storage_authenticate(provider, options)
+  # Always get a fresh token before uploading. Service-account tokens expire
+  # after 1 hour; long upstream jobs (e.g. predict_pds_tracks) can exhaust
+  # this window. Forcing re-auth here means gcs_upload() never needs to
+  # auto-refresh a stale token mid-flight — the source of the HTTP/2
+  # PROTOCOL_ERROR failures (newer gargle uses httr2 for token refresh,
+  # which is unaffected by httr::set_config).
+  cloud_storage_authenticate(provider, options, force = TRUE)
 
   out <- list()
   if ("gcs" %in% provider) {
@@ -188,7 +192,6 @@ upload_cloud_file <- function(file, provider, options, name = file) {
 #' @keywords storage
 #' @export
 download_cloud_file <- function(name, provider, options, file = name) {
-  httr::set_config(httr::config(http_version = 2L))
   cloud_storage_authenticate(provider, options)
 
   if ("gcs" %in% provider) {
@@ -288,10 +291,9 @@ cloud_object_name <- function(
 #'
 #' @keywords storage
 #' @export
-cloud_storage_authenticate <- function(provider, options) {
+cloud_storage_authenticate <- function(provider, options, force = FALSE) {
   if ("gcs" %in% provider) {
-    # Only authenticate if there is no valid token
-    if (isFALSE(googleAuthR::gar_has_token())) {
+    if (force || isFALSE(googleAuthR::gar_has_token())) {
       temp_key_file <- tempfile(fileext = ".json")
       writeLines(options$service_account_key, temp_key_file)
       googleCloudStorageR::gcs_auth(json_file = temp_key_file)
