@@ -15,7 +15,7 @@ fisheries analytics at [Peskas.org](https://peskas.org/).
 
 This project processes raw ocean tracking data and generates accessible
 web dashboards for the Western Indian Ocean (WIO) region, including
-Kenya, Mozambique, and Zanzibar.
+Kenya, Mozambique, and Zanzibar, see the [dashboard here](https://coasts.peskas.org/)
 
 ## What Does This Project Do?
 
