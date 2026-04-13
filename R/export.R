@@ -760,11 +760,22 @@ export_pds_spatial <- function(
   # -- Effort grid ---------------------------------------------------------------
   grid_prefix <- paste0(conf$pds$pds_tracks_h3_grid$file_prefix, "_r", h3_res)
   logger::log_info("Loading effort grid ({grid_prefix}) ...")
-  effort <- download_parquet_from_cloud(
-    prefix = grid_prefix,
-    provider = conf$storage$google$key,
-    options = coasts_opts
+  effort <- tryCatch(
+    download_parquet_from_cloud(
+      prefix = grid_prefix,
+      provider = conf$storage$google$key,
+      options = coasts_opts
+    ),
+    error = function(e) {
+      logger::log_warn(
+        "Effort grid not found -- skipping export ({conditionMessage(e)})"
+      )
+      NULL
+    }
   )
+  if (is.null(effort)) {
+    return(invisible(NULL))
+  }
   logger::log_info(
     "Effort grid: {nrow(effort)} rows |",
     " {dplyr::n_distinct(effort$h3_index)} cells"
