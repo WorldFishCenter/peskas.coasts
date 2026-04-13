@@ -4,7 +4,7 @@
 \alias{cloud_storage_authenticate}
 \title{Authenticate to a Cloud Storage Provider}
 \usage{
-cloud_storage_authenticate(provider, options)
+cloud_storage_authenticate(provider, options, force = FALSE)
 }
 \arguments{
 \item{provider}{A character string specifying the cloud provider ("gcs" or "aws").}

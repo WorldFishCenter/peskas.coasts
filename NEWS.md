@@ -30,6 +30,14 @@
 
 * **FIX** `aggregate_pds_effort()` - Manifest was silently uploaded to a temp-dir GCS path instead of the correct `{grid_prefix}/aggregated_manifest.rds` key, causing incremental processing to always rebuild the entire grid from scratch. Fixed by passing `name = manifest_name` explicitly to `upload_cloud_file()` in both the main and early-return paths.
 * **FIX** `model_cpue()` - Removed dead code left from an earlier refactor (`map_effort`, `map_cpue`, `out_dir` block) that caused an R error at runtime: *"object 'map_effort' not found"*.
+* **FIX** `export_pds_spatial()` - No longer crashes with a cryptic 404 when the effort grid parquet does not yet exist in GCS (e.g. first run or after manual deletion). The function now logs a warning and returns early, matching the existing behaviour for the CPUE file.
+* **FIX** HTTP/2 `PROTOCOL_ERROR` failures on GCS uploads in CI — `upload_cloud_file()` now calls `cloud_storage_authenticate(force = TRUE)` unconditionally before every upload. Service-account tokens expire after 1 hour; long upstream jobs (e.g. `predict_pds_tracks`) can exhaust this window, causing `gargle` (which uses `httr2`) to attempt a mid-flight token refresh over a stale HTTP/2 connection. Forcing fresh re-auth before the upload avoids this path entirely.
+
+## CI / Workflow
+
+* Merged `predict-pds-tracks` and `aggregate-pds-effort` pipeline jobs into a single job — they are always sequential and sharing a container saves startup overhead.
+* Deleted superseded `model-tracks.yaml` workflow (its steps are fully covered by `data-pipeline.yaml`).
+* Fixed `pkgdown.yaml` deploy step: added required `environment: name: github-pages` block (needed by `actions/deploy-pages@v4`); bumped `actions/upload-pages-artifact` to `@v4` (native Node 24 support); added Changelog to pkgdown navbar.
 
 ## Naming & Versioning Coherence
 
