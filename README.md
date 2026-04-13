@@ -1,9 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# coasts
-
-<!-- badges: start -->
+# Peskas Coasts: Coastal Fisheries Data Pipeline
 
 [![R-CMD-check](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml)
@@ -11,234 +9,53 @@
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![License: GPL
 v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-<!-- badges: end -->
 
-The `coasts` package provides a comprehensive data pipeline for
-processing and analyzing coastal fisheries data from the Western Indian
-Ocean (WIO) region. It integrates GPS tracking data from Pelagic Data
-Systems (PDS), regional fisheries metadata, and geospatial information
-to support fisheries research and management.
+**Peskas Coasts** is the automated data pipeline powering the coastal
+fisheries analytics at [Peskas.org](https://peskas.org/).
 
-## Overview
+This project processes raw ocean tracking data and generates accessible
+web dashboards for the Western Indian Ocean (WIO) region, including
+Kenya, Mozambique, and Zanzibar.
 
-This package is designed to handle the complete workflow for coastal
-fisheries data processing:
+## What Does This Project Do?
 
-1.  **Data Ingestion**: Automated retrieval of GPS boat tracking data
-    from Pelagic Data Systems
-2.  **Data Preprocessing**: Spatial gridding and summarization of
-    fishing activity patterns  
-3.  **Data Export**: Integration with MongoDB for data storage and
-    geospatial analysis
-4.  **Metadata Management**: Handling of device information and regional
-    boundaries
+**Peskas Coasts** is an automated data pipeline. Every two days, a
+scheduled GitHub Actions workflow performs a series of data gathering,
+classification, and spatial modeling tasks:
 
-The package supports data from Kenya and Zanzibar fisheries, with
-built-in currency conversion and regional harmonization capabilities.
+1.  **Data Ingestion**: Fetches the latest boat GPS tracks from Pelagic
+    Data Systems (PDS) and combines them with human-reported survey data
+    (KoboToolbox).
+2.  **Fishing Activity Prediction**: Uses a statistical model
+    (`ssfaitk`) to classify parts of the boat’s journey as fishing
+    activity.
+3.  **Spatial Modeling**: Translates GPS pings into standardized
+    hexagonal grids (H3) and calculates fisheries metrics, like **Catch
+    Per Unit Effort (CPUE)**.
+4.  **Dashboard Delivery**: Exports the final results into web-ready
+    formats (JSON/GeoJSON) and pushes them to MongoDB to update the maps
+    on Peskas.org.
 
-## Key Features
+## Explore the Documentation
 
-- **GPS Track Processing**: Ingest and preprocess boat GPS tracks from
-  PDS API
-- **Spatial Analysis**: Grid-based summarization of fishing activity at
-  multiple scales (100m-1km)
-- **Cloud Storage Integration**: Seamless upload/download from Google
-  Cloud Storage with multi-bucket support for regional data
-- **MongoDB Integration**: Geospatial data storage with 2dsphere
-  indexing
-- **Parallel Processing**: Efficient handling of large datasets using
-  parallel computation
-- **Automated Pipeline**: GitHub Actions workflow for continuous data
-  processing
+We’ve designed this documentation to be accessible to stakeholders,
+researchers, and developers alike:
 
-## Installation
+- 📖 **How the Pipeline Works**: A plain-English walkthrough of our
+  automated GitHub Actions workflow. Learn how data travels from a
+  boat’s GPS tracker to our web portal.
+- 🗺️ **Understanding the Models**: Discover how we calculate Catch Per
+  Unit Effort (CPUE) and why we use Hexagonal (H3) gridding to protect
+  fisher privacy while highlighting ocean hotspots.
+- 🛠️ **Reference**: For developers looking to interact with the
+  underlying R functions and APIs.
 
-You can install the development version of coasts from
-[GitHub](https://github.com/) with:
+## The Impact
 
-``` r
-# install.packages("pak")
-pak::pak("WorldFishCenter/peskas.coasts")
-```
+By automating data cleaning, model prediction, and spatial aggregation,
+Peskas Coasts provides updated spatial datasets for coastal monitoring.
 
-## Configuration
+------------------------------------------------------------------------
 
-### Local Development Setup
-
-For local development, the package uses environment variables managed
-through a `.env` file:
-
-1.  Copy the `.env.example` file to `.env`:
-
-    ``` bash
-    cp .env.example .env
-    ```
-
-2.  Fill in your credentials in the `.env` file. Required environment
-    variables include:
-
-    - `PDS_TOKEN`, `PDS_SECRET`, `PDS_USERNAME`, `PDS_PASSWORD`,
-      `PDS_CUSTOMER_ID`: Pelagic Data Systems API credentials
-    - `GCP_SA_KEY`: Google Cloud service account key (JSON format)
-    - `MONGODB_CONNECTION_STRING_COASTS`,
-      `MONGODB_CONNECTION_STRING_TRACKS`: MongoDB connection strings
-    - `GOOGLE_SHEET_ID`: Google Sheets ID for metadata
-    - `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID_FRAME`,
-      `AIRTABLE_BASE_ID_TRACKS_APP`: Airtable credentials
-
-The package automatically loads these environment variables when running
-locally.
-
-### Production Deployment
-
-For production environments, set these environment variables directly in
-your deployment configuration (e.g., GitHub Secrets, Docker environment,
-etc.). The package will use them automatically without requiring a
-`.env` file.
-
-## Main Functions
-
-### Data Ingestion
-
-``` r
-library(coasts)
-
-# Ingest GPS trip data from PDS
-ingest_pds_trips()
-
-# Ingest detailed GPS track data
-ingest_pds_tracks()
-```
-
-### Data Preprocessing
-
-``` r
-# Preprocess tracks into spatial grids
-preprocess_pds_tracks(grid_size = 500)  # 500m grid cells
-
-# Available grid sizes: 100, 250, 500, 1000 meters
-preprocess_pds_tracks(grid_size = 1000)  # 1km grid cells
-```
-
-### Data Export
-
-``` r
-# Export processed data to MongoDB
-export_geos()
-```
-
-### Metadata Management
-
-``` r
-# Get device metadata from Google Sheets
-devices <- get_metadata(table = "devices")
-
-# Get all metadata tables
-all_metadata <- get_metadata()
-```
-
-## Data Pipeline Workflow
-
-The package implements an automated data pipeline that runs every 2 days
-via GitHub Actions:
-
-1.  **Build Container**: Creates a Docker container with R and all
-    dependencies
-2.  **Ingest PDS Trips**: Downloads trip metadata from PDS API
-3.  **Ingest PDS Tracks**: Downloads detailed GPS tracks for each trip
-4.  **Preprocess Tracks**: Creates spatial grid summaries of fishing
-    activity
-5.  **Export Data**: Uploads processed data to MongoDB with geospatial
-    indexing
-
-## Data Products
-
-The pipeline produces several key data products:
-
-- **Trip Data**: Basic trip information (start/end times, vessel info)
-- **Track Data**: Detailed GPS points with speed, heading, and temporal
-  information
-- **Grid Summaries**: Spatial aggregations showing:
-  - Time spent fishing in each grid cell
-  - Average speed and vessel metrics
-  - Temporal patterns of activity
-- **Regional Metrics**: Time series data with currency-converted
-  economic indicators
-
-## Spatial Analysis Capabilities
-
-The package supports multi-scale spatial analysis:
-
-``` r
-# Fine-scale analysis (100m grids)
-preprocess_pds_tracks(grid_size = 100)
-
-# Broad-scale patterns (1km grids)  
-preprocess_pds_tracks(grid_size = 1000)
-```
-
-Grid summaries include: - `time_spent_mins`: Total fishing time per grid
-cell - `mean_speed`: Average vessel speed - `n_points`: Number of GPS
-observations - `first_seen`/`last_seen`: Temporal extent of activity
-
-## Cloud Storage Integration
-
-The package seamlessly integrates with Google Cloud Storage and supports
-multiple buckets for regional/environment-specific data:
-
-``` r
-# List available buckets
-list_storage_buckets()
-# Returns: c("kenya-prod", "mozambique-prod", "zanzibar-prod", "dev", "prod")
-
-# Download from default bucket (backward compatible)
-raw_data <- download_parquet_from_cloud(
-  prefix = "pds-trips",
-  provider = conf$storage$google$key,
-  options = conf$storage$google$options
-)
-
-# Download from a specific regional bucket
-kenya_data <- download_parquet_from_cloud(
-  prefix = "pds-trips",
-  provider = conf$storage$google$key,
-  options = conf$storage$google$options,
-  bucket_name = "kenya-prod"
-)
-
-# Upload to a specific regional bucket
-upload_parquet_to_cloud(
-  data = processed_data,
-  prefix = "pds-trips-processed",
-  provider = conf$storage$google$key,
-  options = conf$storage$google$options,
-  bucket_name = "mozambique-prod"
-)
-
-# Get bucket configuration
-bucket_config <- get_bucket_config("zanzibar-prod")
-```
-
-## MongoDB Integration
-
-Geospatial data is stored in MongoDB with appropriate indexing:
-
-``` r
-# Push data with geospatial indexing
-mdb_collection_push(
-  data = spatial_data,
-  connection_string = "mongodb://...",
-  collection_name = "fishing_areas",
-  geo = TRUE  # Creates 2dsphere index
-)
-```
-
-## Contributing
-
-This package is part of the WorldFish Center’s Peskas initiative for
-small-scale fisheries monitoring. Contributions are welcome via GitHub
-issues and pull requests.
-
-## License
-
-GPL (\>= 3)
+*Peskas Coasts is proudly developed as part of the WorldFish Center’s
+Peskas initiative.*

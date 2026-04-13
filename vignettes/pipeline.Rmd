@@ -1,0 +1,48 @@
+---
+title: "How the Pipeline Works"
+description: "A plain-English guide to the Peskas Coasts automated data workflow."
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{How the Pipeline Works}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+Behind the maps and charts on Peskas.org is an automated system. Every two days, a schedule is triggered via GitHub Actions that runs the **Peskas Coasts Pipeline**. 
+
+This article breaks down exactly what happens during that automated run, step-by-step.
+
+## Phase 1: Gathering the Ground Truth
+
+Before we can look at GPS tracks, we need to know who is fishing and what they are catching.
+
+* **`ingest_assets()`**: The pipeline starts by downloading metadata—the "registry" of known boats, gear types, and landing sites.
+* **`enrich_taxa()`**: It standardizes fish species data, ensuring that local fish names match global scientific databases (like FishBase).
+* **`ingest_pds_trips()`**: We connect to Pelagic Data Systems (PDS) to get a high-level list of all recent boat trips.
+* **`merge_survey_trips()`**: Here, we match the digital GPS trips with human-conducted surveys on the ground. If a surveyor recorded a catch at the dock, we link it to the GPS device that was on that specific boat.
+
+## Phase 2: Tracking and Machine Learning
+
+Once we know *who* went out, we need to know *what they did* on the water.
+
+* **`ingest_pds_tracks()`**: We download the raw, second-by-second GPS pings for the matched trips.
+* **`predict_pds_tracks()`**: Boats move differently when they are travelling vs. when they are actively fishing. We pass the GPS tracks through a statistical model (`ssfaitk`) that classifies which parts of the boat's journey were actual *fishing activity*.
+
+## Phase 3: Making Sense of the Ocean (Aggregation & Modeling)
+
+Raw GPS points are messy and can compromise a fisher's privacy. We aggregate them to make them safe and useful.
+
+* **`aggregate_pds_effort()`**: We group the predicted fishing locations into standard hexagonal areas of the ocean (called H3 grids). We calculate how many unique trips visited a hex and how many hours were spent fishing there.
+* **`model_cpue()`**: We calculate **Catch Per Unit Effort (CPUE)**. By taking the total fish caught (from the ground surveys) and dividing it by the total hours fished in a specific hex grid (from the GPS predictions), we create a map of ocean productivity. 
+
+## Phase 4: Delivery to the Web
+
+Finally, the data must be packaged so the Peskas website can display it instantly.
+
+* **`export_fishers_stats()` & `export_geos()`**: We calculate efficiency metrics (like fuel usage estimates and search efficiency) and push them directly to our MongoDB cloud database.
+* **`export_pds_spatial()`**: The ocean maps are converted into web-ready `JSON` and `GeoJSON` files. These files are pushed to Google Cloud Storage, where the Peskas front-end consumes them to draw the interactive maps on the dashboard.
+
+---
+
+### Summary
+Every two days, the pipeline processes raw pings from ocean trackers and paper surveys into an updated spatial dataset.

@@ -1,3 +1,48 @@
+# coasts 4.0.0
+
+## Spatial CPUE Model Pipeline
+
+* **NEW** `model_cpue()` - Estimates spatial Catch Per Unit Effort (CPUE) by joining matched survey trips with predicted PDS tracks. Supports two estimation methods: `"weighted"` (direct catch-to-effort ratio, robust for sparse data) and `"nnls"` (non-negative least squares, for denser datasets). Uploads results as a versioned parquet to cloud storage.
+* **NEW** `run_weighted_cpue()` - Computes CPUE as `sum(catch_kg) / sum(fishing_hours)` per H3 cell and country.
+* **NEW** `run_nnls_cpue()` - Solves a non-negative least squares system `min ||Xq - y||² s.t. q ≥ 0` across all H3 cells simultaneously.
+* **NEW** `join_effort_catch()` - Builds the effort-catch matrix linking per-trip H3 effort vectors with catch records.
+* **NEW** `load_matched_trips()` - Downloads the `trips-matched` parquet and returns validated catch records for matched PDS trips.
+* **NEW** `download_predicted_tracks()` - Downloads predicted track files for a set of matched trip IDs from the PDS bucket.
+* **NEW** `prepare_tracks_for_effort()` - Projects predicted fishing points into an H3 effort matrix (fishing hours and pings per cell).
+* **NEW** `get_combined_tbl()` - Combines effort and catch into a single analysis table for CPUE modelling.
+* **NEW** `build_catch_wide()` - Pivots catch records to a wide matrix (trips × species) for the NNLS solver.
+* **NEW** `.finalise_cpue()` - Post-processes raw CPUE estimates: adds centroid coordinates, filters cells below `min_trips`, and attaches country labels.
+* **NEW** `.top_species()` - Selects the top-N species by total catch weight to focus CPUE estimation.
+
+## Web-Ready Spatial Export
+
+* **NEW** `export_pds_spatial()` - Reads H3 effort grid and CPUE parquet files from cloud storage, derives fishing grounds, and uploads three web-ready files for the DeckGL portal: H3 effort JSON, CPUE JSON, and fishing grounds GeoJSON.
+* **NEW** `derive_fishing_grounds()` - Converts an H3 effort grid to a GeoJSON `FeatureCollection` of discrete fishing ground polygons, enriched with area, constancy, and activity metrics.
+* **NEW** `aggregate_trip_effort()` - Aggregates per-trip H3 effort vectors into a cumulative effort grid across all trips.
+* **NEW** `plot_effort_map()` / `plot_cpue_map()` - Interactive Leaflet maps for visualising effort and CPUE grids during exploratory analysis.
+## Taxa Enrichment
+
+* **NEW** `enrich_taxa()` - Augments catch records with FishBase and SeaLifeBase taxonomic backbone data (class, order, family, genus) for all species in the matched trips dataset.
+* **NEW** `get_taxa_backbone()` - Queries the GBIF taxonomic backbone to resolve species names to canonical taxonomy.
+* **NEW** `expand_taxonomic_info()` - Expands the taxa lookup table with full higher classification.
+
+## Bug Fixes
+
+* **FIX** `aggregate_pds_effort()` - Manifest was silently uploaded to a temp-dir GCS path instead of the correct `{grid_prefix}/aggregated_manifest.rds` key, causing incremental processing to always rebuild the entire grid from scratch. Fixed by passing `name = manifest_name` explicitly to `upload_cloud_file()` in both the main and early-return paths.
+* **FIX** `model_cpue()` - Removed dead code left from an earlier refactor (`map_effort`, `map_cpue`, `out_dir` block) that caused an R error at runtime: *"object 'map_effort' not found"*.
+
+## Naming & Versioning Coherence
+
+* CPUE parquet files are now stored under `pds-cpue_r{h3_res}` (e.g. `pds-cpue_r9`) to match the effort grid naming convention (`predicted-pds-h3_grid_r9`). This ensures that running the pipeline at different H3 resolutions never silently mixes effort and CPUE data from different resolutions.
+* Portal CPUE JSON files follow the same pattern: `pds-cpue-r{h3_res}__timestamp__json`.
+* `inst/conf.yml` `portal.cpue.file_prefix` updated from `pds-cpue` to `pds-cpue-r`.
+
+## Documentation & Website
+
+* Vignettes (`pipeline.Rmd`, `metrics-and-models.Rmd`) moved from project root to `vignettes/` so pkgdown can discover them correctly.
+* pkgdown CI workflow (`pkgdown.yaml`) fixed: system dependencies (GDAL, GEOS, PROJ, udunits2) now installed before `r-lib/actions/setup-r-dependencies@v2`.
+* `_pkgdown.yml` articles section re-enabled now that vignettes are in the correct location.
+
 # coasts 3.0.1
 
 Align export functions according to countries API schema

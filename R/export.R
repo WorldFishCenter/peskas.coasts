@@ -698,3 +698,244 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
     }
   )
 }
+
+
+#' Export Spatial Pipeline Outputs as Web-Ready JSON / GeoJSON
+#'
+#' @description
+#' Reads the pre-computed H3 effort grid and CPUE Parquet files from cloud
+#' storage, derives fishing grounds, and uploads web-ready files that can be
+#' fetched directly by a Next.js / DeckGL application.
+#'
+#' Three versioned files are produced (following the package's `add_version()`
+#' convention, i.e. `prefix__YYYYMMDDHHMMSS__extension`):
+#' - `pds-h3-effort-r{h3_res}__*__json`: JSON array for `H3HexagonLayer`
+#' - `pds-cpue-r{h3_res}__*__json`: JSON array for `H3HexagonLayer`
+#' - `pds-fishing-grounds__*__geojson`: GeoJSON `FeatureCollection` for `GeoJsonLayer`
+#'
+#' @details
+#' Files follow the same versioning convention as other pipeline outputs
+#' (`add_version()`). The consuming Next.js app uses `cloud_object_name()` or an
+#' equivalent GCS listing + timestamp sort to discover the latest version.
+#'
+#' Schema for each file:
+#' - **Effort JSON** (per H3 cell × year):
+#'   `[{h3_index, year, fishing_hours, unique_trips, n_active_days,
+#'   avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
+#'   hours_per_trip}]`
+#' - **CPUE JSON**: `[{h3_index, country, species, cpue, n_trips, lon, lat}]`
+#' - **Fishing grounds GeoJSON** (same metrics, plus ground-specific):
+#'   `{ground_id, area_km2, n_cells, fishing_hours, unique_trips, n_active_days,
+#'   avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
+#'   hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2,
+#'   hours_per_day_per_km2}`
+#'
+#' @param h3_res Integer. H3 resolution of the effort grid to export.
+#'   Default is `9L`.
+#' @param min_trips_grounds Integer. Minimum unique trips per H3 cell to
+#'   include in fishing grounds derivation. Default is `3L`.
+#' @param log_threshold Logging threshold. Default is `logger::DEBUG`.
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`.
+#'
+#' @return Invisibly `NULL`. Uploads three files to GCS as a side effect.
+#'
+#' @seealso [aggregate_pds_effort()], [model_cpue()], [derive_fishing_grounds()]
+#'
+#' @keywords workflow export
+#' @export
+export_pds_spatial <- function(
+  h3_res = 9L,
+  min_trips_grounds = 3L,
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+  coasts_opts <- resolve_storage_opts(conf, "coasts")
+  cloud_storage_authenticate(conf$storage$google$key, coasts_opts)
+
+  logger::log_info("=== Web spatial export | H3 res = {h3_res} ===")
+
+  # -- Effort grid ---------------------------------------------------------------
+  grid_prefix <- paste0(conf$pds$pds_tracks_h3_grid$file_prefix, "_r", h3_res)
+  logger::log_info("Loading effort grid ({grid_prefix}) ...")
+  effort <- tryCatch(
+    download_parquet_from_cloud(
+      prefix = grid_prefix,
+      provider = conf$storage$google$key,
+      options = coasts_opts
+    ),
+    error = function(e) {
+      logger::log_warn(
+        "Effort grid not found -- skipping export ({conditionMessage(e)})"
+      )
+      NULL
+    }
+  )
+  if (is.null(effort)) {
+    return(invisible(NULL))
+  }
+  logger::log_info(
+    "Effort grid: {nrow(effort)} rows |",
+    " {dplyr::n_distinct(effort$h3_index)} cells"
+  )
+
+  # Compute n_total_days from the stored date range so per-day metrics are
+  # consistent between cell and ground exports.
+  n_total_days <- if (
+    all(c("first_active_date", "last_active_date") %in% names(effort)) &&
+      !all(is.na(effort$first_active_date))
+  ) {
+    as.numeric(
+      max(effort$last_active_date, na.rm = TRUE) -
+        min(effort$first_active_date, na.rm = TRUE)
+    ) +
+      1
+  } else {
+    length(unique(effort$year)) * 365L
+  }
+  logger::log_info("Study period inferred: {round(n_total_days)} days")
+
+  # Derive informative per-cell metrics; drop internal / QA columns.
+  effort_export <- effort |>
+    dplyr::mutate(
+      avg_fidelity = dplyr::if_else(
+        .data$n_trips_for_fidelity > 0,
+        .data$avg_fidelity_sum / .data$n_trips_for_fidelity,
+        NA_real_
+      ),
+      constancy = .data$n_active_days / n_total_days,
+      avg_hours_per_day = .data$fishing_hours / n_total_days,
+      avg_visits_per_day = .data$unique_trips / n_total_days,
+      hours_per_trip = dplyr::if_else(
+        .data$unique_trips > 0,
+        .data$fishing_hours / .data$unique_trips,
+        NA_real_
+      )
+    ) |>
+    dplyr::select(
+      "h3_index",
+      "year",
+      "fishing_hours",
+      "unique_trips",
+      "n_active_days",
+      "avg_fidelity",
+      "constancy",
+      "avg_hours_per_day",
+      "avg_visits_per_day",
+      "hours_per_trip"
+    )
+
+  effort_prefix <- paste0(conf$pds$portal$effort$file_prefix, h3_res)
+  effort_filename <- add_version(effort_prefix, extension = "json")
+  on.exit(
+    if (file.exists(effort_filename)) file.remove(effort_filename),
+    add = TRUE
+  )
+  writeLines(
+    jsonlite::toJSON(effort_export, auto_unbox = TRUE),
+    effort_filename
+  )
+  upload_cloud_file(
+    file = effort_filename,
+    provider = conf$storage$google$key,
+    options = coasts_opts
+  )
+  logger::log_info("Uploaded: {basename(effort_filename)}")
+
+  # -- CPUE ----------------------------------------------------------------------
+  cpue_prefix <- paste0(conf$pds$pds_cpue$file_prefix, "_r", h3_res)
+  cpue <- tryCatch(
+    {
+      logger::log_info("Loading CPUE ({cpue_prefix}) ...")
+      download_parquet_from_cloud(
+        prefix = cpue_prefix,
+        provider = conf$storage$google$key,
+        options = coasts_opts
+      )
+    },
+    error = function(e) {
+      logger::log_warn(
+        "CPUE file not found -- skipping ({conditionMessage(e)})"
+      )
+      NULL
+    }
+  )
+
+  if (!is.null(cpue)) {
+    logger::log_info("CPUE: {nrow(cpue)} rows")
+    cpue_filename <- add_version(
+      paste0(conf$pds$portal$cpue$file_prefix, h3_res),
+      extension = "json"
+    )
+    on.exit(
+      if (file.exists(cpue_filename)) file.remove(cpue_filename),
+      add = TRUE
+    )
+    writeLines(
+      jsonlite::toJSON(cpue, auto_unbox = TRUE, digits = 6),
+      cpue_filename
+    )
+    upload_cloud_file(
+      file = cpue_filename,
+      provider = conf$storage$google$key,
+      options = coasts_opts
+    )
+    logger::log_info("Uploaded: {basename(cpue_filename)}")
+  }
+
+  # -- Fishing grounds (GeoJSON) -------------------------------------------------
+  logger::log_info(
+    "Deriving fishing grounds (min_trips = {min_trips_grounds}) ..."
+  )
+  grounds <- derive_fishing_grounds(effort, min_trips = min_trips_grounds)
+
+  if (!is.null(grounds)) {
+    logger::log_info("Fishing grounds: {nrow(grounds)} polygons")
+
+    # Explicit column selection mirrors the cell-level export: same informative
+    # metrics, plus ground-specific ones (area, n_cells, per-km² densities).
+    grounds_export <- dplyr::select(
+      grounds,
+      "ground_id",
+      "area_km2",
+      "fishing_hours",
+      "unique_trips",
+      "n_active_days",
+      "avg_fidelity",
+      "constancy",
+      "avg_hours_per_day",
+      "avg_visits_per_day",
+      "hours_per_trip",
+      "fishing_hours_per_km2",
+      "unique_trips_per_km2",
+      "hours_per_day_per_km2",
+      "geometry"
+    )
+
+    grounds_filename <- add_version(
+      conf$pds$portal$fishing_grounds$file_prefix,
+      extension = "geojson"
+    )
+    on.exit(
+      if (file.exists(grounds_filename)) file.remove(grounds_filename),
+      add = TRUE
+    )
+    writeLines(geojsonsf::sf_geojson(grounds_export), grounds_filename)
+    upload_cloud_file(
+      file = grounds_filename,
+      provider = conf$storage$google$key,
+      options = coasts_opts
+    )
+    logger::log_info("Uploaded: {basename(grounds_filename)}")
+  } else {
+    logger::log_warn(
+      "No fishing grounds passed min_trips = {min_trips_grounds}",
+      " -- skipping GeoJSON upload."
+    )
+  }
+
+  logger::log_info("=== Web spatial export complete ===")
+  invisible(NULL)
+}

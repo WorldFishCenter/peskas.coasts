@@ -1,173 +1,97 @@
 url: https://worldfishcenter.github.io/peskas.coasts/
+
 template:
   bootstrap: 5
-  bootswatch: yeti
+  bootswatch: flatly
   bslib:
-    primary: "#0077be"
-    secondary: "#6c757d"
-    success: "#28a745"
-    info: "#17a2b8"
-    warning: "#ffc107"
-    danger: "#dc3545"
-
-home:
-  title: "coasts: Coastal Fisheries Data Pipeline"
-  description: >
-    Comprehensive data pipeline for processing coastal fisheries data from the
-    Western Indian Ocean region, integrating GPS tracking, spatial analysis,
-    and cloud storage.
-  strip_header: false
-  sidebar:
-    structure: [links, license, community, citation, authors, dev]
-    links:
-      - text: "WorldFish Center"
-        href: "https://www.worldfishcenter.org/"
-      - text: "Peskas Initiative"
-        href: "https://www.worldfishcenter.org/research/peskas"
-      - text: "Report a Bug"
-        href: "https://github.com/WorldFishCenter/peskas.coasts/issues"
+    primary: "#005b96" # Ocean blue
+    secondary: "#0392cf" # Lighter coastal blue
+    success: "#7bc043" # Sustainable green
+    info: "#f37736" # Warm accent
+    base_font: {google: "Inter"}
+    heading_font: {google: "Montserrat"}
 
 navbar:
+  title: "Peskas Coasts"
   structure:
-    left: [home, reference, articles, tutorials, news]
-    right: [search, github]
+    left: [intro, articles, reference]
+    right: [peskas, github]
   components:
-    home:
-      icon: fas fa-home fa-lg
+    intro:
+      text: "Our Mission"
       href: index.html
-    reference:
-      text: Reference
-      href: reference/index.html
-    # articles:
-    #   text: Articles
-    #   menu:
-    #   - text: "Getting Started"
-    #     href: articles/getting-started.html
-    #   - text: "Data Pipeline Overview"
-    #     href: articles/data-pipeline.html
-    #   - text: "Spatial Analysis"
-    #     href: articles/spatial-analysis.html
-    #   - text: "Configuration Guide"
-    #     href: articles/configuration.html
-    # tutorials:
-    #   text: Tutorials
-    #   menu:
-    #   - text: "Basic Usage"
-    #     href: articles/basic-usage.html
-    #   - text: "Advanced Workflows"
-    #     href: articles/advanced-workflows.html
-    news:
-      text: News
-      href: news/index.html
-    github:
-      icon: fab fa-github fa-lg
-      href: https://github.com/WorldFishCenter/peskas.coasts/
+    peskas:
+      text: "Peskas.org"
+      href: https://peskas.org/
+      icon: fas fa-globe
+
+articles:
+  - title: "Guides and Tutorials"
+    desc: "In-depth explanations of the Peskas Coasts workflows and models."
+    contents:
+      - pipeline
+      - metrics-and-models
 
 reference:
-  - title: "Data Ingestion"
-    desc: "Functions for retrieving data from external APIs"
+  - title: "The Automated Pipeline"
+    desc: "Functions that drive the bi-daily GitHub Actions workflow."
     contents:
-    - get_kobo_data
-    - ingest_pds_trips
-    - ingest_pds_tracks
-    - ingest_assets
-    - backup_tracks
-    - get_trips
-    - get_trip_points
-    - fetch_asset
-    - fetch_assets
-    - ingest_pelagic_boats
-    - get_pelagic_boats
-    - get_pelagic_devices
-    - pelagic_auth
-    - pelagic_refresh_token
-
-  - title: "Data Preprocessing"
-    desc: "Functions for processing and transforming GPS track data"
+      - ingest_assets
+      - enrich_taxa
+      - ingest_pds_trips
+      - merge_survey_trips
+      - ingest_pds_tracks
+      - preprocess_pds_tracks
+      - predict_pds_tracks
+      - aggregate_pds_effort
+      - model_cpue
+  - title: "Data Export & Web Readiness"
+    desc: "Preparing the analyzed data for the Peskas portal and web maps."
     contents:
-    - preprocess_pds_tracks
-    - preprocess_track_data
-    - generate_track_summaries
-    - get_fisher_summaries
-    - merge_survey_trips
-
-  - title: "Tracks App"
-    desc: "Functions for tracks app data and usage reporting"
+      - export_geos
+      - export_fishers_stats
+      - export_portal
+      - export_pds_spatial
+  - title: "Spatial Utilities"
+    desc: "Under-the-hood tools for gridding, mapping, and metric conversion."
     contents:
-    - pull_catch_events
-    - pull_users_data
-    - calculate_catch_record_usage
-    - prepare_usage_summary
-    - create_usage_table
-    - create_usage_heatmap
-    - generate_app_usage_report
-
+      - assign_h3_indices
+      - aggregate_h3_effort
+      - rollup_h3_resolution
+      - create_spatial_grid
+      - derive_fishing_grounds
   - title: "Survey & Fleet Analysis"
-    desc: "Functions for summarizing survey data and modelling fleet-wide activity"
+    desc: "Functions for survey summarization and fleet activity estimation."
     contents:
-    - summarize_data
-    - calculate_fishery_metrics
-    - prepare_boat_registry
-    - process_trip_data
-    - calculate_monthly_trip_stats
-    - estimate_fleet_activity
-    - calculate_district_totals
-    - generate_fleet_analysis
-
-  - title: "Data Export & Storage"
-    desc: "Functions for exporting processed data to databases and cloud storage"
+      - calculate_catch_record_usage
+      - calculate_district_totals
+      - calculate_fishery_metrics
+      - calculate_monthly_trip_stats
+      - estimate_fleet_activity
+      - summarize_data
+      - generate_fleet_analysis
+      - prepare_boat_registry
+      - process_trip_data
+      - create_usage_heatmap
+      - create_usage_table
+  - title: "API & Data Ingestion (PDS & Airtable)"
+    desc: "Functions interacting with Pelagic Data Systems, Airtable, and KoboToolbox."
     contents:
-    - export_geos
-    - export_fishers_stats
-    - export_portal
-    - mdb_collection_push
-    - mdb_collection_pull
-    - upload_cloud_file
-    - download_cloud_file
-    - upload_parquet_to_cloud
-    - download_parquet_from_cloud
-    - cloud_storage_authenticate
-    - cloud_object_name
-    - add_version
-
-  - title: "Airtable Integration"
-    desc: "Functions for managing vessel and trip metadata via Airtable"
+      - airtable_to_df
+      - bulk_update_airtable
+      - device_sync
+      - df_to_airtable
+      - update_airtable_record
+      - get_writable_fields
+      - pelagic_auth
+      - pelagic_refresh_token
+      - get_pelagic_boats
+      - get_pelagic_devices
+      - ingest_pelagic_boats
+      - sync_device_users
+      - get_trips
+      - get_trip_points
+  - title: "Other Utilities and Internals"
+    desc: "Additional exported helper functions."
     contents:
-    - airtable_to_df
-    - df_to_airtable
-    - bulk_update_airtable
-    - update_airtable_record
-    - get_writable_fields
-    - device_sync
-    - sync_device_users
-
-  - title: "Utilities"
-    desc: "Helper functions and utilities"
-    contents:
-    - read_config
-    - "%>%"
-    - "%||%"
-    - ":="
-    - ".data"
-    - "expr"
-    - "enquo"
-    - "enquos"
-    - "sym"
-    - "syms"
-    - "as_name"
-    - "as_label"
-
-footer:
-  structure:
-    left: [developed_by, built_with]
-    right: [legal]
-  components:
-    legal: "GPL (>= 3) Licensed"
-
-authors:
-  Lorenzo Longobardi:
-    href: "https://github.com/langbart"
-  WorldFish Center:
-    href: "https://www.worldfishcenter.org/"
-    html: "<img src='https://www.worldfishcenter.org/themes/custom/worldfish/logo.svg' height=24>"
-
+      - matches(".*")

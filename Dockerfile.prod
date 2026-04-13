@@ -16,8 +16,8 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     python3-venv && \
   rm -rf /var/lib/apt/lists/*
 
-# Tell reticulate which Python to use in every R session started in this image
-ENV RETICULATE_PYTHON=/usr/bin/python3
+# Tell reticulate which Python to use — set after venv is created below
+# (placeholder overridden by the ENV at the end of this file)
 
 # Install R packages from CRAN
 RUN install2.r --error --skipinstalled \
@@ -48,7 +48,12 @@ COPY . /home
 WORKDIR /home
 RUN Rscript -e 'remotes::install_local(dependencies = TRUE)'
 
-# Install the ssfaitk Python module into system Python (matches RETICULATE_PYTHON)
-RUN /usr/bin/python3 -m pip install --break-system-packages "git+https://github.com/WorldFishCenter/ssf-ai-toolkit@plug-R"
+# Install ssfaitk into an isolated venv (avoids PEP 668 system-package restrictions)
+RUN python3 -m venv /opt/ssfaitk && \
+    /opt/ssfaitk/bin/pip install --upgrade pip setuptools wheel && \
+    /opt/ssfaitk/bin/pip install "git+https://github.com/WorldFishCenter/ssf-ai-toolkit@plug-R"
+
+# Point reticulate at the venv Python that has ssfaitk installed
+ENV RETICULATE_PYTHON=/opt/ssfaitk/bin/python3
 
 ENTRYPOINT ["Rscript"]

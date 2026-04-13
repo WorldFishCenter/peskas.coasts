@@ -65,7 +65,20 @@ default:
       version: latest      
     pds_tracks_h3_grid:
       file_prefix: predicted-pds-h3_grid
-      version: latest            
+      version: latest
+    pds_cpue:
+      file_prefix: pds-cpue
+      version: latest
+    portal:
+      effort:
+        file_prefix: pds-h3-effort-r
+        version: latest
+      cpue:
+        file_prefix: pds-cpue-r
+        version: latest
+      fishing_grounds:
+        file_prefix: pds-fishing-grounds
+        version: latest
   tracks_app:
     backup_users:
       file_prefix: backup-users
@@ -117,6 +130,10 @@ default:
         - devices
     airtable:
       name: assets
+    fishbase:
+      taxa_enriched:
+        file_prefix: taxa-fishbase-enriched
+        version: latest
   airtable:
     token: !expr Sys.getenv('AIRTABLE_TOKEN')
     frame:
