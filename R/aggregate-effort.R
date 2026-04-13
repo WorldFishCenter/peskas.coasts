@@ -187,8 +187,15 @@ aggregate_pds_effort <- function(
       if (!"n_active_days" %in% names(existing_grid)) {
         existing_grid$n_active_days <- NA_integer_
       }
-      if (!"avg_trip_share_sum" %in% names(existing_grid)) {
-        existing_grid$avg_trip_share_sum <- NA_real_
+      # Migrate column renamed from avg_trip_share_sum → avg_fidelity_sum
+      if ("avg_trip_share_sum" %in% names(existing_grid)) {
+        existing_grid <- dplyr::rename(
+          existing_grid,
+          avg_fidelity_sum = "avg_trip_share_sum"
+        )
+      }
+      if (!"avg_fidelity_sum" %in% names(existing_grid)) {
+        existing_grid$avg_fidelity_sum <- NA_real_
         existing_grid$n_trips_for_fidelity <- 0L
         existing_grid$first_active_date <- as.Date(NA)
         existing_grid$last_active_date <- as.Date(NA)

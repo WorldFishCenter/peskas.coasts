@@ -16,7 +16,7 @@ derive_fishing_grounds(
 \arguments{
 \item{h3_grid_df}{Data frame with columns `h3_index`, `fishing_hours`,
 `unique_trips`, `n_active_days`, `first_active_date`, `last_active_date`,
-`avg_trip_share_sum`, `n_trips_for_fidelity` (as returned by
+`avg_fidelity_sum`, `n_trips_for_fidelity` (as returned by
 [aggregate_pds_effort()]). A `year` column is accepted and collapsed by
 summation / min / max as appropriate.}
 
