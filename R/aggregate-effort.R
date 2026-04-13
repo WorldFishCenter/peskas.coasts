@@ -250,10 +250,6 @@ aggregate_pds_effort <- function(
 
   future::plan(future::sequential)
 
-  # Force HTTP/1.1 to avoid HTTP/2 framing errors on GCS uploads in CI.
-  # curl constant: CURL_HTTP_VERSION_1_1 = 2 (not HTTP/2 which would be 3).
-  httr::set_config(httr::config(http_version = 2L))
-
   if (nrow(new_tracks) == 0) {
     logger::log_info("All new files were empty, nothing to aggregate")
     saveRDS(c(already_aggregated, new_files), manifest_local)

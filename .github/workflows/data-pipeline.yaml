@@ -178,7 +178,7 @@ jobs:
         run: Rscript -e 'coasts::export_fishers_stats()'
 
   predict-pds-tracks:
-    name: Predict fishing activity from GPS tracks
+    name: Predict fishing tracks and aggregate to H3 grid
     needs: preprocess-pds-tracks
     runs-on: ubuntu-latest
     container:
@@ -192,20 +192,6 @@ jobs:
         run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
       - name: Call predict_pds_tracks()
         run: Rscript -e 'coasts::predict_pds_tracks()'
-
-  aggregate-pds-effort:
-    name: Aggregate predicted tracks to H3 effort grid
-    needs: predict-pds-tracks
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Set env to production
-        if: endsWith(github.ref, '/main')
-        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
       - name: Call aggregate_pds_effort()
         run: Rscript -e 'coasts::aggregate_pds_effort()'
 
@@ -227,7 +213,7 @@ jobs:
 
   export-pds-spatial:
     name: Export spatial outputs as JSON/GeoJSON for web
-    needs: [aggregate-pds-effort, model-cpue]
+    needs: [predict-pds-tracks, model-cpue]
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest

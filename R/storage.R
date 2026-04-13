@@ -152,6 +152,8 @@ upload_parquet_to_cloud <- function(
 #' @keywords storage
 #' @export
 upload_cloud_file <- function(file, provider, options, name = file) {
+  # Force HTTP/1.1 to avoid HTTP/2 framing errors on GCS in CI environments.
+  httr::set_config(httr::config(http_version = 2L))
   cloud_storage_authenticate(provider, options)
 
   out <- list()
@@ -186,6 +188,7 @@ upload_cloud_file <- function(file, provider, options, name = file) {
 #' @keywords storage
 #' @export
 download_cloud_file <- function(name, provider, options, file = name) {
+  httr::set_config(httr::config(http_version = 2L))
   cloud_storage_authenticate(provider, options)
 
   if ("gcs" %in% provider) {
