@@ -770,11 +770,6 @@ export_pds_spatial <- function(
     " {dplyr::n_distinct(effort$h3_index)} cells"
   )
 
-  # Migrate column renamed from avg_trip_share_sum → avg_fidelity_sum
-  if ("avg_trip_share_sum" %in% names(effort)) {
-    effort <- dplyr::rename(effort, avg_fidelity_sum = "avg_trip_share_sum")
-  }
-
   # Compute n_total_days from the stored date range so per-day metrics are
   # consistent between cell and ground exports.
   n_total_days <- if (

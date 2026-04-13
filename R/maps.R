@@ -64,7 +64,7 @@
 #'     \item{`n_active_days`}{Sum of cell-level active days across all
 #'       constituent H3 cells.}
 #'     \item{`n_cells`}{Number of H3 cells that make up the ground.}
-#'     \item{`avg_trip_share`}{Mean across cells of the average fraction of
+#'     \item{`avg_fidelity`}{Mean across cells of the average fraction of
 #'       visiting trips' fishing time spent in each cell. Bounded [0, 1].
 #'       Higher values indicate stronger habitat preference (fidelity).}
 #'     \item{`constancy`}{Mean across cells of the fraction of study days each
@@ -104,11 +104,6 @@ derive_fishing_grounds <- function(
     )
   }
 
-  # Migrate column renamed from avg_trip_share_sum → avg_fidelity_sum
-  if ("avg_trip_share_sum" %in% names(h3_grid_df)) {
-    h3_grid_df <- dplyr::rename(h3_grid_df, avg_fidelity_sum = "avg_trip_share_sum")
-  }
-
   # Collapse year dimension if present (sum totals; min/max dates)
   grid <- if ("year" %in% names(h3_grid_df)) {
     h3_grid_df |>
@@ -117,7 +112,7 @@ derive_fishing_grounds <- function(
         fishing_hours        = sum(.data$fishing_hours),
         unique_trips         = sum(.data$unique_trips),
         n_active_days        = sum(.data$n_active_days, na.rm = TRUE),
-        avg_trip_share_sum   = sum(.data$avg_trip_share_sum, na.rm = TRUE),
+        avg_fidelity_sum     = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
         first_active_date    = min(.data$first_active_date, na.rm = TRUE),
         last_active_date     = max(.data$last_active_date, na.rm = TRUE),
@@ -163,7 +158,7 @@ derive_fishing_grounds <- function(
         fishing_hours        = sum(.data$fishing_hours),
         unique_trips         = sum(.data$unique_trips),
         n_active_days        = sum(.data$n_active_days, na.rm = TRUE),
-        avg_trip_share_sum   = sum(.data$avg_trip_share_sum, na.rm = TRUE),
+        avg_fidelity_sum     = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
         first_active_date    = min(.data$first_active_date, na.rm = TRUE),
         last_active_date     = max(.data$last_active_date, na.rm = TRUE),
@@ -199,9 +194,9 @@ derive_fishing_grounds <- function(
   # ground-level values are means of cell values (not re-derived from totals)
   filtered <- filtered |>
     dplyr::mutate(
-      avg_trip_share = dplyr::if_else(
+      avg_fidelity = dplyr::if_else(
         .data$n_trips_for_fidelity > 0,
-        .data$avg_trip_share_sum / .data$n_trips_for_fidelity,
+        .data$avg_fidelity_sum / .data$n_trips_for_fidelity,
         NA_real_
       ),
       constancy = .data$n_active_days / n_total_days,
@@ -238,7 +233,7 @@ derive_fishing_grounds <- function(
       unique_trips       = sum(.data$unique_trips, na.rm = TRUE),
       n_active_days      = sum(.data$n_active_days, na.rm = TRUE),
       n_cells            = dplyr::n(),
-      avg_trip_share     = mean(.data$avg_trip_share, na.rm = TRUE),
+      avg_fidelity       = mean(.data$avg_fidelity, na.rm = TRUE),
       constancy          = mean(.data$constancy, na.rm = TRUE),
       avg_hours_per_day  = mean(.data$avg_hours_per_day, na.rm = TRUE),
       avg_visits_per_day = mean(.data$avg_visits_per_day, na.rm = TRUE),

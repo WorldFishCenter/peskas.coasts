@@ -70,7 +70,7 @@ prepare_tracks_for_effort <- function(df, h3_res) {
 #'    per-ping time intervals (`dt_hours`), assigns H3 cell indices, and
 #'    records per-trip total hours for fidelity computation.
 #' 4. Runs a **two-pass aggregation**: first a trip × cell summary to compute
-#'    the fidelity components (`avg_trip_share_sum`, `n_trips_for_fidelity`),
+#'    the fidelity components (`avg_fidelity_sum`, `n_trips_for_fidelity`),
 #'    then a cell-level summary for effort totals.
 #' 5. Merges with the previously stored grid and uploads the updated version.
 #'
@@ -86,10 +86,10 @@ prepare_tracks_for_effort <- function(df, h3_res) {
 #' - `n_active_days`: count of distinct calendar days with fishing activity.
 #' - `first_active_date` / `last_active_date`: date range for inferring the
 #'   study period length (`n_total_days`) downstream.
-#' - `avg_trip_share_sum`: sum of per-trip fidelity values (fraction of each
+#' - `avg_fidelity_sum`: sum of per-trip fidelity values (fraction of each
 #'   trip's total fishing hours spent in this cell). Divide by
-#'   `n_trips_for_fidelity` to get `avg_trip_share` ∈ [0, 1].
-#' - `n_trips_for_fidelity`: number of trips contributing to `avg_trip_share_sum`.
+#'   `n_trips_for_fidelity` to get `avg_fidelity` ∈ [0, 1].
+#' - `n_trips_for_fidelity`: number of trips contributing to `avg_fidelity_sum`.
 #' - `fishing_pings`: raw GPS point count (retained for QA; not used as a
 #'   primary metric because ping frequency is irregular).
 #'
@@ -111,7 +111,7 @@ prepare_tracks_for_effort <- function(df, h3_res) {
 #'
 #' @return Invisibly returns the merged H3 grid data frame (columns:
 #'   `h3_index`, `year`, `fishing_hours`, `unique_trips`, `n_active_days`,
-#'   `first_active_date`, `last_active_date`, `avg_trip_share_sum`,
+#'   `first_active_date`, `last_active_date`, `avg_fidelity_sum`,
 #'   `n_trips_for_fidelity`, `fishing_pings`), or `NULL` if there was nothing
 #'   to process.
 #'
@@ -184,23 +184,6 @@ aggregate_pds_effort <- function(
         file = grid_local
       )
       existing_grid <- arrow::read_parquet(grid_local)
-      if (!"n_active_days" %in% names(existing_grid)) {
-        existing_grid$n_active_days <- NA_integer_
-      }
-      # Migrate column renamed from avg_trip_share_sum → avg_fidelity_sum
-      if ("avg_trip_share_sum" %in% names(existing_grid)) {
-        existing_grid <- dplyr::rename(
-          existing_grid,
-          avg_fidelity_sum = "avg_trip_share_sum"
-        )
-      }
-      if (!"avg_fidelity_sum" %in% names(existing_grid)) {
-        existing_grid$avg_fidelity_sum <- NA_real_
-        existing_grid$n_trips_for_fidelity <- 0L
-        existing_grid$first_active_date <- as.Date(NA)
-        existing_grid$last_active_date <- as.Date(NA)
-      }
-
       logger::log_info("Loaded existing grid with {nrow(existing_grid)} rows")
     },
     error = function(e) {
@@ -312,7 +295,7 @@ aggregate_pds_effort <- function(
   cell_fidelity <- trip_cell |>
     dplyr::group_by(.data$h3_index, .data$year) |>
     dplyr::summarise(
-      avg_trip_share_sum = sum(.data$trip_share, na.rm = TRUE),
+      avg_fidelity_sum = sum(.data$trip_share, na.rm = TRUE),
       n_trips_for_fidelity = sum(!is.na(.data$trip_share)),
       .groups = "drop"
     )
@@ -345,7 +328,7 @@ aggregate_pds_effort <- function(
         n_active_days = sum(.data$n_active_days, na.rm = TRUE),
         first_active_date = min(.data$first_active_date, na.rm = TRUE),
         last_active_date = max(.data$last_active_date, na.rm = TRUE),
-        avg_trip_share_sum = sum(.data$avg_trip_share_sum, na.rm = TRUE),
+        avg_fidelity_sum = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
         fishing_pings = sum(.data$fishing_pings),
         .groups = "drop"

@@ -52,7 +52,7 @@ An `sf` POLYGON object in WGS84 (EPSG 4326) with columns:
     \item{`n_active_days`}{Sum of cell-level active days across all
       constituent H3 cells.}
     \item{`n_cells`}{Number of H3 cells that make up the ground.}
-    \item{`avg_trip_share`}{Mean across cells of the average fraction of
+    \item{`avg_fidelity`}{Mean across cells of the average fraction of
       visiting trips' fishing time spent in each cell. Bounded [0, 1].
       Higher values indicate stronger habitat preference (fidelity).}
     \item{`constancy`}{Mean across cells of the fraction of study days each
