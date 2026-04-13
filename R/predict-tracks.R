@@ -364,9 +364,6 @@ predict_pds_tracks <- function(
   fetched_ids <- names(all_tracks)
 
   # --- Stage 2: Sequential predict + upload in batches (Python bound) ---
-  # Force HTTP/1.1 to avoid HTTP/2 framing errors on GCS uploads in CI.
-  # curl constant: CURL_HTTP_VERSION_1_1 = 2 (not HTTP/2 which would be 3).
-  httr::set_config(httr::config(http_version = 2L))
   track_batches <- split(
     fetched_ids,
     ceiling(seq_along(fetched_ids) / batch_size)
