@@ -1,0 +1,40 @@
+---
+title: "Understanding the Models"
+description: "An accessible overview of CPUE, H3 Hexagons, and spatial fisheries metrics."
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Understanding the Models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+When you look at the Peskas Coasts dashboard, you are seeing the results of several spatial and statistical methods. Here is a brief overview of the core concepts driving the analytics.
+
+## 1. The H3 Hexagonal Grid
+
+**Why Hexagons?**
+Instead of showing exact GPS points (which can be visually overwhelming and compromise the privacy of individual fishers), we divide the ocean into a honeycomb-like grid using Uber's **H3** indexing system. 
+
+Hexagons are ideal for spatial analysis because the distance from the center of a hexagon to all its neighbors is identical. This makes calculating movement and effort across the ocean mathematically consistent. When you see a "hotspot" on our map, you are seeing aggregated data representing a specific hex cell of the ocean.
+
+## 2. Catch Per Unit Effort (CPUE)
+
+**What is it?**
+If two boats each catch 100kg of fish, but Boat A fished for 2 hours and Boat B fished for 10 hours, the health of the fishery they visited is very different. 
+
+**CPUE** (Catch Per Unit Effort) solves this by providing a ratio: *Total Catch (kg) divided by Total Fishing Time (hours).*
+
+**How we calculate it spatially:**
+In the `model_cpue()` step of our pipeline, we look at an individual H3 hexagon on the map. We sum up the total weight of fish caught by all boats that visited that hexagon, and divide it by the total number of hours those boats spent actively fishing there. 
+
+To handle messy real-world data, the pipeline uses two methods:
+* **Weighted Method**: A robust, direct ratio best used when data is sparse.
+* **NNLS (Non-Negative Least Squares)**: A rigorous statistical deconvolution used when we have a high density of overlapping trips.
+
+## 3. Defining "Fishing Grounds"
+
+Not every place a boat stops is a fishing ground. The `derive_fishing_grounds()` function builds boundaries around actual fishing areas.
+
+It does this by looking at the H3 grid and filtering out areas with low activity (e.g., requiring at least 3 unique trips and a median number of GPS pings). It then merges the surviving hexagons together to draw continuous polygons representing active fishing grounds.
+
+These methods allow policymakers to understand the patterns of fishing effort and catch along the coast.
