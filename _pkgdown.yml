@@ -14,7 +14,7 @@ template:
 navbar:
   title: "Peskas Coasts"
   structure:
-    left: [intro, articles, reference]
+    left: [intro, articles, reference, news]
     right: [peskas, github]
   components:
     intro:
