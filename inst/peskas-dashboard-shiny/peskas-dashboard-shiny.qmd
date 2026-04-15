@@ -102,7 +102,7 @@ $(document).on('shiny:connected', function() {
 
 required_packages <- c(
   "arrow", "dplyr", "tidyr", "lubridate", "stringr",
-  "tibble", "ggplot2", "ggrepel", "scales",
+  "tibble", "ggplot2", "ggrepel", "scales", "rfishbase",
   "treemapify", "viridis", "knitr", "kableExtra", "DT", "vegan", "shiny"
 )
 install_if_missing <- function(pkgs) {
@@ -303,6 +303,82 @@ wellbeing_data <- reactive({
     )
 })
 
+# ── FishBase vulnerability ────────────────────────────────────────────────────
+taxa_vuln <- reactive({
+  req(input$country)
+  withProgress(message = "Loading FishBase data...", {
+    conf <- coasts::read_config()
+    meta <- coasts::cloud_object_name(
+      prefix    = conf$metadata$airtable$name,
+      provider  = conf$storage$google$key,
+      version   = "latest",
+      extension = "rds",
+      options   = conf$storage$google$options
+    ) |>
+      coasts::download_cloud_file(
+        provider = conf$storage$google$key,
+        options  = conf$storage$google$options
+      ) |>
+      readr::read_rds()
+
+    taxa_lookup <- meta$taxa %>%
+      select(alpha3_code, scientific_name, english_name) %>%
+      distinct()
+
+    vuln <- rfishbase::species(
+      species_list = taxa_lookup$scientific_name,
+      fields = c("Species", "Vulnerability", "VulnerabilityClimate")
+    ) %>%
+      rename(scientific_name       = Species,
+             vulnerability_fishing = Vulnerability,
+             vulnerability_climate = VulnerabilityClimate)
+
+    taxa_lookup %>%
+      left_join(vuln, by = "scientific_name")
+  })
+})
+
+rarity_base <- reactive({
+  req(df(), taxa_vuln())
+  df() %>%
+    group_by(catch_taxon, month_num) %>%
+    summarise(
+      frequency = n_distinct(trip_id),
+      total_kg  = sum(catch_kg, na.rm = TRUE),
+      n_sites   = n_distinct(district),
+      .groups   = "drop"
+    ) %>%
+    group_by(month_num) %>%
+    mutate(
+      freq_pct    = frequency / sum(frequency) * 100,
+      biomass_pct = total_kg  / sum(total_kg)  * 100,
+      season      = case_when(
+        month_num %in% c(12, 1, 2)  ~ "Dec–Feb",
+        month_num %in% c(3, 4, 5)   ~ "Mar–May",
+        month_num %in% c(6, 7, 8)   ~ "Jun–Aug",
+        month_num %in% c(9, 10, 11) ~ "Sep–Nov"
+      )
+    ) %>%
+    ungroup() %>%
+    left_join(
+      taxa_vuln() %>%
+        select(alpha3_code, scientific_name, english_name,
+               vulnerability_fishing, vulnerability_climate) %>%
+        mutate(alpha3_code = str_to_title(alpha3_code)),
+      by = c("catch_taxon" = "alpha3_code")
+    )
+})
+
+taxa_choices <- reactive({
+  req(rarity_base())
+  rarity_base() %>%
+    group_by(catch_taxon) %>%
+    summarise(total_kg = sum(total_kg), .groups = "drop") %>%
+    slice_max(total_kg, n = 20) %>%
+    pull(catch_taxon)
+})
+
+
 # ── Overview ──────────────────────────────────────────────────────────────────
 output$p_top10 <- renderPlot({
   req(top_taxa())
@@ -403,13 +479,75 @@ output$p_rarity <- renderPlot({
                                biomass_pct>quantile(biomass_pct,0.80) |
                                category=="Rare · High Yield"),
       aes(label=catch_taxon), size=2.8, max.overlaps=14, seed=42, show.legend=FALSE) +
-    scale_colour_manual(values=c("Dominant"="#29B6F6","Frequent · Low Yield"="#66BB6A",
-                                  "Rare · High Yield"="#EF5350","Rare · Low Yield"="#5a6880"),
-                        name="Category") +
+    scale_colour_manual(
+      values=c("Dominant"="#29B6F6","Frequent · Low Yield"="#66BB6A",
+               "Rare · High Yield"="#EF5350","Rare · Low Yield"="#5a6880"),
+      name="Category") +
     scale_size_continuous(range=c(2,8), name="Districts") +
     scale_x_log10() + scale_y_log10() +
-    labs(x="Frequency (% trips) — log", y="Biomass (% total kg) — log", caption=src_cap()) +
+    labs(x="Frequency (% trips) — log", y="Biomass (% total kg) — log",
+         caption=src_cap()) +
     guides(colour=guide_legend(override.aes=list(size=4,shape=16)), size="none")
+})
+
+output$taxa_selector <- renderUI({
+  req(taxa_choices())
+  selectInput("selected_taxa", label = NULL,
+              choices  = taxa_choices(),
+              selected = taxa_choices()[1:5],
+              multiple = TRUE,
+              width    = "100%")
+})
+
+output$p_rarity_vuln <- renderPlot({
+  req(df(), taxa_vuln(), input$vuln_type)
+
+  rarity <- df() %>%
+    group_by(catch_taxon) %>%
+    summarise(frequency   = n_distinct(trip_id),
+              total_kg    = sum(catch_kg, na.rm = TRUE),
+              n_sites     = n_distinct(district), .groups = "drop") %>%
+    mutate(freq_pct    = frequency / n_distinct(df()$trip_id) * 100,
+           biomass_pct = total_kg / sum(total_kg) * 100) %>%
+    left_join(
+      taxa_vuln() %>%
+        select(alpha3_code, vulnerability_fishing, vulnerability_climate) %>%
+        mutate(alpha3_code = str_to_title(alpha3_code)),
+      by = c("catch_taxon" = "alpha3_code")
+    ) %>%
+    mutate(vuln = if (input$vuln_type == "fishing") vulnerability_fishing
+                 else vulnerability_climate)
+
+  vuln_label <- if (input$vuln_type == "fishing") "Fishing Vulnerability (0–100)"
+                else "Climate Vulnerability (0–100)"
+
+  ggplot(rarity, aes(x = freq_pct, y = biomass_pct)) +
+    geom_hline(yintercept = median(rarity$biomass_pct),
+               linetype = "dashed", colour = "#5a6880") +
+    geom_vline(xintercept = median(rarity$freq_pct),
+               linetype = "dashed", colour = "#5a6880") +
+    geom_point(aes(size = n_sites, colour = vuln), alpha = 0.85) +
+    geom_text_repel(
+      data = rarity %>% filter(
+        freq_pct    > quantile(freq_pct,    0.80, na.rm = TRUE) |
+        biomass_pct > quantile(biomass_pct, 0.80, na.rm = TRUE)
+      ),
+      aes(label = catch_taxon), size = 2.8, max.overlaps = 14,
+      seed = 42, show.legend = FALSE, colour = "#c0c8d8"
+    ) +
+    scale_colour_gradientn(
+      colours  = c("#66BB6A", "#FDD835", "#FB8C00", "#EF5350"),
+      na.value = "#5a6880",
+      name     = vuln_label,
+      limits   = c(0, 100)
+    ) +
+    scale_size_continuous(range = c(2, 8), name = "Districts") +
+    scale_x_log10() + scale_y_log10() +
+    labs(x = "Frequency (% trips) — log", y = "Biomass (% total kg) — log",
+         subtitle = "Grey = no FishBase match · Green→Red = low→high vulnerability",
+         caption  = src_cap()) +
+    guides(colour = guide_colorbar(barwidth = 8, barheight = 0.5,
+                                   title.position = "top"), size = "none")
 })
 
 output$p_catch_region <- renderPlot({
@@ -427,6 +565,74 @@ output$p_catch_region <- renderPlot({
     scale_fill_manual(values=setNames(pal_ocean,top_taxa()$top8), name="Taxon") +
     labs(x=NULL, y="% of Regional Catch",
          subtitle="Top 8 taxa · stacked by region", caption=src_cap())
+})
+
+output$high_vuln_alert <- renderUI({
+  req(df(), taxa_vuln(), input$vuln_type)
+
+  rarity <- df() %>%
+    group_by(catch_taxon) %>%
+    summarise(frequency   = n_distinct(trip_id),
+              total_kg    = sum(catch_kg, na.rm = TRUE), .groups = "drop") %>%
+    mutate(freq_pct    = frequency / n_distinct(df()$trip_id) * 100,
+           biomass_pct = total_kg / sum(total_kg) * 100) %>%
+    left_join(
+      taxa_vuln() %>%
+        select(alpha3_code, english_name, vulnerability_fishing, vulnerability_climate) %>%
+        mutate(alpha3_code = str_to_title(alpha3_code)),
+      by = c("catch_taxon" = "alpha3_code")
+    ) %>%
+    mutate(vuln = if (input$vuln_type == "fishing") vulnerability_fishing
+                 else vulnerability_climate)
+
+  # Dominant quadrant = above median on both axes + high vulnerability
+  median_freq    <- median(rarity$freq_pct, na.rm = TRUE)
+  median_biomass <- median(rarity$biomass_pct, na.rm = TRUE)
+
+  high_risk <- rarity %>%
+    filter(freq_pct    > median_freq,
+           biomass_pct > median_biomass,
+           vuln        > 75) %>%
+    arrange(desc(vuln)) %>%
+    mutate(label = ifelse(!is.na(english_name) & english_name != "",
+                          paste0(catch_taxon, " (", english_name, ")"),
+                          catch_taxon),
+           vuln_fmt = round(vuln, 1))
+
+  if (nrow(high_risk) == 0) {
+    tags$div(
+      style = "background:#1e3a2f; border-left:4px solid #66BB6A;
+               padding:10px 14px; border-radius:6px; color:#c0c8d8; font-size:0.85rem;",
+      tags$b("✓ No high-risk dominant species"),
+      tags$p(style="margin:4px 0 0;",
+             "No dominant species exceed 75% vulnerability threshold.")
+    )
+  } else {
+    vuln_type_label <- if (input$vuln_type == "fishing") "fishing" else "climate"
+    species_tags <- lapply(seq_len(nrow(high_risk)), function(i) {
+      tags$div(
+        style = "display:flex; justify-content:space-between; align-items:center;
+                 padding:4px 0; border-bottom:1px solid #2e3448;",
+        tags$span(style="color:#e0e6f0; font-weight:bold;", high_risk$label[i]),
+        tags$span(
+          style = paste0("background:", ifelse(high_risk$vuln_fmt[i] > 90,
+                                               "#EF5350", "#FB8C00"),
+                         "; color:white; padding:2px 8px;
+                          border-radius:4px; font-size:0.8rem; font-weight:bold;"),
+          paste0(high_risk$vuln_fmt[i], "%")
+        )
+      )
+    })
+
+    tags$div(
+      style = "background:#2a1f1f; border-left:4px solid #EF5350;
+               padding:10px 14px; border-radius:6px;",
+      tags$b(style="color:#EF5350; font-size:0.9rem;",
+             paste0("⚠ ", nrow(high_risk), " dominant species with high ",
+                    vuln_type_label, " vulnerability (>75%)")),
+      tags$div(style="margin-top:8px;", species_tags)
+    )
+  }
 })
 
 # ── Seasonality ───────────────────────────────────────────────────────────────
@@ -651,55 +857,6 @@ output$p_lf_table <- DT::renderDT({
                   options=list(pageLength=10,dom="ftp"), class="compact stripe")
 })
 
-# ── Socio-Economic ────────────────────────────────────────────────────────────
-output$p_fishers_region <- renderPlot({
-  req(trips(), pal_geo())
-  trips() %>% filter(!is.na(n_fishers), n_fishers>0) %>%
-    ggplot(aes(x=reorder(province,n_fishers,FUN=median), y=n_fishers, fill=province)) +
-    geom_violin(alpha=0.55, colour=NA, scale="width") +
-    geom_boxplot(width=0.14, outlier.shape=NA, colour="#8a9bb8", fill="#2e3448") +
-    stat_summary(fun=median, geom="point", shape=18, size=3, colour="#FB8C00") +
-    coord_flip() + scale_fill_manual(values=pal_geo()) +
-    labs(x=NULL, y="Number of Fishers per Trip",
-         subtitle="Orange diamond = median", caption=src_cap()) +
-    theme(legend.position="none")
-})
-
-output$p_vessel_gear <- renderPlot({
-  req(trips(), pal_gear())
-  trips() %>% filter(!is.na(vessel_type), vessel_type!="") %>%
-    count(vessel_type,gear) %>%
-    group_by(vessel_type) %>% mutate(pct=n/sum(n)*100) %>% ungroup() %>%
-    ggplot(aes(x=reorder(vessel_type,n), y=pct, fill=gear)) +
-    geom_col(position="fill", width=0.7, colour="#242938", linewidth=0.3) +
-    geom_text(aes(label=ifelse(pct>5,paste0(round(pct,0),"%"),"")),
-              position=position_fill(vjust=0.5), size=2.8, colour="white", fontface="bold") +
-    coord_flip() +
-    scale_y_continuous(labels=scales::percent_format(), expand=c(0,0)) +
-    scale_fill_manual(values=pal_gear(), name="Gear") +
-    labs(x=NULL, y="% of Trips", subtitle="Gear type breakdown by vessel", caption=src_cap())
-})
-
-output$p_catch_use <- renderPlot({
-  req(trips(), pal_geo())
-  use_data <- trips() %>% filter(!is.na(catch_use), catch_use!="") %>%
-    count(province,catch_use) %>%
-    group_by(province) %>% mutate(pct=n/sum(n)*100) %>% ungroup()
-  if (nrow(use_data)==0) {
-    ggplot() + annotate("text",x=0.5,y=0.5,label="Catch use data not available.",
-                        size=5,colour="#8a9bb8") + theme_void()
-  } else {
-    ggplot(use_data, aes(x=reorder(province,n), y=pct, fill=catch_use)) +
-      geom_col(position="fill", width=0.7, colour="#242938", linewidth=0.3) +
-      geom_text(aes(label=ifelse(pct>3,paste0(round(pct,0),"%"),"")),
-                position=position_fill(vjust=0.5), size=3, colour="white", fontface="bold") +
-      coord_flip() +
-      scale_y_continuous(labels=scales::percent_format(), expand=c(0,0)) +
-      scale_fill_brewer(palette="Set2", name="Catch Use") +
-      labs(x=NULL, y="% of Trips", caption=src_cap())
-  }
-})
-
 # ── Market & Value Chain ──────────────────────────────────────────────────────
 output$p_price_taxon <- renderPlot({
   req(df())
@@ -855,17 +1012,27 @@ plotOutput("p_diversity")
 ## Row
 
 ### Column {width="50%"}
-
 ```{r}
 #| title: "Rarity–Biomass Quadrant"
-plotOutput("p_rarity")
+plotOutput("p_rarity", height = "460px")
 ```
 
 ### Column {width="50%"}
+```{r}
+#| title: "Vulnerability Overlay"
+selectInput("vuln_type", label = NULL,
+            choices  = c("Fishing vulnerability" = "fishing",
+                         "Climate vulnerability"  = "climate"),
+            selected = "fishing", width = "200px")
+plotOutput("p_rarity_vuln", height = "360px")
+uiOutput("high_vuln_alert")
+```
+
+## Row
 
 ```{r}
 #| title: "Catch Composition by Region"
-plotOutput("p_catch_region")
+plotOutput("p_catch_region", height = "380px")
 ```
 
 # Seasonality
@@ -975,31 +1142,6 @@ plotOutput("p_lf_facets")
 ```{r}
 #| title: "Length Summary by Taxon"
 DT::DTOutput("p_lf_table")
-```
-
-# Socio-Economic
-
-## Row
-
-### Column {width="50%"}
-
-```{r}
-#| title: "Fisher Effort by Region"
-plotOutput("p_fishers_region", height = "380px")
-```
-
-### Column {width="50%"}
-
-```{r}
-#| title: "Vessel Type × Gear Combinations"
-plotOutput("p_vessel_gear", height = "380px")
-```
-
-## Row
-
-```{r}
-#| title: "Catch Utilisation by Region"
-plotOutput("p_catch_use", height = "340px")
 ```
 
 # Market & Value Chain
