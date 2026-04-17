@@ -286,6 +286,8 @@ cloud_object_name <- function(
 #' @param provider A character string specifying the cloud provider ("gcs" or "aws").
 #' @param options A named list of options specific to the cloud provider. For
 #'   GCS, must include `service_account_key`.
+#' @param force A logical value indicating whether to force re-authentication.
+#'   Default is FALSE.
 #'
 #' @return Invisible NULL (called for side effects).
 #'

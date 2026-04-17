@@ -11,6 +11,9 @@ cloud_storage_authenticate(provider, options, force = FALSE)
 
 \item{options}{A named list of options specific to the cloud provider. For
 GCS, must include `service_account_key`.}
+
+\item{force}{A logical value indicating whether to force re-authentication.
+Default is FALSE.}
 }
 \value{
 Invisible NULL (called for side effects).
