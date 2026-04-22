@@ -508,3 +508,145 @@ plot_cpue_map <- function(
       position = "bottomright"
     )
 }
+
+
+#' Interactive Leaflet Map of Fishing Effort by Gear Type
+#'
+#' Same as [plot_effort_map()] but the layer toggle uses gear type instead
+#' of year. Uses matched trips only (gear is recorded in Kobo surveys, not
+#' in raw PDS tracks).
+#'
+#' @param trips Combined effort + catch tibble from [join_effort_catch()],
+#'   must contain columns `h3_index`, `fishing_hours`, `trip`, `gear`.
+#' @param metric Column to colour hexagons by: `"fishing_hours"` (default)
+#'   or `"n_trips"`.
+#'
+#' @return A `leaflet` htmlwidget.
+#'
+#' @seealso [plot_effort_map()], [model_cpue()]
+#'
+#' @keywords modeling
+#' @export
+plot_effort_map_gear <- function(
+    trips,
+    metric = c("fishing_hours", "n_trips")
+) {
+  metric <- match.arg(metric)
+  legend_title <- switch(
+    metric,
+    fishing_hours = "log(Fishing hours)",
+    n_trips       = "log(Trips)"
+  )
+  
+  gears <- sort(unique(na.omit(trips$gear)))
+  
+  effort_hex <- trips |>
+    dplyr::filter(!is.na(.data$gear)) |>
+    dplyr::group_by(.data$h3_index, .data$gear) |>
+    dplyr::summarise(
+      fishing_hours = sum(.data$fishing_hours, na.rm = TRUE),
+      n_trips       = dplyr::n_distinct(.data$trip),
+      .groups       = "drop"
+    )
+  
+  unique_cells <- unique(effort_hex$h3_index)
+  polys <- sf::st_sf(
+    h3_index = unique_cells,
+    geometry = h3jsr::cell_to_polygon(unique_cells, simple = TRUE),
+    crs = 4326
+  )
+  effort_sf <- dplyr::left_join(polys, effort_hex, by = "h3_index")
+  
+  active_vals <- log1p(effort_sf[[metric]])
+  pal <- leaflet::colorNumeric(
+    palette  = "YlOrRd",
+    domain   = active_vals,
+    na.color = "transparent"
+  )
+  
+  m <- leaflet::leaflet() |>
+    leaflet::addProviderTiles(
+      leaflet::providers$CartoDB.DarkMatter,
+      group = "bm_dark"
+    ) |>
+    leaflet::addProviderTiles(
+      leaflet::providers$CartoDB.Positron,
+      group = "bm_light"
+    ) |>
+    leaflet::addProviderTiles(
+      leaflet::providers$Esri.WorldImagery,
+      group = "bm_satellite"
+    ) |>
+    leaflet::addControl(
+      htmltools::HTML(
+        "
+        <div id='bm-ctrl' style='background:rgba(0,0,0,0.7);padding:8px 10px;
+             border-radius:6px;color:white;font-family:system-ui,sans-serif;
+             font-size:12px;line-height:1.8;'>
+          <div style='font-weight:600;margin-bottom:4px;color:#aaa;'>Basemap</div>
+          <label><input type='radio' name='bm' value='bm_dark' checked> Dark</label><br>
+          <label><input type='radio' name='bm' value='bm_light'      > Light</label><br>
+          <label><input type='radio' name='bm' value='bm_satellite'  > Satellite</label>
+        </div>
+        "
+      ),
+      position = "topright"
+    )
+  
+  for (gr in gears) {
+    ld <- effort_sf |> dplyr::filter(.data$gear == gr)
+    fill_vec  <- pal(log1p(ld[[metric]]))
+    popup_vec <- glue::glue_data(
+      ld,
+      "<div style='font-family:system-ui,sans-serif;font-size:13px;line-height:1.8;'>",
+      "<b>Gear:</b> {gear}<br>",
+      "<b>Fishing hours:</b> {round(fishing_hours, 1)} h<br>",
+      "<b>Trips:</b> {n_trips}",
+      "</div>"
+    )
+    m <- m |>
+      leaflet::addPolygons(
+        data        = ld,
+        fillColor   = fill_vec,
+        fillOpacity = 0.75,
+        color       = "transparent",
+        weight      = 0,
+        popup       = popup_vec,
+        group       = gr
+      )
+  }
+  
+  m |>
+    leaflet::addLayersControl(
+      baseGroups = gears,
+      options    = leaflet::layersControlOptions(collapsed = FALSE)
+    ) |>
+    leaflet::addLegend(
+      pal       = pal,
+      values    = active_vals,
+      title     = legend_title,
+      position  = "bottomright",
+      labFormat = leaflet::labelFormat(
+        transform = function(x) round(expm1(x), 1)
+      )
+    ) |>
+    leaflet::addScaleBar(position = "bottomleft") |>
+    htmlwidgets::onRender(
+      "
+      function(el, x) {
+        var map = this;
+        var basemaps = ['bm_dark', 'bm_light', 'bm_satellite'];
+        document.querySelectorAll('#bm-ctrl input[type=radio]').forEach(function(inp) {
+          inp.addEventListener('change', function() {
+            var chosen = this.value;
+            map.eachLayer(function(lyr) {
+              if (lyr.options && basemaps.indexOf(lyr.options.group) !== -1) {
+                lyr.setOpacity(lyr.options.group === chosen ? 1 : 0);
+              }
+            });
+          });
+        });
+      }
+      "
+    )
+}

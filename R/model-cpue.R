@@ -30,7 +30,8 @@ load_matched_trips <- function(conf) {
       pds_trip = as.character(.data$pds_trip),
       landing_date = as.Date(.data$landing_date),
       catch_taxon = stringr::str_to_title(stringr::str_trim(.data$catch_taxon)),
-      catch_kg = as.numeric(.data$catch_kg)
+      catch_kg = as.numeric(.data$catch_kg),
+      gear = stringr::str_to_title(stringr::str_trim(.data$gear))
     )
 
   logger::log_info(
@@ -174,13 +175,13 @@ build_catch_wide <- function(matched) {
   logger::log_info("Building catch matrix from trips-matched ...")
 
   catch_wide <- matched |>
-    dplyr::group_by(.data$pds_trip, .data$country, .data$catch_taxon) |>
+    dplyr::group_by(.data$pds_trip, .data$country, .data$gear, .data$catch_taxon) |>
     dplyr::summarise(
       catch_kg = sum(.data$catch_kg, na.rm = TRUE),
       .groups = "drop"
     ) |>
     tidyr::pivot_wider(
-      id_cols = c("pds_trip", "country"),
+      id_cols = c("pds_trip", "country", "gear"),
       names_from = "catch_taxon",
       values_from = "catch_kg",
       values_fill = 0
@@ -314,7 +315,7 @@ join_effort_catch <- function(effort, catch_wide) {
 run_weighted_cpue <- function(trips, top_n, min_trips) {
   logger::log_info("Running weighted CPUE model (catch / effort per cell) ...")
 
-  meta_cols <- c("trip", "h3_index", "country", "year", "fishing_hours")
+  meta_cols <- c("trip", "h3_index", "country", "gear", "year", "fishing_hours")
   top_species <- .top_species(trips, meta_cols, top_n)
 
   catch_per_trip <- trips |>
