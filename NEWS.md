@@ -1,3 +1,8 @@
+# coasts 4.1.0
+
+* **IMPROVEMENT** Kenya matched trips now combine surveys from all Kenyan sources, not just KEFS — giving a more complete picture of fishing activity in the country.
+* **FIX** Restored the fishing-effort aggregation step of the automated pipeline, which had stopped running on the server due to a missing system component.
+
 # coasts 4.0.0
 
 ## Spatial CPUE Model Pipeline

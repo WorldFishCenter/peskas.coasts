@@ -31,6 +31,7 @@ default:
         validated: wf-surveys-validated
         merged: wf-surveys-merged
     kenya:
+      merged: kenya-surveys-matched-trips
       kefs:
         validated: kefs-v2-surveys-validated
         merged: kefs-v2-surveys-merged
