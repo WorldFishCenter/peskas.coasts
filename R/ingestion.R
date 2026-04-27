@@ -348,6 +348,24 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
           "community"
         ),
         conf = conf
+      ),
+      frame = fetch_asset(
+        table_name = "frame",
+        select_cols = c(
+          "country",
+          "gaul_1_name",
+          "gaul_1_code",
+          "gaul_2_name",
+          "gaul_2_code",
+          "gear_or_boat_type",
+          "category_kind",
+          "standard_name",
+          "standard_code",
+          "n_boats",
+          "fishers_male",
+          "fishers_female"
+        ),
+        conf = conf
       )
     ) |>
     purrr::map(~ dplyr::distinct(.x))

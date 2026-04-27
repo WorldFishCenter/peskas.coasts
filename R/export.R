@@ -939,3 +939,109 @@ export_pds_spatial <- function(
   logger::log_info("=== Web spatial export complete ===")
   invisible(NULL)
 }
+
+
+#' Export Fishing Frame Gear Composition as Web-Ready JSON
+#'
+#' @description
+#' Reads the airtable assets snapshot from cloud storage, derives a
+#' country / region / gear summary of male and female fishers, and uploads
+#' the result as a versioned JSON file for portal consumption.
+#'
+#' @details
+#' The output JSON has one record per `(country, gaul1_name, gaul2_name,
+#' gear_name)` combination with `fishers_male` and `fishers_female` totals.
+#' Files follow the package's `add_version()` convention
+#' (`prefix__YYYYMMDDHHMMSS__extension`).
+#'
+#' @param log_threshold Logging threshold. Default is `logger::DEBUG`.
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`. Pass your own package name when calling from a downstream
+#'   package with a compatible configuration.
+#'
+#' @return Invisibly `NULL`. Uploads one JSON file to GCS as a side effect.
+#'
+#' @seealso [resolve_storage_opts()], [upload_cloud_file()], [add_version()]
+#'
+#' @keywords workflow export
+#' @export
+export_frame_data <- function(
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+  coasts_opts <- resolve_storage_opts(conf, "coasts")
+
+  logger::log_info("Loading airtable assets snapshot ...")
+  frame <- conf$metadata$airtable$name |>
+    cloud_object_name(
+      provider = conf$storage$google$key,
+      version = "latest",
+      extension = "rds",
+      options = coasts_opts
+    ) |>
+    download_cloud_file(
+      provider = conf$storage$google$key,
+      options = coasts_opts
+    ) |>
+    readr::read_rds() |>
+    purrr::pluck("frame") |>
+    dplyr::rename(
+      gaul1_name = "gaul_1_name",
+      gaul2_name = "gaul_2_name",
+      gear_name = "standard_name"
+    )
+
+  #treated differently as there is no gear data
+  moz_frame <-
+    frame |>
+    dplyr::filter(.data$country == "Mozambique") |>
+    dplyr::group_by(
+      .data$country,
+      .data$gaul1_name,
+      .data$gaul2_name
+    ) |>
+    dplyr::summarise(
+      fishers_male = sum(.data$fishers_male),
+      fishers_female = sum(.data$fishers_female),
+      n_boats = sum(.data$n_boats),
+      .groups = "drop"
+    )
+
+  gears <- frame |>
+    dplyr::filter(.data$category_kind == "gear") |>
+    dplyr::group_by(
+      .data$country,
+      .data$gaul1_name,
+      .data$gaul2_name,
+      .data$gear_name
+    ) |>
+    dplyr::summarise(
+      fishers_male = sum(.data$fishers_male),
+      fishers_female = sum(.data$fishers_female),
+      n_boats = sum(.data$n_boats),
+      .groups = "drop"
+    ) |>
+    dplyr::bind_rows(moz_frame)
+
+  logger::log_info("Frame gears: {nrow(gears)} rows")
+
+  gears_filename <- add_version(
+    conf$pds$portal$frame_gears$file_prefix,
+    extension = "json"
+  )
+  on.exit(
+    if (file.exists(gears_filename)) file.remove(gears_filename),
+    add = TRUE
+  )
+  writeLines(jsonlite::toJSON(gears, auto_unbox = TRUE), gears_filename)
+  upload_cloud_file(
+    file = gears_filename,
+    provider = conf$storage$google$key,
+    options = coasts_opts
+  )
+  logger::log_info("Uploaded: {basename(gears_filename)}")
+
+  invisible(NULL)
+}

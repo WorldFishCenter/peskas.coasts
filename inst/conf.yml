@@ -80,6 +80,12 @@ default:
       fishing_grounds:
         file_prefix: pds-fishing-grounds
         version: latest
+      fishers_stats:
+        file_prefix: fishers-stats
+        version: latest
+      frame_gears:
+        file_prefix: frame-gears
+        version: latest
   tracks_app:
     backup_users:
       file_prefix: backup-users
