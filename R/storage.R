@@ -267,7 +267,8 @@ cloud_object_name <- function(
 
     if (version == "latest") {
       selected_rows <- selected_rows %>%
-        dplyr::filter(max(.data$updated) == .data$updated)
+        dplyr::filter(!is.na(.data$updated)) %>%
+        dplyr::filter(.data$updated == max(.data$updated))
     } else {
       this_version <- version
       selected_rows <- selected_rows %>%

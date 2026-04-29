@@ -1,3 +1,6 @@
+# coasts 4.2.0
+* **FIX** Fix critical bug in downloading versioned files
+
 # coasts 4.1.0
 
 * **IMPROVEMENT** Kenya matched trips now combine surveys from all Kenyan sources, not just KEFS — giving a more complete picture of fishing activity in the country.
