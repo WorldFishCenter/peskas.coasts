@@ -1,3 +1,7 @@
+# coasts 4.2.1
+
+* **IMPROVEMENT** Filter out NAs in countries taxa summary (in `export_portal()`) to save storage space and loading time
+
 # coasts 4.2.0
 * **FIX** Fix critical bug in downloading versioned files
 

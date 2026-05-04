@@ -665,10 +665,15 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
       values_to = "value"
     )
 
+  # Filter out NAs
+  taxa_summaries_filtered <-
+    data_summaries$taxa_summaries |>
+    dplyr::filter(!is.na(.data$value))
+
   # Dataframes to upload
   dataframes_to_upload <- list(
     monthly_summaries = monthly_summaries,
-    taxa_summaries = data_summaries$taxa_summaries,
+    taxa_summaries = taxa_summaries_filtered,
     districts_summaries = districts_summaries,
     gear_summaries = data_summaries$gear_summaries,
     grid_summaries = data_summaries$grid_summaries
