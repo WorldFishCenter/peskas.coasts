@@ -203,6 +203,21 @@ aggregate_pds_effort <- function(
     existing_grid <- NULL
   }
 
+  # --- Detect schema change → force full rebuild ---
+  # `active_dates` was added so that incremental merges can deduplicate days
+  # by union rather than by sum. Older grids lack this column and cannot be
+  # merged correctly, so discard them and re-aggregate all parquets.
+  schema_changed <- !is.null(existing_grid) &&
+    !"active_dates" %in% names(existing_grid)
+
+  if (schema_changed) {
+    logger::log_info(
+      "Grid schema is outdated (missing `active_dates`), rebuilding from scratch"
+    )
+    already_aggregated <- character(0)
+    existing_grid <- NULL
+  }
+
   # --- Filter to only new files ---
   new_files <- setdiff(predicted_files, already_aggregated)
 
@@ -296,15 +311,17 @@ aggregate_pds_effort <- function(
       .groups = "drop"
     )
 
-  # Step 2: main cell aggregation from full prepared data
+  # Step 2: main cell aggregation from full prepared data.
+  # `active_dates` is stored as a list-column of Date so that the merge below
+  # can take the unique union across batches — summing scalar `n_active_days`
+  # across batches double-counts days when the same cell is visited by trips
+  # from different aggregation runs on the same calendar day.
   new_grid <- prepared |>
     dplyr::group_by(.data$h3_index, .data$year) |>
     dplyr::summarise(
       fishing_hours = sum(.data$dt_hours, na.rm = TRUE),
       unique_trips = dplyr::n_distinct(.data$trip),
-      n_active_days = dplyr::n_distinct(as.Date(.data$timestamp)),
-      first_active_date = min(as.Date(.data$timestamp)),
-      last_active_date = max(as.Date(.data$timestamp)),
+      active_dates = list(sort(unique(as.Date(.data$timestamp)))),
       fishing_pings = dplyr::n(),
       .groups = "drop"
     ) |>
@@ -321,9 +338,7 @@ aggregate_pds_effort <- function(
       dplyr::summarise(
         fishing_hours = sum(.data$fishing_hours),
         unique_trips = sum(.data$unique_trips),
-        n_active_days = sum(.data$n_active_days, na.rm = TRUE),
-        first_active_date = min(.data$first_active_date, na.rm = TRUE),
-        last_active_date = max(.data$last_active_date, na.rm = TRUE),
+        active_dates = list(sort(unique(do.call(c, .data$active_dates)))),
         avg_fidelity_sum = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
         fishing_pings = sum(.data$fishing_pings),
@@ -332,6 +347,21 @@ aggregate_pds_effort <- function(
   } else {
     h3_grid <- new_grid
   }
+
+  # Derive scalar fields from the canonical active_dates list-column so they
+  # are always consistent with it.
+  h3_grid <- h3_grid |>
+    dplyr::mutate(
+      n_active_days = lengths(.data$active_dates),
+      first_active_date = as.Date(purrr::map_dbl(
+        .data$active_dates,
+        \(d) if (length(d) > 0) as.numeric(min(d)) else NA_real_
+      )),
+      last_active_date = as.Date(purrr::map_dbl(
+        .data$active_dates,
+        \(d) if (length(d) > 0) as.numeric(max(d)) else NA_real_
+      ))
+    )
 
   # --- Upload updated grid ---
   output_filename <- grid_prefix |>

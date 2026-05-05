@@ -104,21 +104,31 @@ derive_fishing_grounds <- function(
     )
   }
 
-  # Collapse year dimension if present (sum totals; min/max dates)
+  # Collapse year dimension if present. `active_dates` is unioned (not summed)
+  # so n_active_days reflects unique days the cell was active across all years.
   grid <- if ("year" %in% names(h3_grid_df)) {
     h3_grid_df |>
       dplyr::group_by(.data$h3_index) |>
       dplyr::summarise(
         fishing_hours        = sum(.data$fishing_hours),
         unique_trips         = sum(.data$unique_trips),
-        n_active_days        = sum(.data$n_active_days, na.rm = TRUE),
+        active_dates         = list(sort(unique(do.call(c, .data$active_dates)))),
         avg_fidelity_sum     = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
-        first_active_date    = min(.data$first_active_date, na.rm = TRUE),
-        last_active_date     = max(.data$last_active_date, na.rm = TRUE),
         fishing_pings        = if ("fishing_pings" %in% names(h3_grid_df))
           sum(.data$fishing_pings) else NA_integer_,
         .groups = "drop"
+      ) |>
+      dplyr::mutate(
+        n_active_days = lengths(.data$active_dates),
+        first_active_date = as.Date(purrr::map_dbl(
+          .data$active_dates,
+          \(d) if (length(d) > 0) as.numeric(min(d)) else NA_real_
+        )),
+        last_active_date = as.Date(purrr::map_dbl(
+          .data$active_dates,
+          \(d) if (length(d) > 0) as.numeric(max(d)) else NA_real_
+        ))
       )
   } else {
     h3_grid_df
@@ -157,14 +167,23 @@ derive_fishing_grounds <- function(
       dplyr::summarise(
         fishing_hours        = sum(.data$fishing_hours),
         unique_trips         = sum(.data$unique_trips),
-        n_active_days        = sum(.data$n_active_days, na.rm = TRUE),
+        active_dates         = list(sort(unique(do.call(c, .data$active_dates)))),
         avg_fidelity_sum     = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
-        first_active_date    = min(.data$first_active_date, na.rm = TRUE),
-        last_active_date     = max(.data$last_active_date, na.rm = TRUE),
         fishing_pings        = if ("fishing_pings" %in% names(grid))
           sum(.data$fishing_pings) else NA_integer_,
         .groups = "drop"
+      ) |>
+      dplyr::mutate(
+        n_active_days = lengths(.data$active_dates),
+        first_active_date = as.Date(purrr::map_dbl(
+          .data$active_dates,
+          \(d) if (length(d) > 0) as.numeric(min(d)) else NA_real_
+        )),
+        last_active_date = as.Date(purrr::map_dbl(
+          .data$active_dates,
+          \(d) if (length(d) > 0) as.numeric(max(d)) else NA_real_
+        ))
       )
   }
 
@@ -200,8 +219,16 @@ derive_fishing_grounds <- function(
         NA_real_
       ),
       constancy = .data$n_active_days / n_total_days,
-      avg_hours_per_day = .data$fishing_hours / n_total_days,
-      avg_visits_per_day = .data$unique_trips / n_total_days,
+      avg_hours_per_day = dplyr::if_else(
+        .data$n_active_days > 0,
+        .data$fishing_hours / .data$n_active_days,
+        NA_real_
+      ),
+      avg_visits_per_day = dplyr::if_else(
+        .data$n_active_days > 0,
+        .data$unique_trips / .data$n_active_days,
+        NA_real_
+      ),
       hours_per_trip = dplyr::if_else(
         .data$unique_trips > 0,
         .data$fishing_hours / .data$unique_trips,
@@ -224,6 +251,8 @@ derive_fishing_grounds <- function(
 
   # Aggregate effort from constituent H3 cells into each ground polygon.
   # Raw totals are summed; normalised metrics are averaged across cells.
+  # `n_active_days` is computed as the unique union of cell-level active_dates
+  # so the same day fished in multiple cells of the same ground counts once.
   effort_by_ground <- sf::st_join(hex_sf, grounds, join = sf::st_within) |>
     sf::st_drop_geometry() |>
     dplyr::filter(!is.na(.data$ground_id)) |>
@@ -231,7 +260,7 @@ derive_fishing_grounds <- function(
     dplyr::summarise(
       fishing_hours      = sum(.data$fishing_hours, na.rm = TRUE),
       unique_trips       = sum(.data$unique_trips, na.rm = TRUE),
-      n_active_days      = sum(.data$n_active_days, na.rm = TRUE),
+      n_active_days      = length(unique(do.call(c, .data$active_dates))),
       n_cells            = dplyr::n(),
       avg_fidelity       = mean(.data$avg_fidelity, na.rm = TRUE),
       constancy          = mean(.data$constancy, na.rm = TRUE),

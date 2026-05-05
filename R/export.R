@@ -811,8 +811,16 @@ export_pds_spatial <- function(
         NA_real_
       ),
       constancy = .data$n_active_days / n_total_days,
-      avg_hours_per_day = .data$fishing_hours / n_total_days,
-      avg_visits_per_day = .data$unique_trips / n_total_days,
+      avg_hours_per_day = dplyr::if_else(
+        .data$n_active_days > 0,
+        .data$fishing_hours / .data$n_active_days,
+        NA_real_
+      ),
+      avg_visits_per_day = dplyr::if_else(
+        .data$n_active_days > 0,
+        .data$unique_trips / .data$n_active_days,
+        NA_real_
+      ),
       hours_per_trip = dplyr::if_else(
         .data$unique_trips > 0,
         .data$fishing_hours / .data$unique_trips,
