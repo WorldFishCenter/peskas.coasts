@@ -333,6 +333,13 @@ aggregate_pds_effort <- function(
       "Merging with existing grid ({nrow(existing_grid)} rows)"
     )
 
+    # Normalise active_dates to a plain list of Date vectors. The parquet
+    # round-trip drops the vctrs `list<date>` type, leaving existing_grid with
+    # `<list>` while new_grid still has `<list<date>>`; bind_rows refuses to
+    # combine the two.
+    existing_grid$active_dates <- lapply(existing_grid$active_dates, as.Date)
+    new_grid$active_dates <- lapply(new_grid$active_dates, as.Date)
+
     h3_grid <- dplyr::bind_rows(existing_grid, new_grid) |>
       dplyr::group_by(.data$h3_index, .data$year) |>
       dplyr::summarise(
