@@ -90,12 +90,12 @@
 #' @keywords modeling
 #' @export
 derive_fishing_grounds <- function(
-  h3_grid_df,
-  min_trips = 3L,
-  min_hours = NULL,
-  min_pings = NULL,
-  target_h3_res = NULL,
-  n_days = NULL
+    h3_grid_df,
+    min_trips = 3L,
+    min_hours = NULL,
+    min_pings = NULL,
+    target_h3_res = NULL,
+    n_days = NULL
 ) {
   if (!is.null(min_pings)) {
     warning(
@@ -103,7 +103,7 @@ derive_fishing_grounds <- function(
       call. = FALSE
     )
   }
-
+  
   # Collapse year dimension if present (sum totals; min/max dates)
   grid <- if ("year" %in% names(h3_grid_df)) {
     h3_grid_df |>
@@ -123,11 +123,11 @@ derive_fishing_grounds <- function(
   } else {
     h3_grid_df
   }
-
+  
   # Infer n_total_days from stored date range (preferred) or legacy n_days arg
   n_total_days <- if (
     all(c("first_active_date", "last_active_date") %in% names(grid)) &&
-      !all(is.na(grid$first_active_date))
+    !all(is.na(grid$first_active_date))
   ) {
     as.numeric(
       max(grid$last_active_date, na.rm = TRUE) -
@@ -141,9 +141,9 @@ derive_fishing_grounds <- function(
     logger::log_warn("Cannot infer n_total_days -- per-day metrics will be NA")
     NA_real_
   }
-
+  
   logger::log_info("Study period: {round(n_total_days)} days")
-
+  
   # Optional rollup to coarser H3 resolution
   if (!is.null(target_h3_res)) {
     logger::log_info(
@@ -167,29 +167,29 @@ derive_fishing_grounds <- function(
         .groups = "drop"
       )
   }
-
+  
   hours_threshold <- min_hours %||% stats::median(grid$fishing_hours)
-
+  
   logger::log_info(
     "Filtering {nrow(grid)} H3 cells: min_trips = {min_trips},",
     " min_hours = {round(hours_threshold, 1)}"
   )
-
+  
   filtered <- grid |>
     dplyr::filter(
       .data$unique_trips >= min_trips,
       .data$fishing_hours >= hours_threshold
     )
-
+  
   if (nrow(filtered) == 0) {
     logger::log_warn("No H3 cells passed the filters -- returning NULL")
     return(NULL)
   }
-
+  
   logger::log_info(
     "{nrow(filtered)} cells retained, deriving contiguous fishing ground polygons"
   )
-
+  
   # Compute per-cell normalised metrics before polygon dissolve so that
   # ground-level values are means of cell values (not re-derived from totals)
   filtered <- filtered |>
@@ -208,20 +208,20 @@ derive_fishing_grounds <- function(
         NA_real_
       )
     )
-
+  
   hex_sf <- create_spatial_grid(filtered)
-
+  
   geoms <- hex_sf |>
     sf::st_union() |>
     sf::st_cast("POLYGON")
-
+  
   grounds <- sf::st_sf(
     ground_id = paste0("FG_", seq_along(geoms)),
     area_km2 = as.numeric(sf::st_area(geoms)) / 1e6,
     geometry = geoms,
     crs = 4326
   )
-
+  
   # Aggregate effort from constituent H3 cells into each ground polygon.
   # Raw totals are summed; normalised metrics are averaged across cells.
   effort_by_ground <- sf::st_join(hex_sf, grounds, join = sf::st_within) |>
@@ -240,7 +240,7 @@ derive_fishing_grounds <- function(
       hours_per_trip     = mean(.data$hours_per_trip, na.rm = TRUE),
       .groups = "drop"
     )
-
+  
   grounds <- grounds |>
     dplyr::left_join(effort_by_ground, by = "ground_id") |>
     dplyr::mutate(dplyr::across(
@@ -259,13 +259,13 @@ derive_fishing_grounds <- function(
       )
     ) |>
     dplyr::arrange(dplyr::desc(.data$area_km2))
-
+  
   logger::log_success(
     "Derived {nrow(grounds)} fishing grounds",
     " (total area: {round(sum(grounds$area_km2), 1)} km\u00b2,",
     " {round(sum(grounds$fishing_hours, na.rm = TRUE))} total fishing hours)"
   )
-
+  
   grounds
 }
 
@@ -313,9 +313,9 @@ plot_effort_map <- function(effort, metric = c("fishing_hours", "n_trips")) {
     fishing_hours = "log(Fishing hours)",
     n_trips = "log(Trips)"
   )
-
+  
   years <- sort(unique(effort$year))
-
+  
   effort_hex <- effort |>
     dplyr::group_by(.data$h3_index, .data$year) |>
     dplyr::summarise(
@@ -323,7 +323,7 @@ plot_effort_map <- function(effort, metric = c("fishing_hours", "n_trips")) {
       n_trips = sum(.data$unique_trips, na.rm = TRUE),
       .groups = "drop"
     )
-
+  
   unique_cells <- unique(effort_hex$h3_index)
   polys <- sf::st_sf(
     h3_index = unique_cells,
@@ -331,14 +331,14 @@ plot_effort_map <- function(effort, metric = c("fishing_hours", "n_trips")) {
     crs = 4326
   )
   effort_sf <- dplyr::left_join(polys, effort_hex, by = "h3_index")
-
+  
   active_vals <- log1p(effort_sf[[metric]])
   pal <- leaflet::colorNumeric(
     palette = "YlOrRd",
     domain = active_vals,
     na.color = "transparent"
   )
-
+  
   m <- leaflet::leaflet() |>
     leaflet::addProviderTiles(
       leaflet::providers$CartoDB.DarkMatter,
@@ -367,7 +367,7 @@ plot_effort_map <- function(effort, metric = c("fishing_hours", "n_trips")) {
       ),
       position = "topright"
     )
-
+  
   for (yr in years) {
     ld <- effort_sf |> dplyr::filter(.data$year == yr)
     fill_vec <- pal(log1p(ld[[metric]]))
@@ -390,7 +390,7 @@ plot_effort_map <- function(effort, metric = c("fishing_hours", "n_trips")) {
         group = as.character(yr)
       )
   }
-
+  
   m |>
     leaflet::addLayersControl(
       baseGroups = as.character(years),
@@ -447,9 +447,9 @@ plot_effort_map <- function(effort, metric = c("fishing_hours", "n_trips")) {
 #' @keywords modeling
 #' @export
 plot_cpue_map <- function(
-  cpue_df,
-  species,
-  title = "CPUE (kg / fishing hour)"
+    cpue_df,
+    species,
+    title = "CPUE (kg / fishing hour)"
 ) {
   polys <- create_spatial_grid(
     cpue_df |>
@@ -457,26 +457,26 @@ plot_cpue_map <- function(
       dplyr::rename(h3_index = "h3_index")
   )
   vmax <- stats::quantile(cpue_df$cpue, 0.95, na.rm = TRUE)
-
+  
   pal <- leaflet::colorNumeric(
     palette = "YlOrRd",
     domain = c(0, vmax),
     na.color = "transparent"
   )
-
+  
   m <- leaflet::leaflet() |>
     leaflet::addProviderTiles("CartoDB.DarkMatter") |>
     leaflet::addControl(
       htmltools::HTML(glue::glue("<b>{title}</b>")),
       position = "topright"
     )
-
+  
   for (sp in species) {
     sp_data <- cpue_df |>
       dplyr::filter(.data$species == sp) |>
       dplyr::mutate(cpue_capped = pmin(.data$cpue, vmax))
     layer_sf <- dplyr::left_join(polys, sp_data, by = "h3_index")
-
+    
     m <- m |>
       leaflet::addPolygons(
         data = layer_sf,
@@ -495,7 +495,7 @@ plot_cpue_map <- function(
         group = sp
       )
   }
-
+  
   m |>
     leaflet::addLayersControl(
       baseGroups = species,
@@ -538,11 +538,11 @@ plot_effort_map_gear <- function(
     n_trips       = "log(Trips)"
   )
   
-  gears <- sort(unique(na.omit(trips$gear)))
+  gears <- sort(unique(na.omit(trips$gear_class)))
   
   effort_hex <- trips |>
-    dplyr::filter(!is.na(.data$gear)) |>
-    dplyr::group_by(.data$h3_index, .data$gear) |>
+    dplyr::filter(!is.na(.data$gear_class)) |>
+    dplyr::group_by(.data$h3_index, .data$gear_class) |>
     dplyr::summarise(
       fishing_hours = sum(.data$fishing_hours, na.rm = TRUE),
       n_trips       = dplyr::n_distinct(.data$trip),
@@ -594,12 +594,12 @@ plot_effort_map_gear <- function(
     )
   
   for (gr in gears) {
-    ld <- effort_sf |> dplyr::filter(.data$gear == gr)
+    ld <- effort_sf |> dplyr::filter(.data$gear_class == gr)
     fill_vec  <- pal(log1p(ld[[metric]]))
     popup_vec <- glue::glue_data(
       ld,
       "<div style='font-family:system-ui,sans-serif;font-size:13px;line-height:1.8;'>",
-      "<b>Gear:</b> {gear}<br>",
+      "<b>Gear:</b> {gear_class}<br>",
       "<b>Fishing hours:</b> {round(fishing_hours, 1)} h<br>",
       "<b>Trips:</b> {n_trips}",
       "</div>"

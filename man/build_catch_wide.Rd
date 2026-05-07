@@ -10,12 +10,13 @@ build_catch_wide(matched)
 \item{matched}{A tibble as returned by [load_matched_trips()].}
 }
 \value{
-A wide tibble with columns `pds_trip`, `country`, and one numeric
-  column per species (catch in kg, zero-filled for missing combinations).
+A wide tibble with columns `pds_trip`, `country`, `gear`, and one
+  numeric column per species (catch in kg, zero-filled for missing
+  combinations).
 }
 \description{
 Pivots matched trip catch records to a wide format with one row per
 trip and one column per species, ready for joining with effort data.
-The `country` column is carried through as an identifier.
+The `country` and `gear` columns are carried through as identifiers.
 }
 \keyword{internal}

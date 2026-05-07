@@ -13,7 +13,7 @@
 #' @keywords internal
 load_matched_trips <- function(conf) {
   logger::log_info("Downloading trips-matched (all countries) ...")
-
+  
   matched <- download_parquet_from_cloud(
     prefix = conf$trips$matched,
     provider = conf$storage$google$key,
@@ -27,13 +27,13 @@ load_matched_trips <- function(conf) {
       .data$catch_kg > 0
     ) |>
     dplyr::mutate(
-      pds_trip = as.character(.data$pds_trip),
+      pds_trip     = as.character(.data$pds_trip),
       landing_date = as.Date(.data$landing_date),
-      catch_taxon = stringr::str_to_title(stringr::str_trim(.data$catch_taxon)),
-      catch_kg = as.numeric(.data$catch_kg),
-      gear = stringr::str_to_title(stringr::str_trim(.data$gear))
+      catch_taxon  = stringr::str_to_title(stringr::str_trim(.data$catch_taxon)),
+      catch_kg     = as.numeric(.data$catch_kg),
+      gear         = stringr::str_to_title(stringr::str_trim(.data$gear))
     )
-
+  
   logger::log_info(
     "Matched trips: {nrow(matched)} catch records |",
     " {dplyr::n_distinct(matched$pds_trip)} unique PDS trips |",
@@ -42,6 +42,118 @@ load_matched_trips <- function(conf) {
     " -> {format(max(matched$landing_date), '%Y-%m-%d')}"
   )
   matched
+}
+
+
+#' Build a Trip-to-Gear-Class Lookup via Merged Surveys and Airtable
+#'
+#' Creates a lookup table mapping each PDS trip ID to a gear class, by
+#' bridging two sources:
+#'   1. **Merged surveys** (per-country buckets): link `trip → boat_name_trip`
+#'   2. **Airtable pds_devices table**: link `boat_name → gear class`
+#'
+#' This enables gear attribution for all predicted trips — not just those
+#' matched to Kobo surveys — since the boat name is recorded in the PDS
+#' device registry regardless of whether a Kobo survey was completed.
+#'
+#' The `AIRTABLE_BASE_ID` environment variable must be set (same base as
+#' `conf$airtable$frame$base_id` but loaded from env to handle legacy configs
+#' where the key may be empty).
+#'
+#' @param conf Configuration list, as returned by [read_config()].
+#'
+#' @return A tibble with columns `pds_trip` (character) and `gear_class`
+#'   (character, one of the standard Airtable gear classes).
+#'
+#' @keywords internal
+build_trip_gear_lookup <- function(conf) {
+  logger::log_info("Building trip -> gear_class lookup ...")
+  
+  # -- Gear lookup from Airtable pds_devices ------------------------------------
+  base_id <- Sys.getenv("AIRTABLE_BASE_ID")
+  if (nchar(base_id) == 0) {
+    logger::log_warn(
+      "AIRTABLE_BASE_ID not set — skipping gear lookup.",
+      " Set it in your .env file."
+    )
+    return(tibble::tibble(pds_trip = character(), gear_class = character()))
+  }
+  
+  logger::log_info("Downloading pds_devices from Airtable ...")
+  devices <- airtable_to_df(
+    base_id    = base_id,
+    table_name = "pds_devices",
+    token      = conf$airtable$token
+  )
+  
+  gear_lookup <- devices |>
+    dplyr::filter(!is.na(.data$boat_name), !is.na(.data$`gear class`)) |>
+    dplyr::mutate(
+      boat_key   = stringr::str_to_lower(stringr::str_squish(.data$boat_name)),
+      gear_class = .data$`gear class`
+    ) |>
+    dplyr::distinct(.data$boat_key, .data$gear_class)
+  
+  logger::log_info(
+    "Airtable gear lookup: {nrow(gear_lookup)} unique boat → gear entries"
+  )
+  
+  # -- Trip -> boat_name bridge from merged surveys (all countries) -------------
+  countries       <- c("kenya", "mozambique", "zanzibar")
+  merged_prefixes <- c(
+    conf$surveys$kenya$kefs$merged,
+    conf$surveys$mozambique$adnap$merged,
+    conf$surveys$zanzibar$wf$merged
+  )
+  merged_buckets <- c(
+    conf$storage$google$buckets$kenya,
+    conf$storage$google$buckets$mozambique,
+    conf$storage$google$buckets$zanzibar
+  )
+  
+  logger::log_info("Downloading merged surveys for trip -> boat_name bridge ...")
+  trip_boat <- purrr::map2(
+    merged_prefixes, merged_buckets,
+    ~ tryCatch(
+      download_parquet_from_cloud(
+        prefix      = .x,
+        provider    = conf$storage$google$key,
+        options     = conf$storage$google$options,
+        bucket_name = .y
+      ) |>
+        dplyr::filter(
+          !is.na(.data$trip),
+          !is.na(.data$boat_name_trip)
+        ) |>
+        dplyr::distinct(
+          pds_trip = as.character(.data$trip),
+          boat_key = stringr::str_to_lower(
+            stringr::str_squish(.data$boat_name_trip)
+          )
+        ),
+      error = function(e) {
+        logger::log_warn("Could not download merged surveys: {e$message}")
+        tibble::tibble(pds_trip = character(), boat_key = character())
+      }
+    )
+  ) |>
+    dplyr::bind_rows() |>
+    dplyr::distinct()
+  
+  logger::log_info(
+    "Merged surveys bridge: {nrow(trip_boat)} trip -> boat_name entries"
+  )
+  
+  # -- Join bridge + gear lookup ------------------------------------------------
+  trip_gear <- trip_boat |>
+    dplyr::left_join(gear_lookup, by = "boat_key") |>
+    dplyr::filter(!is.na(.data$gear_class)) |>
+    dplyr::distinct(.data$pds_trip, .data$gear_class)
+  
+  logger::log_info(
+    "Trip-gear lookup: {nrow(trip_gear)} trips with gear_class"
+  )
+  trip_gear
 }
 
 
@@ -59,16 +171,16 @@ load_matched_trips <- function(conf) {
 #'
 #' @keywords internal
 download_predicted_tracks <- function(trip_ids, conf) {
-  pds_opts <- resolve_storage_opts(conf, "pds")
+  pds_opts    <- resolve_storage_opts(conf, "pds")
   file_prefix <- conf$pds$pds_tracks_predicted$file_prefix
-
+  
   cloud_storage_authenticate(conf$pds_storage$google$key, pds_opts)
-
+  
   file_list <- googleCloudStorageR::gcs_list_objects(
     bucket = pds_opts$bucket,
     prefix = file_prefix
   )
-
+  
   if (is.null(file_list) || nrow(file_list) == 0) {
     stop(
       "No predicted track files found in bucket '",
@@ -79,21 +191,21 @@ download_predicted_tracks <- function(trip_ids, conf) {
       "Run predict_pds_tracks() first."
     )
   }
-
+  
   predicted_ids <- as.numeric(
     stringr::str_extract(file_list$name, "trip_(\\d+)_", group = 1)
   )
   file_list <- file_list[predicted_ids %in% as.numeric(trip_ids), ]
-
+  
   logger::log_info(
     "Downloading {nrow(file_list)} matched track files",
     " (out of {length(predicted_ids)} total predicted)"
   )
-
+  
   if (nrow(file_list) == 0) {
     stop("No predicted track files found for the requested trip IDs.")
   }
-
+  
   tracks <- purrr::map(
     file_list$name,
     function(obj_name) {
@@ -103,9 +215,9 @@ download_predicted_tracks <- function(trip_ids, conf) {
         {
           googleCloudStorageR::gcs_get_object(
             object_name = obj_name,
-            bucket = pds_opts$bucket,
-            saveToDisk = tmp,
-            overwrite = TRUE
+            bucket      = pds_opts$bucket,
+            saveToDisk  = tmp,
+            overwrite   = TRUE
           )
           arrow::read_parquet(tmp)
         },
@@ -119,7 +231,7 @@ download_predicted_tracks <- function(trip_ids, conf) {
   ) |>
     purrr::compact() |>
     dplyr::bind_rows()
-
+  
   logger::log_info(
     "Downloaded {format(nrow(tracks), big.mark = ',')} fishing points",
     " across {dplyr::n_distinct(tracks$trip)} trips"
@@ -149,7 +261,7 @@ aggregate_trip_effort <- function(tracks, h3_res) {
       fishing_hours = sum(.data$dt_hours, na.rm = TRUE),
       .groups = "drop"
     )
-
+  
   logger::log_info(
     "Trip effort: {nrow(effort)} rows |",
     " {dplyr::n_distinct(effort$trip)} trips |",
@@ -163,33 +275,36 @@ aggregate_trip_effort <- function(tracks, h3_res) {
 #'
 #' Pivots matched trip catch records to a wide format with one row per
 #' trip and one column per species, ready for joining with effort data.
-#' The `country` column is carried through as an identifier.
+#' The `country` and `gear` columns are carried through as identifiers.
 #'
 #' @param matched A tibble as returned by [load_matched_trips()].
 #'
-#' @return A wide tibble with columns `pds_trip`, `country`, and one numeric
-#'   column per species (catch in kg, zero-filled for missing combinations).
+#' @return A wide tibble with columns `pds_trip`, `country`, `gear`, and one
+#'   numeric column per species (catch in kg, zero-filled for missing
+#'   combinations).
 #'
 #' @keywords internal
 build_catch_wide <- function(matched) {
   logger::log_info("Building catch matrix from trips-matched ...")
-
+  
   catch_wide <- matched |>
-    dplyr::group_by(.data$pds_trip, .data$country, .data$gear, .data$catch_taxon) |>
+    dplyr::group_by(
+      .data$pds_trip, .data$country, .data$gear, .data$catch_taxon
+    ) |>
     dplyr::summarise(
       catch_kg = sum(.data$catch_kg, na.rm = TRUE),
       .groups = "drop"
     ) |>
     tidyr::pivot_wider(
-      id_cols = c("pds_trip", "country", "gear"),
-      names_from = "catch_taxon",
+      id_cols     = c("pds_trip", "country", "gear"),
+      names_from  = "catch_taxon",
       values_from = "catch_kg",
       values_fill = 0
     )
-
+  
   logger::log_info(
     "Catch matrix: {nrow(catch_wide)} trips x",
-    " {ncol(catch_wide) - 2} species"
+    " {ncol(catch_wide) - 3} species"
   )
   catch_wide
 }
@@ -209,22 +324,22 @@ build_catch_wide <- function(matched) {
 #' @keywords internal
 join_effort_catch <- function(effort, catch_wide) {
   logger::log_info("Joining effort and catch on trip ID ...")
-
+  
   trips <- effort |>
     dplyr::inner_join(catch_wide, by = c("trip" = "pds_trip"))
-
+  
   logger::log_info(
     "Matched: {nrow(trips)} rows |",
     " {dplyr::n_distinct(trips$trip)} trips |",
     " {dplyr::n_distinct(trips$h3_index)} H3 cells"
   )
-
+  
   if (nrow(trips) == 0) {
     logger::log_warn(
       "No matches -- check that predicted tracks cover trips-matched trips."
     )
   }
-
+  
   trips
 }
 
@@ -240,69 +355,73 @@ join_effort_catch <- function(effort, catch_wide) {
 #' @keywords internal
 .top_species <- function(trips, meta_cols, top_n) {
   species_cols <- setdiff(colnames(trips), meta_cols)
-
+  
   species_totals <- trips |>
     dplyr::summarise(dplyr::across(
-      dplyr::all_of(species_cols),
-      \(x) sum(x, na.rm = TRUE)
+      dplyr::all_of(species_cols), \(x) sum(x, na.rm = TRUE)
     )) |>
     tidyr::pivot_longer(
       dplyr::everything(),
-      names_to = "species",
+      names_to  = "species",
       values_to = "total_kg"
     ) |>
     dplyr::filter(.data$total_kg > 0) |>
     dplyr::arrange(dplyr::desc(.data$total_kg))
-
+  
   logger::log_info("Catch totals from matched trips:")
   print(as.data.frame(species_totals))
-
-  top_sp <- species_totals |>
+  
+  species_totals |>
     dplyr::slice_head(n = top_n) |>
     dplyr::pull("species")
-
-  logger::log_info("Modelling: {paste(top_sp, collapse = ', ')}")
-  top_sp
 }
 
 
-#' Attach Trip Counts, Cell Centroids, and Apply Minimum-Trips Filter
+#' Finalise CPUE Table
 #'
-#' @param cpue_long Long tibble with columns `h3_index`, `country`, `cpue`,
-#'   `species`.
-#' @param trips Combined effort + catch tibble (used to count trips per cell).
-#' @param min_trips Integer. Minimum unique trips per H3 cell x country.
+#' Attaches trip counts and H3 cell centroids, then filters to cells meeting
+#' the minimum trip threshold and with non-zero CPUE.
 #'
-#' @return Filtered tibble with additional columns `n_trips`, `lon`, `lat`.
+#' @param cpue_long Long-format CPUE tibble with columns `h3_index`, `country`,
+#'   `cpue`, `species`.
+#' @param trips Combined effort + catch tibble.
+#' @param min_trips Integer. Minimum unique trips per cell to retain.
+#'
+#' @return A filtered tibble with additional columns `n_trips`, `lon`, `lat`.
 #'
 #' @keywords internal
 .finalise_cpue <- function(cpue_long, trips, min_trips) {
   trip_counts <- trips |>
-    dplyr::group_by(.data$h3_index, .data$country) |>
-    dplyr::summarise(n_trips = dplyr::n_distinct(.data$trip), .groups = "drop")
-
+    dplyr::group_by(.data$h3_index) |>
+    dplyr::summarise(
+      n_trips = dplyr::n_distinct(.data$trip),
+      .groups = "drop"
+    )
+  
   centroids <- h3jsr::cell_to_point(unique(cpue_long$h3_index)) |>
     sf::st_coordinates() |>
     tibble::as_tibble() |>
     dplyr::rename(lon = "X", lat = "Y") |>
     dplyr::mutate(h3_index = unique(cpue_long$h3_index))
-
+  
   cpue_df <- cpue_long |>
-    dplyr::left_join(trip_counts, by = c("h3_index", "country")) |>
-    dplyr::left_join(centroids, by = "h3_index") |>
+    dplyr::left_join(trip_counts, by = "h3_index") |>
+    dplyr::left_join(centroids,   by = "h3_index") |>
     dplyr::filter(.data$n_trips >= min_trips, .data$cpue > 0)
-
-  logger::log_info("CPUE table: {nrow(cpue_df)} rows (min_trips = {min_trips})")
+  
+  logger::log_info(
+    "CPUE table: {nrow(cpue_df)} rows (min_trips = {min_trips})"
+  )
   cpue_df
 }
 
 
 #' Run the Weighted CPUE Model
 #'
-#' Computes CPUE as the ratio of total catch to total fishing hours per H3
-#' cell for each of the top-N species:
-#' `CPUE_h = sum(catch_kg for trips visiting h) / sum(fishing_hours in h)`.
-#' Robust with sparse data; always produces a result.
+#' Computes CPUE as the direct catch-to-effort ratio per H3 cell and country:
+#' `CPUE_h = sum(catch_kg) / sum(fishing_hours)` across all matched trips
+#' visiting cell `h` within each country. Robust with sparse data — all
+#' visited cells receive an estimate.
 #'
 #' @param trips Combined effort + catch tibble from [join_effort_catch()].
 #' @param top_n Integer. Number of top species to model.
@@ -314,10 +433,12 @@ join_effort_catch <- function(effort, catch_wide) {
 #' @keywords internal
 run_weighted_cpue <- function(trips, top_n, min_trips) {
   logger::log_info("Running weighted CPUE model (catch / effort per cell) ...")
-
-  meta_cols <- c("trip", "h3_index", "country", "gear", "year", "fishing_hours")
+  
+  meta_cols   <- c(
+    "trip", "h3_index", "country", "gear", "gear_class", "year", "fishing_hours"
+  )
   top_species <- .top_species(trips, meta_cols, top_n)
-
+  
   catch_per_trip <- trips |>
     dplyr::group_by(.data$trip) |>
     dplyr::summarise(
@@ -327,7 +448,7 @@ run_weighted_cpue <- function(trips, top_n, min_trips) {
       ),
       .groups = "drop"
     )
-
+  
   cpue_long <- purrr::map(top_species, function(sp) {
     trips |>
       dplyr::select("trip", "h3_index", "country", "fishing_hours") |>
@@ -337,7 +458,7 @@ run_weighted_cpue <- function(trips, top_n, min_trips) {
       ) |>
       dplyr::group_by(.data$h3_index, .data$country) |>
       dplyr::summarise(
-        total_catch = sum(.data[[sp]], na.rm = TRUE),
+        total_catch = sum(.data[[sp]],       na.rm = TRUE),
         total_hours = sum(.data$fishing_hours, na.rm = TRUE),
         .groups = "drop"
       ) |>
@@ -352,11 +473,11 @@ run_weighted_cpue <- function(trips, top_n, min_trips) {
       dplyr::select("h3_index", "country", "cpue", "species")
   }) |>
     dplyr::bind_rows()
-
+  
   logger::log_info(
     "Weighted CPUE: {sum(cpue_long$cpue > 0)} non-zero cell x species combinations"
   )
-
+  
   cpue_df <- .finalise_cpue(cpue_long, trips, min_trips)
   list(cpue = cpue_df, species = top_species)
 }
@@ -379,24 +500,26 @@ run_weighted_cpue <- function(trips, top_n, min_trips) {
 #' @keywords internal
 run_nnls_cpue <- function(trips, top_n, min_trips) {
   logger::log_info("Running NNLS CPUE model ...")
-
-  meta_cols <- c("trip", "h3_index", "country", "year", "fishing_hours")
+  
+  meta_cols   <- c(
+    "trip", "h3_index", "country", "gear", "gear_class", "year", "fishing_hours"
+  )
   top_species <- .top_species(trips, meta_cols, top_n)
-
+  
   X_wide <- trips |>
     dplyr::distinct(.data$trip, .data$h3_index, .data$fishing_hours) |>
     tidyr::pivot_wider(
-      id_cols = "trip",
-      names_from = "h3_index",
+      id_cols     = "trip",
+      names_from  = "h3_index",
       values_from = "fishing_hours",
-      values_fn = sum,
+      values_fn   = sum,
       values_fill = 0
     )
-
+  
   trip_ids <- X_wide$trip
   h3_cells <- setdiff(colnames(X_wide), "trip")
-  X <- as.matrix(X_wide[, h3_cells])
-
+  X        <- as.matrix(X_wide[, h3_cells])
+  
   catch_per_trip <- trips |>
     dplyr::group_by(.data$trip) |>
     dplyr::summarise(
@@ -407,23 +530,23 @@ run_nnls_cpue <- function(trips, top_n, min_trips) {
       .groups = "drop"
     ) |>
     dplyr::arrange(match(.data$trip, trip_ids))
-
+  
   Y <- as.matrix(dplyr::select(catch_per_trip, dplyr::all_of(top_species)))
-
+  
   logger::log_info("Design matrix: {nrow(X)} trips x {ncol(X)} H3 cells")
-
+  
   if (ncol(X) >= nrow(X)) {
     logger::log_warn(
       "Under-determined: {ncol(X)} cells >= {nrow(X)} trips.",
       " NNLS will produce sparse results. Consider method = 'weighted'."
     )
   }
-
+  
   cell_country <- trips |>
     dplyr::distinct(.data$h3_index, .data$country)
-
+  
   cpue_long <- purrr::map(top_species, function(sp) {
-    y <- Y[, sp]
+    y   <- Y[, sp]
     fit <- nnls::nnls(X, y)
     logger::log_info(
       "  {sp}: residual = {round(sqrt(sum(fit$residuals^2)), 2)},",
@@ -433,7 +556,7 @@ run_nnls_cpue <- function(trips, top_n, min_trips) {
   }) |>
     dplyr::bind_rows() |>
     dplyr::left_join(cell_country, by = "h3_index")
-
+  
   cpue_df <- .finalise_cpue(cpue_long, trips, min_trips)
   list(cpue = cpue_df, species = top_species)
 }
@@ -448,6 +571,9 @@ run_nnls_cpue <- function(trips, top_n, min_trips) {
 #' - **Predicted track files** (from [predict_pds_tracks()]): downloaded only
 #'   for matched trips, to build the per-trip H3 effort matrix for the CPUE
 #'   model.
+#' - **Gear class** (from Airtable pds_devices + merged surveys): each trip
+#'   is attributed a gear class via `pds_trip → boat_name → gear class`,
+#'   bridged through the per-country merged survey files.
 #'
 #' @details
 #' Two CPUE estimation methods are available:
@@ -465,6 +591,9 @@ run_nnls_cpue <- function(trips, top_n, min_trips) {
 #' The CPUE result table includes a `country` column so users can filter by
 #' country downstream. It is uploaded as a versioned Parquet file to the
 #' cloud bucket under the `pds_cpue` file prefix.
+#'
+#' The `trips` output includes a `gear_class` column (from Airtable) which
+#' can be used directly with [plot_effort_map_gear()].
 #'
 #' @param h3_res Integer (0-15). H3 resolution for spatial aggregation.
 #'   Default is `9L` (~174 m edge). Use `5`-`6` for very sparse data.
@@ -484,72 +613,84 @@ run_nnls_cpue <- function(trips, top_n, min_trips) {
 #'     \item{`effort_matched`}{Per-trip H3 effort for matched trips.}
 #'     \item{`cpue`}{CPUE table (tibble with `h3_index`, `country`, `cpue`,
 #'       `species`, `n_trips`, `lon`, `lat`).}
-#'     \item{`trips`}{Combined effort + catch matrix.}
+#'     \item{`trips`}{Combined effort + catch + gear_class matrix.}
 #'   }
 #'
 #' @seealso [aggregate_pds_effort()], [predict_pds_tracks()],
-#'   [merge_survey_trips()]
+#'   [merge_survey_trips()], [plot_effort_map_gear()]
 #'
 #' @keywords workflow modeling
 #' @export
 model_cpue <- function(
-  h3_res = 9L,
-  top_n = 5L,
-  min_trips = 3L,
-  method = c("weighted", "nnls"),
-  log_threshold = logger::DEBUG,
-  package = "coasts"
+    h3_res        = 9L,
+    top_n         = 5L,
+    min_trips     = 3L,
+    method        = c("weighted", "nnls"),
+    log_threshold = logger::DEBUG,
+    package       = "coasts"
 ) {
   method <- match.arg(method)
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
-
+  
   logger::log_info(
     "=== CPUE pipeline | H3 res = {h3_res} | method = {method} ==="
   )
-
+  
   # -- Matched trips (catch + pds_trip ID, all countries) -----------------------
   matched <- load_matched_trips(conf)
-
+  
+  # -- Gear class lookup (Airtable + merged surveys) ----------------------------
+  trip_gear <- build_trip_gear_lookup(conf)
+  
   # -- Matched tracks -> per-trip effort for CPUE model --------------------------
   logger::log_info("Downloading matched predicted tracks for CPUE model ...")
   tracks_m <- download_predicted_tracks(unique(matched$pds_trip), conf)
   effort_m <- aggregate_trip_effort(tracks_m, h3_res)
   rm(tracks_m)
-
+  
   # -- Catch matrix + join -------------------------------------------------------
   catch_wide <- build_catch_wide(matched)
   rm(matched)
-
+  
   trips <- join_effort_catch(effort_m, catch_wide)
-
+  
   if (nrow(trips) == 0) {
     logger::log_warn("Pipeline stopped: no matched trips.")
     return(invisible(NULL))
   }
-
+  
+  # -- Attach gear_class to trips -----------------------------------------------
+  trips <- trips |>
+    dplyr::left_join(trip_gear, by = c("trip" = "pds_trip"))
+  
+  logger::log_info(
+    "Trips with gear_class: {sum(!is.na(trips$gear_class))}",
+    " / {dplyr::n_distinct(trips$trip)}"
+  )
+  
   # -- CPUE estimation -----------------------------------------------------------
   result <- if (method == "weighted") {
     run_weighted_cpue(trips, top_n, min_trips)
   } else {
     run_nnls_cpue(trips, top_n, min_trips)
   }
-
+  
   cpue_df <- result$cpue
-  species <- result$species
-
+  species  <- result$species
+  
   # -- Upload CPUE table to cloud ------------------------------------------------
   logger::log_info(
     "Uploading CPUE table ({nrow(cpue_df)} rows) to cloud storage ..."
   )
   upload_parquet_to_cloud(
-    data = cpue_df,
-    prefix = paste0(conf$pds$pds_cpue$file_prefix, "_r", h3_res),
+    data     = cpue_df,
+    prefix   = paste0(conf$pds$pds_cpue$file_prefix, "_r", h3_res),
     provider = conf$storage$google$key,
-    options = conf$storage$google$options
+    options  = conf$storage$google$options
   )
-
+  
   logger::log_info("=== CPUE pipeline complete ===")
-
+  
   invisible(list(effort_matched = effort_m, cpue = cpue_df, trips = trips))
 }

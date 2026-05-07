@@ -18,9 +18,9 @@ A named list with elements `cpue` (tibble) and `species`
   (character vector).
 }
 \description{
-Computes CPUE as the ratio of total catch to total fishing hours per H3
-cell for each of the top-N species:
-`CPUE_h = sum(catch_kg for trips visiting h) / sum(fishing_hours in h)`.
-Robust with sparse data; always produces a result.
+Computes CPUE as the direct catch-to-effort ratio per H3 cell and country:
+`CPUE_h = sum(catch_kg) / sum(fishing_hours)` across all matched trips
+visiting cell `h` within each country. Robust with sparse data — all
+visited cells receive an estimate.
 }
 \keyword{internal}

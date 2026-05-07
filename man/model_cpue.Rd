@@ -38,7 +38,7 @@ Invisibly returns a named list:
     \item{`effort_matched`}{Per-trip H3 effort for matched trips.}
     \item{`cpue`}{CPUE table (tibble with `h3_index`, `country`, `cpue`,
       `species`, `n_trips`, `lon`, `lat`).}
-    \item{`trips`}{Combined effort + catch matrix.}
+    \item{`trips`}{Combined effort + catch + gear_class matrix.}
   }
 }
 \description{
@@ -48,6 +48,9 @@ Estimates spatial Catch Per Unit Effort (CPUE) by combining:
 - **Predicted track files** (from [predict_pds_tracks()]): downloaded only
   for matched trips, to build the per-trip H3 effort matrix for the CPUE
   model.
+- **Gear class** (from Airtable pds_devices + merged surveys): each trip
+  is attributed a gear class via `pds_trip → boat_name → gear class`,
+  bridged through the per-country merged survey files.
 }
 \details{
 Two CPUE estimation methods are available:
@@ -65,10 +68,13 @@ Two CPUE estimation methods are available:
 The CPUE result table includes a `country` column so users can filter by
 country downstream. It is uploaded as a versioned Parquet file to the
 cloud bucket under the `pds_cpue` file prefix.
+
+The `trips` output includes a `gear_class` column (from Airtable) which
+can be used directly with [plot_effort_map_gear()].
 }
 \seealso{
 [aggregate_pds_effort()], [predict_pds_tracks()],
-  [merge_survey_trips()]
+  [merge_survey_trips()], [plot_effort_map_gear()]
 }
 \keyword{modeling}
 \keyword{workflow}

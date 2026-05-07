@@ -2,22 +2,23 @@
 % Please edit documentation in R/model-cpue.R
 \name{.finalise_cpue}
 \alias{.finalise_cpue}
-\title{Attach Trip Counts, Cell Centroids, and Apply Minimum-Trips Filter}
+\title{Finalise CPUE Table}
 \usage{
 .finalise_cpue(cpue_long, trips, min_trips)
 }
 \arguments{
-\item{cpue_long}{Long tibble with columns `h3_index`, `country`, `cpue`,
-`species`.}
+\item{cpue_long}{Long-format CPUE tibble with columns `h3_index`, `country`,
+`cpue`, `species`.}
 
-\item{trips}{Combined effort + catch tibble (used to count trips per cell).}
+\item{trips}{Combined effort + catch tibble.}
 
-\item{min_trips}{Integer. Minimum unique trips per H3 cell x country.}
+\item{min_trips}{Integer. Minimum unique trips per cell to retain.}
 }
 \value{
-Filtered tibble with additional columns `n_trips`, `lon`, `lat`.
+A filtered tibble with additional columns `n_trips`, `lon`, `lat`.
 }
 \description{
-Attach Trip Counts, Cell Centroids, and Apply Minimum-Trips Filter
+Attaches trip counts and H3 cell centroids, then filters to cells meeting
+the minimum trip threshold and with non-zero CPUE.
 }
 \keyword{internal}
