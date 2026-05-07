@@ -696,15 +696,23 @@ prepare_kenya_landings <- function(landings_kefs) {
     colnames(landings_kefs)
   )
   
+  # Priority block: revenue estimated from unit price
+  #   priority_revenue = priority_weight x total_price_kg
   priority <- landings_kefs |>
+    dplyr::mutate(
+      .priority_revenue = .data$priority_weight * .data$total_price_kg
+    ) |>
     dplyr::select(dplyr::all_of(carry),
                   catch_taxon = "priority_scientific_name",
-                  catch_kg    = "priority_weight")
+                  catch_kg    = "priority_weight",
+                  catch_price = ".priority_revenue")
   
+  # Sample block: revenue is given directly per row
   sample <- landings_kefs |>
     dplyr::select(dplyr::all_of(carry),
                   catch_taxon = "sample_scientific_name",
-                  catch_kg    = "sample_weight")
+                  catch_kg    = "sample_weight",
+                  catch_price = "sample_price")
   
   out <- dplyr::bind_rows(priority, sample) |>
     dplyr::filter(!is.na(.data$catch_taxon),
@@ -747,6 +755,13 @@ prepare_kenya_landings <- function(landings_kefs) {
 #'                         to the CPUE RE. (For ADNAP-style data, supply
 #'                         a real `activity` table to recover the days
 #'                         variability term.)
+#' @param metric           Either "catch" (default, weights in kg) or
+#'                         "revenue" (monetary value). When "revenue",
+#'                         the pipeline uses the `catch_price` column as
+#'                         the per-row quantity. Output column names stay
+#'                         the same (`total_catch_kg`, `mean_cpue`, ...)
+#'                         but contain monetary values; the `metric` field
+#'                         in the returned list states which is which.
 #' @param period_col       Column with the period label (e.g. "year_month").
 #'                         If absent, it's built from `landing_date`.
 #' @param duration_col     Trip-duration column. Default "trip_duration".
@@ -756,19 +771,21 @@ prepare_kenya_landings <- function(landings_kefs) {
 #'
 #' @return A list with named tibbles:
 #'   \describe{
+#'     \item{metric}{"catch" or "revenue" — what the numeric outputs mean}
 #'     \item{trips}{trip-level CPUE table}
-#'     \item{cpue_summary}{minor stratum × fu × period CPUE summary}
-#'     \item{days_summary}{minor stratum × fu × period fishing-days summary}
+#'     \item{cpue_summary}{minor stratum x fu x period CPUE summary}
+#'     \item{days_summary}{minor stratum x fu x period fishing-days summary}
 #'     \item{frame}{frame-survey counts used}
 #'     \item{minor}{FAO catch estimates at the minor stratum level}
 #'     \item{major}{FAO catch estimates aggregated to the major stratum}
-#'     \item{species}{catch by species per (group × species)}
+#'     \item{species}{catch by species per (group x species)}
 #'     \item{quality}{summary of pass/warn/fail counts}
 #'   }
 #' @export
 estimate_catch_fao <- function(landings,
                                frame          = NULL,
                                activity       = NULL,
+                               metric         = c("catch", "revenue"),
                                major_stratum  = "gaul_2_name",
                                minor_stratum  = "landing_site",
                                fu_cols        = c("vessel_type", "gear"),
@@ -779,7 +796,11 @@ estimate_catch_fao <- function(landings,
                                alpha          = 0.10,
                                re_threshold   = 0.15) {
   
-  logger::log_info("FAO aggregation: starting on {nrow(landings)} landing rows")
+  metric <- match.arg(metric)
+  logger::log_info(
+    "FAO aggregation: starting on {nrow(landings)} landing rows ",
+    "(metric = '{metric}')"
+  )
   
   # ── 12.0a Auto-detect country schema and reshape to FAO long format
   is_kefs <- all(c("priority_scientific_name", "priority_weight",
@@ -803,7 +824,27 @@ estimate_catch_fao <- function(landings,
     )
   }
   
-  # ── 12.0b Boat column auto-fallback
+  # ── 12.0b Revenue swap: when metric = 'revenue', overwrite catch_kg with
+  # the per-row revenue value so the rest of the pipeline runs unchanged.
+  # Output column names stay catch_kg / total_catch_kg / mean_cpue, but the
+  # `metric` field on the result tells the caller what they actually contain.
+  if (metric == "revenue") {
+    if (!"catch_price" %in% colnames(landings)) {
+      stop(
+        "metric = 'revenue' requested but `catch_price` column not found. ",
+        "Add a per-row revenue column named `catch_price` to the landings."
+      )
+    }
+    n_swapped <- sum(!is.na(landings$catch_price) & landings$catch_price > 0)
+    landings$catch_kg <- landings$catch_price
+    logger::log_info(
+      "Revenue mode: using `catch_price` as quantity ",
+      "({n_swapped} non-zero rows). Output columns keep their `catch_kg` ",
+      "names but contain monetary values."
+    )
+  }
+  
+  # ── 12.0c Boat column auto-fallback
   if (!boat_col %in% colnames(landings)) {
     if ("submission_id" %in% colnames(landings)) {
       logger::log_warn(
@@ -920,6 +961,7 @@ estimate_catch_fao <- function(landings,
   )
   
   list(
+    metric        = metric,
     trips         = trips,
     cpue_summary  = cpue_summary,
     days_summary  = days_summary,

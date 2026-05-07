@@ -8,6 +8,7 @@ estimate_catch_fao(
   landings,
   frame = NULL,
   activity = NULL,
+  metric = c("catch", "revenue"),
   major_stratum = "gaul_2_name",
   minor_stratum = "landing_site",
   fu_cols = c("vessel_type", "gear"),
@@ -29,6 +30,14 @@ observed boats (placeholder, with warning).}
 \item{activity}{Optional tibble with `bac` or `pab` per minor
 stratum × fu × period. If `NULL`, fishing days
 are taken directly from observed records.}
+
+\item{metric}{Either "catch" (default, weights in kg) or
+"revenue" (monetary value). When "revenue",
+the pipeline uses the `catch_price` column as
+the per-row quantity. Output column names stay
+the same (`total_catch_kg`, `mean_cpue`, ...)
+but contain monetary values; the `metric` field
+in the returned list states which is which.}
 
 \item{major_stratum}{Column for major stratum. Default "gaul_2_name".}
 
@@ -60,13 +69,14 @@ If absent, it's built from `landing_date`.}
 \value{
 A list with named tibbles:
   \describe{
+    \item{metric}{"catch" or "revenue" — what the numeric outputs mean}
     \item{trips}{trip-level CPUE table}
-    \item{cpue_summary}{minor stratum × fu × period CPUE summary}
-    \item{days_summary}{minor stratum × fu × period fishing-days summary}
+    \item{cpue_summary}{minor stratum x fu x period CPUE summary}
+    \item{days_summary}{minor stratum x fu x period fishing-days summary}
     \item{frame}{frame-survey counts used}
     \item{minor}{FAO catch estimates at the minor stratum level}
     \item{major}{FAO catch estimates aggregated to the major stratum}
-    \item{species}{catch by species per (group × species)}
+    \item{species}{catch by species per (group x species)}
     \item{quality}{summary of pass/warn/fail counts}
   }
 }
