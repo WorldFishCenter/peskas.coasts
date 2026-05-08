@@ -10,6 +10,7 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     libsasl2-dev \
     libsqlite3-dev \
     libssh2-1-dev \
+    libnode-dev \
     unixodbc-dev \
     python3-dev \
     python3-pip \
@@ -24,6 +25,8 @@ RUN install2.r --error --skipinstalled \
     arrow \
     config \
     dplyr \
+    V8 \
+    h3jsr \
     furrr \
     future \
     git2r \

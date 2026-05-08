@@ -19,7 +19,10 @@
 #'
 #' @keywords workflow export
 #' @export
-merge_survey_trips <- function(log_threshold = logger::DEBUG, package = "coasts") {
+merge_survey_trips <- function(
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
@@ -44,7 +47,7 @@ merge_survey_trips <- function(log_threshold = logger::DEBUG, package = "coasts"
   )
 
   merged_prefixes <- c(
-    conf$surveys$kenya$kefs$merged,
+    conf$surveys$kenya$merged,
     conf$surveys$mozambique$adnap$merged,
     conf$surveys$zanzibar$wf$merged
   )

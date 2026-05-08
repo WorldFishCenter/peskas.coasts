@@ -1,3 +1,18 @@
+# coasts 4.3.0
+* **FIX** `export_pds_spatial()` per-cell metrics — `avg_hours_per_day` and `avg_visits_per_day` were divided by the whole study period (`n_total_days`, ~850+ days), producing values near zero. They now divide by `n_active_days` (the number of days the cell was actually visited), so the metric matches its name: average fishing hours / trips on days the cell was active. `constancy` (fraction of study period the cell was active) still uses `n_total_days` and is unchanged. Same fix applied to `derive_fishing_grounds()` per-cell metrics.
+* **FIX** `aggregate_pds_effort()` — `n_active_days` was double-counted on incremental merge whenever the same calendar day was visited by trips from different aggregation runs (common: many boats fishing the same cell daily produce one parquet per trip, batched separately). The grid now stores `active_dates` as a list-column of `Date` per cell-year; merges take the unique union, and `n_active_days` is recomputed from it. `derive_fishing_grounds()` applies the same union semantics when collapsing years, rolling up to coarser resolutions, and aggregating cells into ground polygons.
+# coasts 4.2.1
+
+* **IMPROVEMENT** Filter out NAs in countries taxa summary (in `export_portal()`) to save storage space and loading time
+
+# coasts 4.2.0
+* **FIX** Fix critical bug in downloading versioned files
+
+# coasts 4.1.0
+
+* **IMPROVEMENT** Kenya matched trips now combine surveys from all Kenyan sources, not just KEFS — giving a more complete picture of fishing activity in the country.
+* **FIX** Restored the fishing-effort aggregation step of the automated pipeline, which had stopped running on the server due to a missing system component.
+
 # coasts 4.0.0
 
 ## Spatial CPUE Model Pipeline
