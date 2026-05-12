@@ -7,6 +7,7 @@
 estimate_catch_fao(
   landings,
   frame = NULL,
+  assets = NULL,
   activity = NULL,
   metric = c("catch", "revenue"),
   major_stratum = "gaul_2_name",
@@ -24,11 +25,23 @@ estimate_catch_fao(
 \item{landings}{Validated landings. One row per species per trip.}
 
 \item{frame}{Optional tibble with frame counts (`F_total` per
-minor stratum × fu). If `NULL`, derived from
-observed boats (placeholder, with warning).}
+minor stratum x fu). If `NULL` and no `assets`,
+derived from observed boats (placeholder, with
+warning).}
+
+\item{assets}{Optional Airtable assets list from
+`download_fao_frame()`. When provided and
+`frame` is `NULL`, the frame survey is
+derived from `assets$frame` automatically.
+If `fu_cols` includes both vessel and gear
+(the default), the vessel-level frame is
+disaggregated to (vessel x gear) using the
+observed gear proportions per
+(district x vessel) -- see
+`disaggregate_frame_by_gear()`.}
 
 \item{activity}{Optional tibble with `bac` or `pab` per minor
-stratum × fu × period. If `NULL`, fishing days
+stratum x fu x period. If `NULL`, fishing days
 are taken directly from observed records.}
 
 \item{metric}{Either "catch" (default, weights in kg) or
@@ -44,7 +57,10 @@ in the returned list states which is which.}
 \item{minor_stratum}{Column for minor stratum. Default "landing_site".}
 
 \item{fu_cols}{Columns defining the fishing unit. Default
-`c("vessel_type", "gear")`.}
+`c("vessel_type", "gear")`. Pass just
+`"vessel_type"` for a coarser (and more
+FAO-orthodox) grouping that maps directly to
+the Airtable frame without disaggregation.}
 
 \item{boat_col}{Vessel-identifier column. Default "boat_name".
 If absent in `landings`, falls back to

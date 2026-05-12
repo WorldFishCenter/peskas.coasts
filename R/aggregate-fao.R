@@ -610,10 +610,15 @@ aggregate_to_major <- function(minor_estimates,
       total_catch_kg     = sum(total_catch_kg, na.rm = TRUE),
       F_total            = sum(F_total,        na.rm = TRUE),
       n_minor_strata     = dplyr::n(),
-      # Quadrature combine of CL_i = RE_i × catch_i, then RE_total = CL / total
-      re_total_catch     = sqrt(sum((re_total_catch * total_catch_kg) ^ 2,
-                                    na.rm = TRUE)) /
-        sum(total_catch_kg, na.rm = TRUE),
+      # Quadrature combine of CL_i = RE_i x catch_i, then RE_total = CL / total.
+      # If ALL minor strata have NA re, the aggregate must also be NA (not 0).
+      re_total_catch     = dplyr::if_else(
+        all(is.na(re_total_catch)),
+        NA_real_,
+        sqrt(sum((re_total_catch * total_catch_kg) ^ 2,
+                 na.rm = TRUE)) /
+          sum(total_catch_kg, na.rm = TRUE)
+      ),
       mean_cpue_weighted = stats::weighted.mean(mean_cpue,
                                                 w = F_total * mean_days,
                                                 na.rm = TRUE),
@@ -644,6 +649,7 @@ flag_quality <- function(estimates,
   classify <- function(x) {
     dplyr::case_when(
       is.na(x)        ~ "unknown",
+      x == 0          ~ "unknown",    # exact zero = degenerate (n<2 or NA propagation)
       x <= threshold  ~ "pass",
       x <= warn_at    ~ "warn",
       TRUE            ~ "fail"
@@ -728,7 +734,261 @@ prepare_kenya_landings <- function(landings_kefs) {
 }
 
 
-# ── 12. TOP-LEVEL ORCHESTRATOR ───────────────────────────────────────────────
+# ── 12. FRAME SURVEY INTEGRATION (Airtable assets) ───────────────────────────
+
+#' Download the Peskas Airtable assets RDS containing the frame survey
+#'
+#' The Airtable `assets` RDS bundled by Lorenzo's `model-fishery.R` pipeline
+#' is the canonical source for the FAO frame `F_total`. This helper fetches
+#' it from cloud storage and returns the full named list:
+#'   `geo`, `taxa`, `gear`, `vessels`, `sites`, `forms`, `devices`, `frame`.
+#'
+#' The `frame` element has one row per (district x vessel-or-gear) with
+#' `n_boats` (= F), `standard_name` (canonical fishing-unit label) and
+#' `category_kind` ("vessel" or "gear").
+#'
+#' Note: uses `conf$storage$google$options` (not `options_coasts`).
+#'
+#' @param conf Output of `read_config()`.
+#'
+#' @return Named list as stored in the Airtable assets RDS.
+#' @export
+download_fao_frame <- function(conf) {
+  
+  logger::log_info("Downloading Airtable assets RDS for FAO frame ...")
+  
+  assets <- cloud_object_name(
+    prefix    = conf$metadata$airtable$assets,
+    provider  = conf$storage$google$key,
+    version   = "latest",
+    extension = "rds",
+    options   = conf$storage$google$options
+  ) |>
+    download_cloud_file(
+      provider = conf$storage$google$key,
+      options  = conf$storage$google$options
+    ) |>
+    readr::read_rds()
+  
+  if (!"frame" %in% names(assets)) {
+    stop(
+      "The downloaded assets RDS has no `frame` element. ",
+      "Available elements: ", paste(names(assets), collapse = ", ")
+    )
+  }
+  
+  logger::log_info(
+    "Frame loaded: {nrow(assets$frame)} rows across ",
+    "{dplyr::n_distinct(assets$frame$country)} countries."
+  )
+  assets
+}
+
+
+#' Build a FAO `frame` tibble from the Airtable assets frame
+#'
+#' Filters `assets$frame` by `category_kind` and reshapes to the
+#' (`gaul_2_name` x `fishing_unit` -> `F_total`) tibble that
+#' `estimate_catch_fao()` consumes via its `frame` argument.
+#'
+#' Defaults to `level = "vessel"` because the Airtable frame stores
+#' vessel and gear counts on separate rows -- there is no recorded
+#' joint count of (vessel x gear) combinations. FAO toolkit p. 6
+#' explicitly allows defining fishing units by vessel alone when gear
+#' assignments are diverse or unknown.
+#'
+#' @param assets_frame The `frame` element of `download_fao_frame()`.
+#' @param level        Either "vessel" (default), "gear", or "both".
+#' @param country      Optional country filter (e.g. "Mozambique").
+#'                     If `NULL`, all countries are kept.
+#' @param gaul_2_filter Optional vector of `gaul_2_name` to keep.
+#'                     Useful to restrict the frame to the districts
+#'                     that appear in the landings being analysed.
+#'
+#' @return Tibble with columns `gaul_2_name`, `fishing_unit`, `F_total`.
+#' @export
+build_frame_table <- function(assets_frame,
+                              level         = c("vessel", "gear", "both"),
+                              country       = NULL,
+                              gaul_2_filter = NULL) {
+  
+  level <- match.arg(level)
+  
+  fr <- assets_frame
+  if (!is.null(country)) {
+    fr <- dplyr::filter(fr, .data$country %in% .env$country)
+  }
+  if (!is.null(gaul_2_filter)) {
+    fr <- dplyr::filter(fr, .data$gaul_2_name %in% .env$gaul_2_filter)
+  }
+  
+  fr <- switch(level,
+               vessel = dplyr::filter(fr, .data$category_kind == "vessel"),
+               gear   = dplyr::filter(fr, .data$category_kind == "gear"),
+               both   = fr
+  )
+  
+  out <- fr |>
+    dplyr::group_by(.data$gaul_2_name, .data$standard_name) |>
+    dplyr::summarise(
+      F_total = sum(.data$n_boats, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    dplyr::filter(.data$F_total > 0) |>
+    dplyr::rename(fishing_unit = "standard_name")
+  
+  logger::log_info(
+    "build_frame_table (level = '{level}'): {nrow(out)} ",
+    "(district x fishing_unit) cells from frame survey."
+  )
+  out
+}
+
+
+#' Disaggregate a vessel-level frame to (vessel x gear) using observed proportions
+#'
+#' The Airtable frame stores `F` separately by vessel and by gear -- it does
+#' not record joint counts of (vessel x gear) combinations. This helper
+#' bridges that gap by distributing each vessel's frame count across the
+#' gears observed for that vessel in the landings, proportionally to trip
+#' counts:
+#'
+#'   F(district, vessel, gear) = F_frame(district, vessel)
+#'                              x p_observed(gear | district, vessel)
+#'
+#' The output is suitable for direct use as the `frame` argument of
+#' `estimate_catch_fao()` when `fu_cols = c("vessel_type", "gear")`.
+#'
+#' Methodological note: the proportional split assumes that the share of
+#' observed trips for each gear within a (district x vessel) group is
+#' representative of the share of frame vessels using that gear. This is
+#' an approximation -- some vessels may make disproportionately more trips
+#' than others -- but it is dramatically better than treating
+#' heterogeneous gears (e.g. trawl vs gillnet on the same motorised boat)
+#' as a single fishing unit, which inflates within-cell variance and
+#' destroys the relative-error estimates.
+#'
+#' Combinations with no observed trips are dropped (we cannot guess the
+#' split). Callers may wish to apply a uniform split for unobserved gears
+#' as a downstream refinement.
+#'
+#' @param frame      Tibble with `gaul_2_name`, `fishing_unit` (= vessel),
+#'                   `F_total`. Output of `build_frame_table(level = 'vessel')`.
+#' @param landings   Validated landings (raw, before `build_fishing_units`).
+#' @param vessel_col Name of the vessel column in landings. Default
+#'                   "vessel_type".
+#' @param gear_col   Name of the gear column in landings. Default "gear".
+#' @param sep        Separator between vessel and gear in the new
+#'                   `fishing_unit` label. Default " | " (matches
+#'                   `build_fishing_units()`).
+#'
+#' @return Tibble with columns `gaul_2_name`, `fishing_unit` (= vessel | gear),
+#'         `F_total` (rounded to integer).
+#' @export
+disaggregate_frame_by_gear <- function(frame,
+                                       landings,
+                                       vessel_col = "vessel_type",
+                                       gear_col   = "gear",
+                                       sep        = " | ") {
+  
+  # Observed proportions of gear within (district x vessel)
+  proportions <- landings |>
+    dplyr::filter(!is.na(.data[[vessel_col]]),
+                  !is.na(.data[[gear_col]])) |>
+    dplyr::distinct(.data$gaul_2_name,
+                    vessel_type = .data[[vessel_col]],
+                    gear        = .data[[gear_col]],
+                    .data$submission_id) |>
+    dplyr::count(.data$gaul_2_name, .data$vessel_type, .data$gear,
+                 name = "n_trips") |>
+    dplyr::group_by(.data$gaul_2_name, .data$vessel_type) |>
+    dplyr::mutate(prop = .data$n_trips / sum(.data$n_trips)) |>
+    dplyr::ungroup()
+  
+  # Join frame (treating its `fishing_unit` as the vessel name) with
+  # observed proportions, then multiply.
+  out <- frame |>
+    dplyr::rename(.vessel = "fishing_unit") |>
+    dplyr::inner_join(
+      proportions,
+      by = c("gaul_2_name", ".vessel" = "vessel_type")
+    ) |>
+    dplyr::mutate(
+      F_total      = as.integer(round(.data$F_total * .data$prop)),
+      fishing_unit = paste(.data$.vessel, .data$gear, sep = sep)
+    ) |>
+    dplyr::filter(.data$F_total > 0) |>
+    dplyr::select("gaul_2_name", "fishing_unit", "F_total")
+  
+  logger::log_info(
+    "disaggregate_frame_by_gear: {nrow(frame)} (district x vessel) -> ",
+    "{nrow(out)} (district x vessel x gear) cells."
+  )
+  out
+}
+
+
+#' Disaggregate a gear-level frame to (vessel x gear) using observed proportions
+#'
+#' Mirror of `disaggregate_frame_by_gear()` for countries whose Airtable
+#' frame records F by gear rather than by vessel (e.g. Kenya).
+#'
+#'   F(district, vessel, gear) = F_frame(district, gear)
+#'                              x p_observed(vessel | district, gear)
+#'
+#' @param frame      Tibble with `gaul_2_name`, `fishing_unit` (= gear),
+#'                   `F_total`. Output of `build_frame_table(level = 'gear')`.
+#' @param landings   Validated landings (raw, before `build_fishing_units`).
+#' @param vessel_col Name of the vessel column in landings. Default
+#'                   "vessel_type".
+#' @param gear_col   Name of the gear column in landings. Default "gear".
+#' @param sep        Separator between vessel and gear in the new
+#'                   `fishing_unit` label. Default " | ".
+#'
+#' @return Tibble with columns `gaul_2_name`, `fishing_unit` (= vessel | gear),
+#'         `F_total` (rounded to integer).
+#' @export
+disaggregate_frame_by_vessel <- function(frame,
+                                         landings,
+                                         vessel_col = "vessel_type",
+                                         gear_col   = "gear",
+                                         sep        = " | ") {
+  
+  proportions <- landings |>
+    dplyr::filter(!is.na(.data[[vessel_col]]),
+                  !is.na(.data[[gear_col]])) |>
+    dplyr::distinct(.data$gaul_2_name,
+                    vessel_type = .data[[vessel_col]],
+                    gear        = .data[[gear_col]],
+                    .data$submission_id) |>
+    dplyr::count(.data$gaul_2_name, .data$vessel_type, .data$gear,
+                 name = "n_trips") |>
+    dplyr::group_by(.data$gaul_2_name, .data$gear) |>
+    dplyr::mutate(prop = .data$n_trips / sum(.data$n_trips)) |>
+    dplyr::ungroup()
+  
+  out <- frame |>
+    dplyr::rename(.gear = "fishing_unit") |>
+    dplyr::inner_join(
+      proportions,
+      by = c("gaul_2_name", ".gear" = "gear")
+    ) |>
+    dplyr::mutate(
+      F_total      = as.integer(round(.data$F_total * .data$prop)),
+      fishing_unit = paste(.data$vessel_type, .data$.gear, sep = sep)
+    ) |>
+    dplyr::filter(.data$F_total > 0) |>
+    dplyr::select("gaul_2_name", "fishing_unit", "F_total")
+  
+  logger::log_info(
+    "disaggregate_frame_by_vessel: {nrow(frame)} (district x gear) -> ",
+    "{nrow(out)} (district x vessel x gear) cells."
+  )
+  out
+}
+
+
+# ── 13. TOP-LEVEL ORCHESTRATOR ───────────────────────────────────────────────
 
 #' FAO-aligned catch & effort estimation pipeline
 #'
@@ -738,15 +998,29 @@ prepare_kenya_landings <- function(landings_kefs) {
 #'
 #' @param landings         Validated landings. One row per species per trip.
 #' @param frame            Optional tibble with frame counts (`F_total` per
-#'                         minor stratum × fu). If `NULL`, derived from
-#'                         observed boats (placeholder, with warning).
+#'                         minor stratum x fu). If `NULL` and no `assets`,
+#'                         derived from observed boats (placeholder, with
+#'                         warning).
+#' @param assets           Optional Airtable assets list from
+#'                         `download_fao_frame()`. When provided and
+#'                         `frame` is `NULL`, the frame survey is
+#'                         derived from `assets$frame` automatically.
+#'                         If `fu_cols` includes both vessel and gear
+#'                         (the default), the vessel-level frame is
+#'                         disaggregated to (vessel x gear) using the
+#'                         observed gear proportions per
+#'                         (district x vessel) -- see
+#'                         `disaggregate_frame_by_gear()`.
 #' @param activity         Optional tibble with `bac` or `pab` per minor
-#'                         stratum × fu × period. If `NULL`, fishing days
+#'                         stratum x fu x period. If `NULL`, fishing days
 #'                         are taken directly from observed records.
 #' @param major_stratum    Column for major stratum. Default "gaul_2_name".
 #' @param minor_stratum    Column for minor stratum. Default "landing_site".
 #' @param fu_cols          Columns defining the fishing unit. Default
-#'                         `c("vessel_type", "gear")`.
+#'                         `c("vessel_type", "gear")`. Pass just
+#'                         `"vessel_type"` for a coarser (and more
+#'                         FAO-orthodox) grouping that maps directly to
+#'                         the Airtable frame without disaggregation.
 #' @param boat_col         Vessel-identifier column. Default "boat_name".
 #'                         If absent in `landings`, falls back to
 #'                         `submission_id` with a warning — meaning each
@@ -784,6 +1058,7 @@ prepare_kenya_landings <- function(landings_kefs) {
 #' @export
 estimate_catch_fao <- function(landings,
                                frame          = NULL,
+                               assets         = NULL,
                                activity       = NULL,
                                metric         = c("catch", "revenue"),
                                major_stratum  = "gaul_2_name",
@@ -802,7 +1077,66 @@ estimate_catch_fao <- function(landings,
     "(metric = '{metric}')"
   )
   
-  # ── 12.0a Auto-detect country schema and reshape to FAO long format
+  # ── 13.0a Frame survey from Airtable assets
+  # Auto-detect whether the frame uses vessel or gear categories, then
+  # disaggregate to (vessel x gear) fishing units using observed proportions
+  # from whichever dimension is missing.
+  if (!is.null(assets)) {
+    if (!is.null(frame)) {
+      logger::log_warn(
+        "Both `frame` and `assets` were provided -- `assets` will be ignored ",
+        "and the explicit `frame` used."
+      )
+    } else {
+      if (!"frame" %in% names(assets)) {
+        stop("`assets` does not contain a `frame` element.")
+      }
+      gaul_2_in_data <- unique(landings$gaul_2_name)
+      frame_vessel <- build_frame_table(
+        assets$frame, level = "vessel", gaul_2_filter = gaul_2_in_data
+      )
+      frame_gear <- build_frame_table(
+        assets$frame, level = "gear", gaul_2_filter = gaul_2_in_data
+      )
+      
+      wants_vessel_gear <- length(fu_cols) >= 2 &&
+        all(c("vessel_type", "gear") %in% fu_cols)
+      
+      if (nrow(frame_vessel) > 0 && wants_vessel_gear) {
+        # Mozambique path: vessel frame -> disaggregate by gear
+        logger::log_info(
+          "Frame is vessel-based ({nrow(frame_vessel)} cells). ",
+          "Disaggregating by observed gear proportions."
+        )
+        frame <- disaggregate_frame_by_gear(frame_vessel, landings)
+        
+      } else if (nrow(frame_gear) > 0 && wants_vessel_gear) {
+        # Kenya path: gear frame -> disaggregate by vessel
+        logger::log_info(
+          "Frame is gear-based ({nrow(frame_gear)} cells). ",
+          "Disaggregating by observed vessel proportions."
+        )
+        frame <- disaggregate_frame_by_vessel(frame_gear, landings)
+        
+      } else if (nrow(frame_vessel) > 0) {
+        logger::log_info("Using vessel-only frame ({nrow(frame_vessel)} cells).")
+        frame <- frame_vessel
+        
+      } else if (nrow(frame_gear) > 0) {
+        logger::log_info("Using gear-only frame ({nrow(frame_gear)} cells).")
+        frame <- frame_gear
+        
+      } else {
+        logger::log_warn(
+          "No frame data found in assets for the districts in landings. ",
+          "Falling back to observed-boats frame."
+        )
+        frame <- NULL
+      }
+    }
+  }
+  
+  # ── 13.0b Auto-detect country schema and reshape to FAO long format
   is_kefs <- all(c("priority_scientific_name", "priority_weight",
                    "sample_scientific_name",   "sample_weight") %in%
                    colnames(landings))
@@ -824,7 +1158,7 @@ estimate_catch_fao <- function(landings,
     )
   }
   
-  # ── 12.0b Revenue swap: when metric = 'revenue', overwrite catch_kg with
+  # ── 13.0c Revenue swap: when metric = 'revenue', overwrite catch_kg with
   # the per-row revenue value so the rest of the pipeline runs unchanged.
   # Output column names stay catch_kg / total_catch_kg / mean_cpue, but the
   # `metric` field on the result tells the caller what they actually contain.
@@ -844,7 +1178,7 @@ estimate_catch_fao <- function(landings,
     )
   }
   
-  # ── 12.0c Boat column auto-fallback
+  # ── 13.0d Boat column auto-fallback
   if (!boat_col %in% colnames(landings)) {
     if ("submission_id" %in% colnames(landings)) {
       logger::log_warn(
@@ -861,7 +1195,7 @@ estimate_catch_fao <- function(landings,
     }
   }
   
-  # ── 12.1 Build period column if missing
+  # ── 13.1 Build period column if missing
   if (!period_col %in% colnames(landings)) {
     if (!"landing_date" %in% colnames(landings)) {
       stop("Provide either `", period_col, "` or `landing_date` in landings.")
@@ -869,10 +1203,10 @@ estimate_catch_fao <- function(landings,
     landings[[period_col]] <- format(as.Date(landings$landing_date), "%Y-%m")
   }
   
-  # ── 12.2 Build fishing-unit labels
+  # ── 13.2 Build fishing-unit labels
   landings <- build_fishing_units(landings, fu_cols = fu_cols)
   
-  # ── 12.3 Trip-level CPUE
+  # ── 13.3 Trip-level CPUE
   keep <- c(major_stratum, minor_stratum, "fishing_unit",
             period_col, boat_col, "landing_date")
   trips <- compute_trip_cpue(
@@ -882,7 +1216,7 @@ estimate_catch_fao <- function(landings,
     keep_cols      = intersect(keep, colnames(landings))
   )
   
-  # ── 12.4 Minor-stratum summaries
+  # ── 13.4 Minor-stratum summaries
   group_minor <- c(major_stratum, minor_stratum, "fishing_unit", period_col)
   cpue_summary <- summarize_cpue(trips, group_by = group_minor, alpha = alpha)
   
@@ -913,7 +1247,7 @@ estimate_catch_fao <- function(landings,
       )
   }
   
-  # ── 12.5 Frame
+  # ── 13.5 Frame
   if (is.null(frame)) {
     frame <- derive_frame_observed(
       landings,
@@ -922,7 +1256,7 @@ estimate_catch_fao <- function(landings,
     )
   }
   
-  # ── 12.6 Minor-stratum totals + compound RE
+  # ── 13.6 Minor-stratum totals + compound RE
   minor <- estimate_minor_total(
     cpue_summary  = cpue_summary,
     days_summary  = days_summary,
@@ -934,21 +1268,21 @@ estimate_catch_fao <- function(landings,
   ) |>
     flag_quality(threshold = re_threshold)
   
-  # ── 12.7 Aggregation to major stratum
+  # ── 13.7 Aggregation to major stratum
   major <- aggregate_to_major(
     minor,
     major_keys = c(major_stratum, "fishing_unit", period_col)
   ) |>
     flag_quality(threshold = re_threshold)
   
-  # ── 12.8 Species breakdown
+  # ── 13.8 Species breakdown
   species <- estimate_species_total(
     landings        = landings,
     minor_estimates = minor,
     join_keys       = group_minor
   )
   
-  # ── 12.9 Quality summary
+  # ── 13.9 Quality summary
   quality <- minor |>
     dplyr::count(quality_overall, name = "n_groups") |>
     dplyr::mutate(pct = n_groups / sum(n_groups))
@@ -972,3 +1306,4 @@ estimate_catch_fao <- function(landings,
     quality       = quality
   )
 }
+
