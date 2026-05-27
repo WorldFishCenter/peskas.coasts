@@ -378,6 +378,54 @@ taxa_choices <- reactive({
     pull(catch_taxon)
 })
 
+# ── Trophic level ─────────────────────────────────────────────────────────────
+taxa_troph <- reactive({
+  req(input$country)
+  withProgress(message = "Loading trophic data...", {
+    conf <- coasts::read_config()
+    meta <- coasts::cloud_object_name(
+      prefix    = conf$metadata$airtable$name,
+      provider  = conf$storage$google$key,
+      version   = "latest",
+      extension = "rds",
+      options   = conf$storage$google$options
+    ) |>
+      coasts::download_cloud_file(
+        provider = conf$storage$google$key,
+        options  = conf$storage$google$options
+      ) |>
+      readr::read_rds()
+
+    taxa_lookup <- meta$taxa %>%
+      select(alpha3_code, scientific_name, english_name) %>%
+      distinct()
+
+    troph <- rfishbase::ecology(
+      species_list = taxa_lookup$scientific_name,
+      fields = c("Species", "FoodTroph", "DietTroph", "FeedingType")
+    ) %>%
+      rename(scientific_name = Species) %>%
+      group_by(scientific_name) %>%
+      summarise(
+        food_troph   = mean(FoodTroph,   na.rm = TRUE),
+        diet_troph   = mean(DietTroph,   na.rm = TRUE),
+        feeding_type = first(na.omit(FeedingType)),
+        .groups = "drop"
+      )
+
+    taxa_lookup %>%
+      mutate(alpha3_code = str_to_title(alpha3_code)) %>%
+      left_join(troph, by = "scientific_name")
+  })
+})
+
+mtl_data <- reactive({
+  req(df(), taxa_troph())
+  df() %>%
+    left_join(taxa_troph() %>% select(alpha3_code, food_troph, feeding_type),
+              by = c("catch_taxon" = "alpha3_code")) %>%
+    filter(!is.na(food_troph))
+})
 
 # ── Overview ──────────────────────────────────────────────────────────────────
 output$p_top10 <- renderPlot({
@@ -633,6 +681,79 @@ output$high_vuln_alert <- renderUI({
       tags$div(style="margin-top:8px;", species_tags)
     )
   }
+})
+
+# ── Ecosystem Indicators ──────────────────────────────────────────────────────
+output$p_mtl_gear <- renderPlot({
+  req(mtl_data())
+  mtl_data() %>%
+    group_by(gear) %>%
+    summarise(mTL     = weighted.mean(food_troph, catch_kg, na.rm = TRUE),
+              n_trips = n_distinct(trip_id), .groups = "drop") %>%
+    filter(!is.na(gear), gear != "", n_trips >= 5) %>%
+    mutate(colour = case_when(mTL >= 4.0 ~ "#EF5350",
+                              mTL >= 3.5 ~ "#FB8C00",
+                              mTL >= 3.0 ~ "#FDD835",
+                              TRUE       ~ "#66BB6A")) %>%
+    ggplot(aes(x = reorder(gear, mTL), y = mTL)) +
+    geom_segment(aes(xend = gear, y = 2.5, yend = mTL, colour = colour),
+                 linewidth = 1.2) +
+    geom_point(aes(colour = colour, size = n_trips)) +
+    geom_hline(yintercept = 3.25, linetype = "dashed", colour = "#5a6880") +
+    annotate("text", x = 1, y = 3.28, label = "FAO 'fishing down' threshold",
+             hjust = 0, size = 2.8, colour = "#5a6880") +
+    coord_flip() +
+    scale_colour_identity() +
+    scale_size_continuous(range = c(2, 6), name = "Trips") +
+    scale_y_continuous(limits = c(2.5, 4.6)) +
+    labs(x = NULL, y = "Mean Trophic Level (mTL)",
+         subtitle = "Weighted by catch (kg) · Dashed = FAO ecosystem health threshold",
+         caption  = src_cap()) +
+    theme(legend.position = "none")
+})
+
+output$p_mtl_region <- renderPlot({
+  req(mtl_data(), pal_geo())
+  mtl_data() %>%
+    group_by(province) %>%
+    summarise(mTL     = weighted.mean(food_troph, catch_kg, na.rm = TRUE),
+              n_trips = n_distinct(trip_id), .groups = "drop") %>%
+    filter(!is.na(province)) %>%
+    ggplot(aes(x = reorder(province, mTL), y = mTL, colour = province)) +
+    geom_segment(aes(xend = province, y = 2.5, yend = mTL),
+                 linewidth = 1.5) +
+    geom_point(aes(size = n_trips)) +
+    geom_hline(yintercept = 3.25, linetype = "dashed", colour = "#5a6880") +
+    coord_flip() +
+    scale_colour_manual(values = pal_geo()) +
+    scale_size_continuous(range = c(3, 8), name = "Trips") +
+    scale_y_continuous(limits = c(2.5, 4.6)) +
+    labs(x = NULL, y = "Mean Trophic Level (mTL)",
+         subtitle = "Weighted by catch (kg) · Dashed = FAO threshold",
+         caption  = src_cap()) +
+    theme(legend.position = "none")
+})
+
+output$p_mtl_seasonal <- renderPlot({
+  req(mtl_data(), month_order())
+  mtl_data() %>%
+    group_by(month_num, month) %>%
+    summarise(mTL   = weighted.mean(food_troph, catch_kg, na.rm = TRUE),
+              q25   = quantile(food_troph, 0.25, na.rm = TRUE),
+              q75   = quantile(food_troph, 0.75, na.rm = TRUE),
+              n     = n_distinct(trip_id), .groups = "drop") %>%
+    mutate(month = factor(as.character(month), levels = month_order())) %>%
+    ggplot(aes(x = month, group = 1)) +
+    geom_ribbon(aes(ymin = q25, ymax = q75), fill = "#29B6F6", alpha = 0.15) +
+    geom_line(aes(y = mTL), colour = "#00bcd4", linewidth = 1.2) +
+    geom_point(aes(y = mTL, size = n), colour = "#e0e6f0") +
+    geom_hline(yintercept = 3.25, linetype = "dashed", colour = "#5a6880") +
+    scale_y_continuous(limits = c(2.5, 4.5)) +
+    scale_size_continuous(range = c(2, 5), name = "Trips") +
+    labs(x = "Month", y = "Mean Trophic Level (mTL)",
+         subtitle = "Seasonal variation in catch trophic level · Ribbon = IQR",
+         caption  = src_cap()) +
+    theme(legend.position = "none")
 })
 
 # ── Seasonality ───────────────────────────────────────────────────────────────
@@ -1033,6 +1154,28 @@ uiOutput("high_vuln_alert")
 ```{r}
 #| title: "Catch Composition by Region"
 plotOutput("p_catch_region", height = "380px")
+```
+
+# Ecosystem Indicators
+
+## Row
+
+### Column {width="40%"}
+```{r}
+#| title: "Mean Trophic Level by Gear"
+plotOutput("p_mtl_gear", height = "440px")
+```
+
+### Column {width="30%"}
+```{r}
+#| title: "Mean Trophic Level by Region"
+plotOutput("p_mtl_region", height = "440px")
+```
+
+### Column {width="30%"}
+```{r}
+#| title: "Seasonal mTL Trend"
+plotOutput("p_mtl_seasonal", height = "440px")
 ```
 
 # Seasonality
