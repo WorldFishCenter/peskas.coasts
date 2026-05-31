@@ -8,7 +8,8 @@ build_frame_table(
   assets_frame,
   level = c("vessel", "gear", "both"),
   country = NULL,
-  gaul_2_filter = NULL
+  gaul_2_filter = NULL,
+  gear_lookup = NULL
 )
 }
 \arguments{

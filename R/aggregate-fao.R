@@ -66,7 +66,7 @@
 build_fishing_units <- function(data,
                                 fu_cols = c("vessel_type", "gear"),
                                 sep     = " | ") {
-  
+
   fu_cols_present <- intersect(fu_cols, colnames(data))
   if (length(fu_cols_present) == 0L) {
     stop(
@@ -74,7 +74,7 @@ build_fishing_units <- function(data,
       " are present in the data."
     )
   }
-  
+
   if (length(fu_cols_present) < length(fu_cols)) {
     logger::log_warn(
       "Missing fishing-unit columns: ",
@@ -82,13 +82,13 @@ build_fishing_units <- function(data,
       ". Using ", paste(fu_cols_present, collapse = " + "), " only."
     )
   }
-  
+
   fu_mat <- as.matrix(data[, fu_cols_present, drop = FALSE])
   fu     <- apply(fu_mat, 1L, function(row) {
     if (any(is.na(row) | row == "")) NA_character_
     else paste(row, collapse = sep)
   })
-  
+
   data |>
     dplyr::mutate(fishing_unit = fu) |>
     dplyr::relocate(fishing_unit, .after = dplyr::all_of(fu_cols_present[length(fu_cols_present)]))
@@ -112,10 +112,10 @@ relative_error_t <- function(x, alpha = 0.10) {
   x <- x[!is.na(x) & is.finite(x)]
   n <- length(x)
   if (n < 2L) return(NA_real_)
-  
+
   mean_x <- mean(x)
   if (mean_x == 0) return(NA_real_)
-  
+
   sd_x   <- stats::sd(x)
   t_crit <- stats::qt(1 - alpha / 2, df = n - 1L)
   abs((t_crit * sd_x / sqrt(n)) / mean_x)
@@ -146,24 +146,24 @@ relative_error_t <- function(x, alpha = 0.10) {
 #' @return Single numeric value (proportion).
 #' @export
 compound_re_catch <- function(cpue_vec, days_vec, F_total, alpha = 0.10) {
-  
+
   cpue_vec <- cpue_vec[!is.na(cpue_vec) & is.finite(cpue_vec)]
   days_vec <- days_vec[!is.na(days_vec) & is.finite(days_vec)]
-  
+
   n_c <- length(cpue_vec); n_d <- length(days_vec)
   if (n_c < 2L || n_d < 2L) return(NA_real_)
   if (is.na(F_total) || F_total <= 0) return(NA_real_)
-  
+
   m_c <- mean(cpue_vec); s_c <- stats::sd(cpue_vec)
   m_d <- mean(days_vec); s_d <- stats::sd(days_vec)
   if (m_c == 0 || m_d == 0) return(NA_real_)
-  
+
   cl_c <- stats::qt(1 - alpha / 2, df = n_c - 1L) * s_c / sqrt(n_c)
   cl_d <- stats::qt(1 - alpha / 2, df = n_d - 1L) * s_d / sqrt(n_d)
-  
+
   mean_catch <- F_total * m_d * m_c
   max_catch  <- F_total * (m_d + cl_d) * (m_c + cl_c)
-  
+
   abs((max_catch - mean_catch) / mean_catch)
 }
 
@@ -187,7 +187,7 @@ compute_bac <- function(obs,
                         group_by,
                         active   = "n_active",
                         examined = "n_examined") {
-  
+
   obs |>
     dplyr::group_by(dplyr::across(dplyr::all_of(group_by))) |>
     dplyr::summarise(
@@ -244,12 +244,12 @@ derive_activity_observed <- function(landings,
                                      boat_col       = "boat_name",
                                      date_col       = "landing_date",
                                      days_in_period = 30L) {
-  
+
   logger::log_warn(
     "Deriving activity coefficient from observed landings — ",
     "this is a placeholder. Replace with BAC or PAB data when available."
   )
-  
+
   landings |>
     dplyr::filter(!is.na(.data[[boat_col]]), !is.na(.data[[date_col]])) |>
     dplyr::group_by(dplyr::across(dplyr::all_of(group_by))) |>
@@ -292,10 +292,10 @@ compute_trip_cpue <- function(landings,
                                                  "landing_site",
                                                  "fishing_unit",
                                                  "landing_date")) {
-  
+
   duration_units <- match.arg(duration_units)
   keep_cols      <- intersect(keep_cols, colnames(landings))
-  
+
   trips <- landings |>
     dplyr::filter(!is.na(.data[[trip_id_col]]),
                   !is.na(.data[[duration_col]]),
@@ -314,7 +314,7 @@ compute_trip_cpue <- function(landings,
       cpue_kg_day  = total_catch_kg / fishing_days
     ) |>
     dplyr::filter(is.finite(cpue_kg_day), cpue_kg_day >= 0)
-  
+
   logger::log_info(
     "Trip-level CPUE: {nrow(trips)} trips | ",
     "median CPUE = {round(stats::median(trips$cpue_kg_day, na.rm = TRUE), 1)} kg/day"
@@ -339,9 +339,9 @@ summarize_cpue <- function(trips,
                                          "fishing_unit", "year_month"),
                            cpue_col  = "cpue_kg_day",
                            alpha     = 0.10) {
-  
+
   group_by <- intersect(group_by, colnames(trips))
-  
+
   trips |>
     dplyr::group_by(dplyr::across(dplyr::all_of(group_by))) |>
     dplyr::summarise(
@@ -378,9 +378,9 @@ summarize_fishing_days <- function(trips,
                                    boat_col = "boat_name",
                                    date_col = "landing_date",
                                    alpha    = 0.10) {
-  
+
   group_by <- intersect(group_by, colnames(trips))
-  
+
   per_boat <- trips |>
     dplyr::filter(!is.na(.data[[boat_col]])) |>
     dplyr::group_by(dplyr::across(dplyr::all_of(c(group_by, boat_col)))) |>
@@ -388,7 +388,7 @@ summarize_fishing_days <- function(trips,
       days_sampled = dplyr::n_distinct(as.Date(.data[[date_col]])),
       .groups      = "drop"
     )
-  
+
   per_boat |>
     dplyr::group_by(dplyr::across(dplyr::all_of(group_by))) |>
     dplyr::summarise(
@@ -421,14 +421,14 @@ derive_frame_observed <- function(landings,
                                                "landing_site",
                                                "fishing_unit"),
                                   boat_col = "boat_name") {
-  
+
   logger::log_warn(
     "Deriving frame F from observed boats — placeholder. ",
     "Replace with frame-survey or vessel-register counts when available."
   )
-  
+
   group_by <- intersect(group_by, colnames(landings))
-  
+
   landings |>
     dplyr::filter(!is.na(.data[[boat_col]]),
                   !is.na(fishing_unit)) |>
@@ -476,17 +476,17 @@ estimate_minor_total <- function(cpue_summary,
                                  boat_col  = "boat_name",
                                  date_col  = "landing_date",
                                  alpha     = 0.10) {
-  
+
   join_keys  <- intersect(join_keys, colnames(cpue_summary))
   frame_keys <- intersect(join_keys, colnames(frame))
-  
+
   est <- cpue_summary |>
     dplyr::inner_join(days_summary, by = join_keys) |>
     dplyr::left_join(frame,         by = frame_keys) |>
     dplyr::mutate(
       total_catch_kg = F_total * mean_days * mean_cpue
     )
-  
+
   # Compound RE — done per group with raw vectors. Days-per-unit needs a
   # vessel identifier; if missing, we fall back to a 1-day-per-trip vector
   # and the compound RE collapses to the CPUE RE.
@@ -498,7 +498,7 @@ estimate_minor_total <- function(cpue_summary,
       "BAC/PAB activity data to recover the days-variability term."
     )
   }
-  
+
   re_compound <- trips |>
     dplyr::group_by(dplyr::across(dplyr::all_of(join_keys))) |>
     dplyr::summarise(
@@ -528,7 +528,7 @@ estimate_minor_total <- function(cpue_summary,
       )
     ) |>
     dplyr::select(dplyr::all_of(join_keys), re_total_catch)
-  
+
   est |>
     dplyr::left_join(re_compound, by = join_keys)
 }
@@ -560,9 +560,9 @@ estimate_species_total <- function(landings,
                                                    "year_month"),
                                    species_col = "catch_taxon",
                                    catch_col   = "catch_kg") {
-  
+
   join_keys <- intersect(join_keys, colnames(minor_estimates))
-  
+
   proportions <- landings |>
     dplyr::filter(!is.na(.data[[species_col]]),
                   !is.na(.data[[catch_col]])) |>
@@ -572,7 +572,7 @@ estimate_species_total <- function(landings,
     dplyr::group_by(dplyr::across(dplyr::all_of(join_keys))) |>
     dplyr::mutate(proportion = species_kg / sum(species_kg)) |>
     dplyr::ungroup()
-  
+
   minor_estimates |>
     dplyr::select(dplyr::all_of(join_keys), total_catch_kg) |>
     dplyr::inner_join(proportions, by = join_keys) |>
@@ -600,9 +600,9 @@ aggregate_to_major <- function(minor_estimates,
                                major_keys = c("gaul_2_name",
                                               "fishing_unit",
                                               "year_month")) {
-  
+
   major_keys <- intersect(major_keys, colnames(minor_estimates))
-  
+
   minor_estimates |>
     dplyr::filter(!is.na(total_catch_kg)) |>
     dplyr::group_by(dplyr::across(dplyr::all_of(major_keys))) |>
@@ -645,7 +645,7 @@ aggregate_to_major <- function(minor_estimates,
 flag_quality <- function(estimates,
                          threshold = 0.15,
                          warn_at   = 0.20) {
-  
+
   classify <- function(x) {
     dplyr::case_when(
       is.na(x)        ~ "unknown",
@@ -655,11 +655,11 @@ flag_quality <- function(estimates,
       TRUE            ~ "fail"
     )
   }
-  
+
   out <- estimates
   if ("re_cpue"        %in% colnames(out)) out$quality_cpue  <- classify(out$re_cpue)
   if ("re_total_catch" %in% colnames(out)) out$quality_catch <- classify(out$re_total_catch)
-  
+
   if (all(c("quality_cpue", "quality_catch") %in% colnames(out))) {
     levels_q <- c("unknown", "pass", "warn", "fail")
     r_cpue   <- match(out$quality_cpue,  levels_q, nomatch = 1L)
@@ -694,14 +694,14 @@ flag_quality <- function(estimates,
 #'         for `estimate_catch_fao()`.
 #' @keywords internal
 prepare_kenya_landings <- function(landings_kefs) {
-  
+
   carry <- intersect(
     c("submission_id", "gaul_1_name", "gaul_2_name", "landing_site",
       "vessel_type", "gear", "boat_name", "trip_duration",
       "landing_date", "total_catch_weight"),
     colnames(landings_kefs)
   )
-  
+
   # Priority block: revenue estimated from unit price
   #   priority_revenue = priority_weight x total_price_kg
   priority <- landings_kefs |>
@@ -712,25 +712,207 @@ prepare_kenya_landings <- function(landings_kefs) {
                   catch_taxon = "priority_scientific_name",
                   catch_kg    = "priority_weight",
                   catch_price = ".priority_revenue")
-  
+
   # Sample block: revenue is given directly per row
   sample <- landings_kefs |>
     dplyr::select(dplyr::all_of(carry),
                   catch_taxon = "sample_scientific_name",
                   catch_kg    = "sample_weight",
                   catch_price = "sample_price")
-  
+
   out <- dplyr::bind_rows(priority, sample) |>
     dplyr::filter(!is.na(.data$catch_taxon),
                   !is.na(.data$catch_kg),
                   .data$catch_kg > 0)
-  
+
   logger::log_info(
     "prepare_kenya_landings: {nrow(landings_kefs)} input rows -> ",
     "{nrow(out)} long-format rows ",
     "({dplyr::n_distinct(out$submission_id)} unique trips)."
   )
   out
+}
+
+
+# ── 11b. GEAR MACRO-CATEGORIES & PDS ACTIVITY ────────────────────────────────
+
+#' Default gear lookup: 23 survey gears -> 5 PDS macro-categories
+#'
+#' Maps the gear labels used in country landing surveys (ADNAP, KEFS, Zanzibar)
+#' onto the 5 PDS macro-categories used by the Airtable `pds_devices` table:
+#' `gillnet_trammel`, `hook_and_line`, `seine_encircling`, `line_and_gillnet`,
+#' `other_unknown`. The macro grouping reduces the explosion of (vessel x gear)
+#' combinations (e.g. ~85 in Kenya) to a handful of homogeneous fishing units,
+#' which dramatically improves cell-level sample sizes and FAO pass rates.
+#'
+#' Override this default by passing your own tibble as `gear_lookup` to
+#' [estimate_catch_fao()].
+#'
+#' @export
+default_gear_lookup <- tibble::tribble(
+  ~gear,            ~gear_class,
+  "Gill Net",       "gillnet_trammel",
+  "Trammel Net",    "gillnet_trammel",
+  "Tangle Net",     "gillnet_trammel",
+  "Hand Line",      "hook_and_line",
+  "Long Line",      "hook_and_line",
+  "Pole and Line",  "hook_and_line",
+  "Stick Rod",      "hook_and_line",
+  "Trolling Line",  "hook_and_line",
+  "Dropline",       "hook_and_line",
+  "Beach Seine",    "seine_encircling",
+  "Purse Seine",    "seine_encircling",
+  "Ring Net",       "seine_encircling",
+  "Reef Seine",     "seine_encircling",
+  "Seine",          "seine_encircling",
+  "Trawl Net",      "seine_encircling",
+  "Scoop Net",      "seine_encircling",
+  "Mixed gears",    "line_and_gillnet",
+  "Trap",           "other_unknown",
+  "Cage Trap",      "other_unknown",
+  "Cast Net",       "other_unknown",
+  "Spear Gun",      "other_unknown",
+  "Harpoon",        "other_unknown",
+  "Gleaning",       "other_unknown",
+  "Other",          "other_unknown"
+)
+
+
+#' Apply gear macro-categories to a landings or frame tibble
+#'
+#' Overwrites the gear-name column with its corresponding macro-category
+#' from `gear_lookup`. Operates on a `gear` column by default, but the
+#' column name is configurable (e.g. `standard_name` for the Airtable frame).
+#'
+#' Rows where the gear value has no match in `gear_lookup` keep the original
+#' label (a warning is emitted listing the unmapped values).
+#'
+#' @param data        A tibble containing the gear-name column.
+#' @param gear_lookup A tibble with columns `gear` and `gear_class`. Default
+#'                    `default_gear_lookup`.
+#' @param gear_col    Name of the column to remap. Default `"gear"`.
+#'
+#' @return The input tibble with `gear_col` overwritten by the macro-category.
+#' @export
+apply_gear_macros <- function(data,
+                              gear_lookup = default_gear_lookup,
+                              gear_col    = "gear") {
+
+  if (!gear_col %in% colnames(data)) {
+    logger::log_warn(
+      "apply_gear_macros: column `{gear_col}` not in data — skipping."
+    )
+    return(data)
+  }
+
+  lookup <- gear_lookup |>
+    dplyr::rename(.gear_in = "gear", .gear_out = "gear_class")
+
+  data_out <- data |>
+    dplyr::left_join(lookup, by = setNames(".gear_in", gear_col)) |>
+    dplyr::mutate(
+      "{gear_col}" := dplyr::coalesce(.data$.gear_out, .data[[gear_col]])
+    ) |>
+    dplyr::select(-".gear_out")
+
+  unmapped <- setdiff(unique(stats::na.omit(data[[gear_col]])),
+                      lookup$.gear_in)
+  if (length(unmapped) > 0L) {
+    logger::log_warn(
+      "apply_gear_macros: {length(unmapped)} unmapped gear value(s): ",
+      paste(unmapped, collapse = ", "),
+      ". Original labels kept."
+    )
+  }
+
+  data_out
+}
+
+
+#' Build an activity table from PDS trips and devices
+#'
+#' Computes a Boat Activity Coefficient (BAC) per gear macro-category by
+#' counting how many trips a GPS-tracked vessel makes per month, then
+#' averaging over all boats of the same gear class. The result is wrapped
+#' as a per-(`fishing_unit`) activity table consumable by
+#' [estimate_catch_fao()].
+#'
+#' The function joins the PDS trips (which carry `IMEI` and trip
+#' timestamps) with the Airtable `pds_devices` table (which carries
+#' `gear class` per IMEI), aggregates trips per boat per month, then
+#' computes the mean monthly trip count per gear class. Each unique
+#' `(vessel_type x gear_class)` combination in the landings is then assigned
+#' the corresponding BAC.
+#'
+#' @param pds_trips    Tibble of GPS trips with `IMEI` and `Started` columns
+#'                     (as returned by reading the `pds-trips` parquet).
+#' @param pds_devices  Tibble from the Airtable `pds_devices` table with
+#'                     `imei` and `gear class` columns.
+#' @param landings     The landings tibble (used to derive which
+#'                     `(vessel_type, gear_class)` combinations exist).
+#' @param days_in_period Days in the analysis period. Default 30.
+#'
+#' @return A tibble with columns `fishing_unit`, `bac`, `pab`, `ac`,
+#'         `days_in_period` ready for the `activity` parameter of
+#'         [estimate_catch_fao()].
+#' @export
+build_pds_activity <- function(pds_trips,
+                               pds_devices,
+                               landings,
+                               days_in_period = 30) {
+
+  trips_per_month <- pds_trips |>
+    dplyr::mutate(
+      .imei = as.character(.data$IMEI),
+      .ym   = format(.data$Started, "%Y-%m")
+    ) |>
+    dplyr::left_join(
+      pds_devices |>
+        dplyr::transmute(
+          .imei      = as.character(.data$imei),
+          boat_name  = .data$boat_name,
+          gear_class = .data$`gear class`
+        ),
+      by = ".imei"
+    ) |>
+    dplyr::filter(!is.na(.data$gear_class), !is.na(.data$boat_name)) |>
+    dplyr::count(.data$boat_name, .data$gear_class, .data$.ym,
+                 name = "n_trips") |>
+    dplyr::group_by(.data$gear_class) |>
+    dplyr::summarise(
+      mean_trips_per_month = mean(.data$n_trips),
+      n_boats              = dplyr::n_distinct(.data$boat_name),
+      .groups              = "drop"
+    )
+
+  logger::log_info(
+    "build_pds_activity: {nrow(trips_per_month)} gear classes from ",
+    "{sum(trips_per_month$n_boats)} unique GPS-tracked boats."
+  )
+
+  unique_fus <- landings |>
+    dplyr::filter(!is.na(.data$vessel_type), !is.na(.data$gear)) |>
+    dplyr::distinct(.data$vessel_type, .data$gear) |>
+    dplyr::mutate(fishing_unit = paste(.data$vessel_type, .data$gear,
+                                       sep = " | "))
+
+  unique_fus |>
+    dplyr::left_join(
+      trips_per_month |>
+        dplyr::transmute(gear         = .data$gear_class,
+                         bac          = .data$mean_trips_per_month /
+                           .env$days_in_period,
+                         days_in_period = .env$days_in_period),
+      by = "gear"
+    ) |>
+    dplyr::filter(!is.na(.data$bac)) |>
+    dplyr::transmute(
+      fishing_unit   = .data$fishing_unit,
+      bac            = .data$bac,
+      pab            = NA_real_,
+      ac             = NA_real_,
+      days_in_period = .data$days_in_period
+    )
 }
 
 
@@ -754,9 +936,9 @@ prepare_kenya_landings <- function(landings_kefs) {
 #' @return Named list as stored in the Airtable assets RDS.
 #' @export
 download_fao_frame <- function(conf) {
-  
+
   logger::log_info("Downloading Airtable assets RDS for FAO frame ...")
-  
+
   assets <- cloud_object_name(
     prefix    = conf$metadata$airtable$assets,
     provider  = conf$storage$google$key,
@@ -769,14 +951,14 @@ download_fao_frame <- function(conf) {
       options  = conf$storage$google$options
     ) |>
     readr::read_rds()
-  
+
   if (!"frame" %in% names(assets)) {
     stop(
       "The downloaded assets RDS has no `frame` element. ",
       "Available elements: ", paste(names(assets), collapse = ", ")
     )
   }
-  
+
   logger::log_info(
     "Frame loaded: {nrow(assets$frame)} rows across ",
     "{dplyr::n_distinct(assets$frame$country)} countries."
@@ -810,10 +992,11 @@ download_fao_frame <- function(conf) {
 build_frame_table <- function(assets_frame,
                               level         = c("vessel", "gear", "both"),
                               country       = NULL,
-                              gaul_2_filter = NULL) {
-  
+                              gaul_2_filter = NULL,
+                              gear_lookup   = NULL) {
+
   level <- match.arg(level)
-  
+
   fr <- assets_frame
   if (!is.null(country)) {
     fr <- dplyr::filter(fr, .data$country %in% .env$country)
@@ -821,13 +1004,22 @@ build_frame_table <- function(assets_frame,
   if (!is.null(gaul_2_filter)) {
     fr <- dplyr::filter(fr, .data$gaul_2_name %in% .env$gaul_2_filter)
   }
-  
+
   fr <- switch(level,
                vessel = dplyr::filter(fr, .data$category_kind == "vessel"),
                gear   = dplyr::filter(fr, .data$category_kind == "gear"),
                both   = fr
   )
-  
+
+  # Apply gear macro-categories to the frame's standard_name when requested.
+  # Only meaningful for level = "gear" (vessel-level frames have vessel
+  # names, not gear names).
+  if (!is.null(gear_lookup) && level == "gear") {
+    fr <- apply_gear_macros(fr,
+                            gear_lookup = gear_lookup,
+                            gear_col    = "standard_name")
+  }
+
   out <- fr |>
     dplyr::group_by(.data$gaul_2_name, .data$standard_name) |>
     dplyr::summarise(
@@ -836,7 +1028,7 @@ build_frame_table <- function(assets_frame,
     ) |>
     dplyr::filter(.data$F_total > 0) |>
     dplyr::rename(fishing_unit = "standard_name")
-  
+
   logger::log_info(
     "build_frame_table (level = '{level}'): {nrow(out)} ",
     "(district x fishing_unit) cells from frame survey."
@@ -890,7 +1082,7 @@ disaggregate_frame_by_gear <- function(frame,
                                        vessel_col = "vessel_type",
                                        gear_col   = "gear",
                                        sep        = " | ") {
-  
+
   # Observed proportions of gear within (district x vessel)
   proportions <- landings |>
     dplyr::filter(!is.na(.data[[vessel_col]]),
@@ -904,7 +1096,7 @@ disaggregate_frame_by_gear <- function(frame,
     dplyr::group_by(.data$gaul_2_name, .data$vessel_type) |>
     dplyr::mutate(prop = .data$n_trips / sum(.data$n_trips)) |>
     dplyr::ungroup()
-  
+
   # Join frame (treating its `fishing_unit` as the vessel name) with
   # observed proportions, then multiply.
   out <- frame |>
@@ -919,7 +1111,7 @@ disaggregate_frame_by_gear <- function(frame,
     ) |>
     dplyr::filter(.data$F_total > 0) |>
     dplyr::select("gaul_2_name", "fishing_unit", "F_total")
-  
+
   logger::log_info(
     "disaggregate_frame_by_gear: {nrow(frame)} (district x vessel) -> ",
     "{nrow(out)} (district x vessel x gear) cells."
@@ -953,7 +1145,7 @@ disaggregate_frame_by_vessel <- function(frame,
                                          vessel_col = "vessel_type",
                                          gear_col   = "gear",
                                          sep        = " | ") {
-  
+
   proportions <- landings |>
     dplyr::filter(!is.na(.data[[vessel_col]]),
                   !is.na(.data[[gear_col]])) |>
@@ -966,7 +1158,7 @@ disaggregate_frame_by_vessel <- function(frame,
     dplyr::group_by(.data$gaul_2_name, .data$gear) |>
     dplyr::mutate(prop = .data$n_trips / sum(.data$n_trips)) |>
     dplyr::ungroup()
-  
+
   out <- frame |>
     dplyr::rename(.gear = "fishing_unit") |>
     dplyr::inner_join(
@@ -979,7 +1171,7 @@ disaggregate_frame_by_vessel <- function(frame,
     ) |>
     dplyr::filter(.data$F_total > 0) |>
     dplyr::select("gaul_2_name", "fishing_unit", "F_total")
-  
+
   logger::log_info(
     "disaggregate_frame_by_vessel: {nrow(frame)} (district x gear) -> ",
     "{nrow(out)} (district x vessel x gear) cells."
@@ -1011,9 +1203,32 @@ disaggregate_frame_by_vessel <- function(frame,
 #'                         observed gear proportions per
 #'                         (district x vessel) -- see
 #'                         `disaggregate_frame_by_gear()`.
-#' @param activity         Optional tibble with `bac` or `pab` per minor
-#'                         stratum x fu x period. If `NULL`, fishing days
-#'                         are taken directly from observed records.
+#' @param activity         Optional tibble with `bac`, `pab`, or `ac` per
+#'                         minor stratum x fu x period. If `NULL`, fishing
+#'                         days are taken directly from observed records.
+#'                         When `pds_trips` and `pds_devices` are also
+#'                         provided, the table is built automatically from
+#'                         GPS tracking data — see [build_pds_activity()].
+#' @param pds_trips        Optional tibble of GPS trips (from the
+#'                         `pds-trips` parquet). When provided along with
+#'                         `pds_devices`, an activity table is built
+#'                         automatically.
+#' @param pds_devices      Optional tibble from the Airtable `pds_devices`
+#'                         table (with `imei` and `gear class`).
+#' @param gear_lookup      Tibble mapping survey gears to PDS macro
+#'                         categories. Default [default_gear_lookup].
+#'                         Set to `NULL` (or `apply_macros = FALSE`) to
+#'                         disable the macro-grouping.
+#' @param apply_macros     Logical. If `TRUE` (default), the gear column
+#'                         of landings is overwritten with the macro
+#'                         category from `gear_lookup` before fishing
+#'                         units are built. Reduces ~85 vessel-gear combos
+#'                         to ~30 macro-units and dramatically improves
+#'                         per-cell sample sizes.
+#' @param hybrid_frame     Logical. If `TRUE` (default), cells not covered
+#'                         by the explicit/assets frame are backfilled
+#'                         with observed-boat counts, so every cell ends
+#'                         up with a valid F_total.
 #' @param major_stratum    Column for major stratum. Default "gaul_2_name".
 #' @param minor_stratum    Column for minor stratum. Default "landing_site".
 #' @param fu_cols          Columns defining the fishing unit. Default
@@ -1026,9 +1241,7 @@ disaggregate_frame_by_vessel <- function(frame,
 #'                         `submission_id` with a warning — meaning each
 #'                         submission is treated as one fishing-unit-day
 #'                         and the compound RE for total catch collapses
-#'                         to the CPUE RE. (For ADNAP-style data, supply
-#'                         a real `activity` table to recover the days
-#'                         variability term.)
+#'                         to the CPUE RE.
 #' @param metric           Either "catch" (default, weights in kg) or
 #'                         "revenue" (monetary value). When "revenue",
 #'                         the pipeline uses the `catch_price` column as
@@ -1060,6 +1273,11 @@ estimate_catch_fao <- function(landings,
                                frame          = NULL,
                                assets         = NULL,
                                activity       = NULL,
+                               pds_trips      = NULL,
+                               pds_devices    = NULL,
+                               gear_lookup    = default_gear_lookup,
+                               apply_macros   = TRUE,
+                               hybrid_frame   = TRUE,
                                metric         = c("catch", "revenue"),
                                major_stratum  = "gaul_2_name",
                                minor_stratum  = "landing_site",
@@ -1070,14 +1288,29 @@ estimate_catch_fao <- function(landings,
                                duration_units = "hours",
                                alpha          = 0.10,
                                re_threshold   = 0.15) {
-  
+
   metric <- match.arg(metric)
   logger::log_info(
     "FAO aggregation: starting on {nrow(landings)} landing rows ",
     "(metric = '{metric}')"
   )
-  
-  # ── 13.0a Frame survey from Airtable assets
+
+  # ── 13.0a Apply gear macro-categories to landings BEFORE everything else,
+  # so that frame disaggregation, fishing-unit construction, and activity
+  # joins all use the same vocabulary. Skip if user opts out or no lookup.
+  use_macros <- isTRUE(apply_macros) && !is.null(gear_lookup) &&
+    "gear" %in% colnames(landings)
+  if (use_macros) {
+    landings <- apply_gear_macros(landings,
+                                  gear_lookup = gear_lookup,
+                                  gear_col    = "gear")
+    logger::log_info(
+      "Applied gear macro-categories to landings ",
+      "({nrow(gear_lookup)} mappings)."
+    )
+  }
+
+  # ── 13.0b Frame survey from Airtable assets
   # Auto-detect whether the frame uses vessel or gear categories, then
   # disaggregate to (vessel x gear) fishing units using observed proportions
   # from whichever dimension is missing.
@@ -1092,40 +1325,43 @@ estimate_catch_fao <- function(landings,
         stop("`assets` does not contain a `frame` element.")
       }
       gaul_2_in_data <- unique(landings$gaul_2_name)
+      frame_lookup <- if (use_macros) gear_lookup else NULL
       frame_vessel <- build_frame_table(
-        assets$frame, level = "vessel", gaul_2_filter = gaul_2_in_data
+        assets$frame, level = "vessel",
+        gaul_2_filter = gaul_2_in_data,
+        gear_lookup   = frame_lookup
       )
       frame_gear <- build_frame_table(
-        assets$frame, level = "gear", gaul_2_filter = gaul_2_in_data
+        assets$frame, level = "gear",
+        gaul_2_filter = gaul_2_in_data,
+        gear_lookup   = frame_lookup
       )
-      
+
       wants_vessel_gear <- length(fu_cols) >= 2 &&
         all(c("vessel_type", "gear") %in% fu_cols)
-      
+
       if (nrow(frame_vessel) > 0 && wants_vessel_gear) {
-        # Mozambique path: vessel frame -> disaggregate by gear
         logger::log_info(
           "Frame is vessel-based ({nrow(frame_vessel)} cells). ",
           "Disaggregating by observed gear proportions."
         )
         frame <- disaggregate_frame_by_gear(frame_vessel, landings)
-        
+
       } else if (nrow(frame_gear) > 0 && wants_vessel_gear) {
-        # Kenya path: gear frame -> disaggregate by vessel
         logger::log_info(
           "Frame is gear-based ({nrow(frame_gear)} cells). ",
           "Disaggregating by observed vessel proportions."
         )
         frame <- disaggregate_frame_by_vessel(frame_gear, landings)
-        
+
       } else if (nrow(frame_vessel) > 0) {
         logger::log_info("Using vessel-only frame ({nrow(frame_vessel)} cells).")
         frame <- frame_vessel
-        
+
       } else if (nrow(frame_gear) > 0) {
         logger::log_info("Using gear-only frame ({nrow(frame_gear)} cells).")
         frame <- frame_gear
-        
+
       } else {
         logger::log_warn(
           "No frame data found in assets for the districts in landings. ",
@@ -1133,14 +1369,24 @@ estimate_catch_fao <- function(landings,
         )
         frame <- NULL
       }
+
+      # Disaggregation can silently produce an empty frame when the
+      # assets/landings vocabulary doesn't intersect. Treat 0-row as NULL.
+      if (!is.null(frame) && nrow(frame) == 0L) {
+        logger::log_warn(
+          "Frame from assets is empty after disaggregation. ",
+          "Falling back to observed-boats frame."
+        )
+        frame <- NULL
+      }
     }
   }
-  
-  # ── 13.0b Auto-detect country schema and reshape to FAO long format
+
+  # ── 13.0c Auto-detect country schema and reshape to FAO long format
   is_kefs <- all(c("priority_scientific_name", "priority_weight",
                    "sample_scientific_name",   "sample_weight") %in%
                    colnames(landings))
-  
+
   if (is_kefs) {
     logger::log_info(
       "Detected KEFS (Kenya) schema -- reshaping priority + sample blocks ",
@@ -1148,7 +1394,7 @@ estimate_catch_fao <- function(landings,
     )
     landings <- prepare_kenya_landings(landings)
   }
-  
+
   if (!all(c("catch_kg", "catch_taxon") %in% colnames(landings))) {
     stop(
       "Landings must contain `catch_kg` and `catch_taxon` columns. ",
@@ -1157,8 +1403,8 @@ estimate_catch_fao <- function(landings,
       "to the schema-detection block in `estimate_catch_fao()`."
     )
   }
-  
-  # ── 13.0c Revenue swap: when metric = 'revenue', overwrite catch_kg with
+
+  # ── 13.0d Revenue swap: when metric = 'revenue', overwrite catch_kg with
   # the per-row revenue value so the rest of the pipeline runs unchanged.
   # Output column names stay catch_kg / total_catch_kg / mean_cpue, but the
   # `metric` field on the result tells the caller what they actually contain.
@@ -1177,8 +1423,8 @@ estimate_catch_fao <- function(landings,
       "names but contain monetary values."
     )
   }
-  
-  # ── 13.0d Boat column auto-fallback
+
+  # ── 13.0e Boat column auto-fallback
   if (!boat_col %in% colnames(landings)) {
     if ("submission_id" %in% colnames(landings)) {
       logger::log_warn(
@@ -1194,7 +1440,7 @@ estimate_catch_fao <- function(landings,
            "cannot identify fishing units.")
     }
   }
-  
+
   # ── 13.1 Build period column if missing
   if (!period_col %in% colnames(landings)) {
     if (!"landing_date" %in% colnames(landings)) {
@@ -1202,10 +1448,10 @@ estimate_catch_fao <- function(landings,
     }
     landings[[period_col]] <- format(as.Date(landings$landing_date), "%Y-%m")
   }
-  
+
   # ── 13.2 Build fishing-unit labels
   landings <- build_fishing_units(landings, fu_cols = fu_cols)
-  
+
   # ── 13.3 Trip-level CPUE
   keep <- c(major_stratum, minor_stratum, "fishing_unit",
             period_col, boat_col, "landing_date")
@@ -1215,11 +1461,11 @@ estimate_catch_fao <- function(landings,
     duration_units = duration_units,
     keep_cols      = intersect(keep, colnames(landings))
   )
-  
+
   # ── 13.4 Minor-stratum summaries
   group_minor <- c(major_stratum, minor_stratum, "fishing_unit", period_col)
   cpue_summary <- summarize_cpue(trips, group_by = group_minor, alpha = alpha)
-  
+
   # If activity coefficients are provided, override observed days with
   # F × AC × D-derived expectation. Otherwise summarise observed days.
   days_summary <- summarize_fishing_days(
@@ -1228,34 +1474,82 @@ estimate_catch_fao <- function(landings,
     boat_col = boat_col,
     alpha    = alpha
   )
+  # If pds_trips and pds_devices are provided, derive activity automatically
+  # from GPS tracking data. The result populates `activity` if not already set.
+  if (!is.null(pds_trips) && !is.null(pds_devices) && is.null(activity)) {
+    logger::log_info(
+      "Building BAC activity table from PDS trips + Airtable devices ..."
+    )
+    activity <- build_pds_activity(
+      pds_trips   = pds_trips,
+      pds_devices = pds_devices,
+      landings    = landings
+    )
+  }
+
   if (!is.null(activity)) {
     logger::log_info("Applying provided activity coefficients (BAC / PAB).")
     ac_cols <- c("bac", "pab", "ac", "days_in_period")
     join_ac <- intersect(group_minor, colnames(activity))
-    
+
+    # Ensure all coalesce columns exist (fill missing as NA) so the join
+    # produces a tibble with all three coefficient columns available.
+    activity_for_join <- activity |>
+      dplyr::select(dplyr::all_of(join_ac), dplyr::any_of(ac_cols))
+    for (col in c("bac", "pab", "ac", "days_in_period")) {
+      if (!col %in% colnames(activity_for_join)) {
+        activity_for_join[[col]] <- NA_real_
+      }
+    }
+
     days_summary <- days_summary |>
-      dplyr::left_join(
-        dplyr::select(activity,
-                      dplyr::all_of(join_ac),
-                      dplyr::any_of(ac_cols)),
-        by = join_ac
-      ) |>
+      dplyr::left_join(activity_for_join, by = join_ac) |>
       dplyr::mutate(
-        ac        = dplyr::coalesce(.data$bac, .data$pab, .data$ac),
-        D         = dplyr::coalesce(.data$days_in_period, 30),
-        mean_days = .data$ac * .data$D
+        ac_combined = dplyr::coalesce(.data$bac, .data$pab, .data$ac),
+        D           = dplyr::coalesce(.data$days_in_period, 30),
+        mean_days   = dplyr::if_else(
+          is.na(.data$ac_combined),
+          .data$mean_days,
+          .data$ac_combined * .data$D
+        )
       )
   }
-  
-  # ── 13.5 Frame
+
+  # ── 13.5 Frame (with hybrid fallback)
+  # If an explicit frame is provided (or derived from assets), the join with
+  # the minor-stratum estimates can leave some cells with F_total = NA when
+  # the frame doesn't cover every (district x fishing_unit) combination.
+  # When `hybrid_frame = TRUE`, we fill those gaps with observed-boat counts
+  # aggregated to the SAME granularity as the explicit frame. This is the
+  # "best of both worlds": real F from the census where available, observed
+  # counts as a placeholder, joined at consistent keys.
   if (is.null(frame)) {
     frame <- derive_frame_observed(
       landings,
       group_by = c(major_stratum, minor_stratum, "fishing_unit"),
       boat_col = boat_col
     )
+  } else if (isTRUE(hybrid_frame)) {
+    # Match the explicit frame's granularity for the fallback
+    frame_keys <- intersect(c(major_stratum, minor_stratum, "fishing_unit"),
+                            colnames(frame))
+    observed_frame <- derive_frame_observed(
+      landings,
+      group_by = frame_keys,
+      boat_col = boat_col
+    )
+    n_before <- nrow(frame)
+    frame <- dplyr::bind_rows(
+      frame,
+      dplyr::anti_join(observed_frame, frame, by = frame_keys)
+    )
+    logger::log_info(
+      "Hybrid frame: {n_before} cells from real frame + ",
+      "{nrow(frame) - n_before} fallback cells from observed boats ",
+      "(aggregated at keys: {paste(frame_keys, collapse = ' + ')})."
+    )
   }
-  
+
   # ── 13.6 Minor-stratum totals + compound RE
   minor <- estimate_minor_total(
     cpue_summary  = cpue_summary,
@@ -1267,33 +1561,33 @@ estimate_catch_fao <- function(landings,
     alpha         = alpha
   ) |>
     flag_quality(threshold = re_threshold)
-  
+
   # ── 13.7 Aggregation to major stratum
   major <- aggregate_to_major(
     minor,
     major_keys = c(major_stratum, "fishing_unit", period_col)
   ) |>
     flag_quality(threshold = re_threshold)
-  
+
   # ── 13.8 Species breakdown
   species <- estimate_species_total(
     landings        = landings,
     minor_estimates = minor,
     join_keys       = group_minor
   )
-  
+
   # ── 13.9 Quality summary
   quality <- minor |>
     dplyr::count(quality_overall, name = "n_groups") |>
     dplyr::mutate(pct = n_groups / sum(n_groups))
-  
+
   logger::log_info(
     "FAO aggregation: {nrow(minor)} minor-stratum estimates | ",
     "{sum(minor$quality_overall == 'pass', na.rm = TRUE)} pass, ",
     "{sum(minor$quality_overall == 'warn', na.rm = TRUE)} warn, ",
     "{sum(minor$quality_overall == 'fail', na.rm = TRUE)} fail"
   )
-  
+
   list(
     metric        = metric,
     trips         = trips,

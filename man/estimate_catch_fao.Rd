@@ -9,6 +9,11 @@ estimate_catch_fao(
   frame = NULL,
   assets = NULL,
   activity = NULL,
+  pds_trips = NULL,
+  pds_devices = NULL,
+  gear_lookup = default_gear_lookup,
+  apply_macros = TRUE,
+  hybrid_frame = TRUE,
   metric = c("catch", "revenue"),
   major_stratum = "gaul_2_name",
   minor_stratum = "landing_site",
@@ -40,9 +45,37 @@ observed gear proportions per
 (district x vessel) -- see
 `disaggregate_frame_by_gear()`.}
 
-\item{activity}{Optional tibble with `bac` or `pab` per minor
-stratum x fu x period. If `NULL`, fishing days
-are taken directly from observed records.}
+\item{activity}{Optional tibble with `bac`, `pab`, or `ac` per
+minor stratum x fu x period. If `NULL`, fishing
+days are taken directly from observed records.
+When `pds_trips` and `pds_devices` are also
+provided, the table is built automatically from
+GPS tracking data — see [build_pds_activity()].}
+
+\item{pds_trips}{Optional tibble of GPS trips (from the
+`pds-trips` parquet). When provided along with
+`pds_devices`, an activity table is built
+automatically.}
+
+\item{pds_devices}{Optional tibble from the Airtable `pds_devices`
+table (with `imei` and `gear class`).}
+
+\item{gear_lookup}{Tibble mapping survey gears to PDS macro
+categories. Default [default_gear_lookup].
+Set to `NULL` (or `apply_macros = FALSE`) to
+disable the macro-grouping.}
+
+\item{apply_macros}{Logical. If `TRUE` (default), the gear column
+of landings is overwritten with the macro
+category from `gear_lookup` before fishing
+units are built. Reduces ~85 vessel-gear combos
+to ~30 macro-units and dramatically improves
+per-cell sample sizes.}
+
+\item{hybrid_frame}{Logical. If `TRUE` (default), cells not covered
+by the explicit/assets frame are backfilled
+with observed-boat counts, so every cell ends
+up with a valid F_total.}
 
 \item{metric}{Either "catch" (default, weights in kg) or
 "revenue" (monetary value). When "revenue",
@@ -67,9 +100,7 @@ If absent in `landings`, falls back to
 `submission_id` with a warning — meaning each
 submission is treated as one fishing-unit-day
 and the compound RE for total catch collapses
-to the CPUE RE. (For ADNAP-style data, supply
-a real `activity` table to recover the days
-variability term.)}
+to the CPUE RE.}
 
 \item{period_col}{Column with the period label (e.g. "year_month").
 If absent, it's built from `landing_date`.}
