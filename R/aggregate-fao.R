@@ -832,17 +832,26 @@ apply_gear_macros <- function(data,
 #' Build an activity table from PDS trips and devices
 #'
 #' Computes a Boat Activity Coefficient (BAC) per gear macro-category by
-#' counting how many trips a GPS-tracked vessel makes per month, then
-#' averaging over all boats of the same gear class. The result is wrapped
-#' as a per-(`fishing_unit`) activity table consumable by
-#' [estimate_catch_fao()].
+#' counting how many trips a GPS-tracked vessel makes per month. By default
+#' the BAC is calculated **per (gear x year_month)** — i.e. each month gets
+#' its own activity estimate — which is the FAO-orthodox approach
+#' (de Graaf et al. 2017, Section 3 of the toolkit: "BAC ... the probability
+#' that any boat will be active on any day during the month"). Set
+#' `by_period = FALSE` to fall back to a single annual mean per gear class.
 #'
 #' The function joins the PDS trips (which carry `IMEI` and trip
 #' timestamps) with the Airtable `pds_devices` table (which carries
 #' `gear class` per IMEI), aggregates trips per boat per month, then
-#' computes the mean monthly trip count per gear class. Each unique
-#' `(vessel_type x gear_class)` combination in the landings is then assigned
-#' the corresponding BAC.
+#' computes the mean monthly trip count per (gear class [x year_month]).
+#' Each unique `(vessel_type x gear_class)` combination in the landings is
+#' then assigned the corresponding BAC.
+#'
+#' When `by_period = TRUE`, months with no PDS observations for a given
+#' gear class are simply absent from the output -- the orchestrator will
+#' fall back to observed days for those cells. To get a graceful fallback
+#' chain (monthly -> annual -> observed), call this function twice (once
+#' with `by_period = TRUE`, once with `by_period = FALSE`) and bind the
+#' rows, keeping the monthly value where present.
 #'
 #' @param pds_trips    Tibble of GPS trips with `IMEI` and `Started` columns
 #'                     (as returned by reading the `pds-trips` parquet).
@@ -851,20 +860,26 @@ apply_gear_macros <- function(data,
 #' @param landings     The landings tibble (used to derive which
 #'                     `(vessel_type, gear_class)` combinations exist).
 #' @param days_in_period Days in the analysis period. Default 30.
+#' @param by_period    Logical. If `TRUE` (default, FAO-orthodox), the BAC
+#'                     is calculated per (gear x year_month). If `FALSE`,
+#'                     a single annual mean per gear class is returned.
 #'
 #' @return A tibble with columns `fishing_unit`, `bac`, `pab`, `ac`,
-#'         `days_in_period` ready for the `activity` parameter of
-#'         [estimate_catch_fao()].
+#'         `days_in_period`, and (when `by_period = TRUE`) `year_month`.
+#'         Consumable by the `activity` parameter of [estimate_catch_fao()].
 #' @export
 build_pds_activity <- function(pds_trips,
                                pds_devices,
                                landings,
-                               days_in_period = 30) {
+                               days_in_period = 30,
+                               by_period      = TRUE) {
 
-  trips_per_month <- pds_trips |>
+  # Trip counts per (boat x gear_class x year_month) from the raw PDS data.
+  # Each row is one boat's monthly trip count -- the unit FAO calls "AverF".
+  trips_per_boat_month <- pds_trips |>
     dplyr::mutate(
-      .imei = as.character(.data$IMEI),
-      .ym   = format(.data$Started, "%Y-%m")
+      .imei      = as.character(.data$IMEI),
+      year_month = format(.data$Started, "%Y-%m")
     ) |>
     dplyr::left_join(
       pds_devices |>
@@ -876,43 +891,96 @@ build_pds_activity <- function(pds_trips,
       by = ".imei"
     ) |>
     dplyr::filter(!is.na(.data$gear_class), !is.na(.data$boat_name)) |>
-    dplyr::count(.data$boat_name, .data$gear_class, .data$.ym,
-                 name = "n_trips") |>
-    dplyr::group_by(.data$gear_class) |>
-    dplyr::summarise(
-      mean_trips_per_month = mean(.data$n_trips),
-      n_boats              = dplyr::n_distinct(.data$boat_name),
-      .groups              = "drop"
+    dplyr::count(.data$boat_name, .data$gear_class, .data$year_month,
+                 name = "n_trips")
+
+  # Aggregate to BAC at the requested temporal grain.
+  if (isTRUE(by_period)) {
+    trips_summary <- trips_per_boat_month |>
+      dplyr::group_by(.data$gear_class, .data$year_month) |>
+      dplyr::summarise(
+        mean_trips_per_month = mean(.data$n_trips),
+        n_boats              = dplyr::n_distinct(.data$boat_name),
+        .groups              = "drop"
+      )
+    logger::log_info(
+      "build_pds_activity (by_period = TRUE, FAO-orthodox): ",
+      "{nrow(trips_summary)} (gear x year_month) cells from ",
+      "{dplyr::n_distinct(trips_per_boat_month$boat_name)} GPS-tracked boats."
     )
+  } else {
+    trips_summary <- trips_per_boat_month |>
+      dplyr::group_by(.data$gear_class) |>
+      dplyr::summarise(
+        mean_trips_per_month = mean(.data$n_trips),
+        n_boats              = dplyr::n_distinct(.data$boat_name),
+        .groups              = "drop"
+      )
+    logger::log_info(
+      "build_pds_activity (by_period = FALSE, annual mean): ",
+      "{nrow(trips_summary)} gear classes from ",
+      "{sum(trips_summary$n_boats)} unique GPS-tracked boats."
+    )
+  }
 
-  logger::log_info(
-    "build_pds_activity: {nrow(trips_per_month)} gear classes from ",
-    "{sum(trips_per_month$n_boats)} unique GPS-tracked boats."
-  )
-
+  # Unique fishing units in the landings (after gear macros have been
+  # applied -- if they have, `gear` already holds the macro label).
   unique_fus <- landings |>
     dplyr::filter(!is.na(.data$vessel_type), !is.na(.data$gear)) |>
     dplyr::distinct(.data$vessel_type, .data$gear) |>
     dplyr::mutate(fishing_unit = paste(.data$vessel_type, .data$gear,
                                        sep = " | "))
 
-  unique_fus |>
-    dplyr::left_join(
-      trips_per_month |>
-        dplyr::transmute(gear         = .data$gear_class,
-                         bac          = .data$mean_trips_per_month /
-                           .env$days_in_period,
-                         days_in_period = .env$days_in_period),
-      by = "gear"
+  if (isTRUE(by_period)) {
+    # Cartesian-expand fishing units by every year_month present in PDS,
+    # then drop the (gear x month) combinations not observed by PDS.
+    out <- tidyr::crossing(
+      unique_fus,
+      trips_summary |> dplyr::distinct(.data$year_month)
     ) |>
-    dplyr::filter(!is.na(.data$bac)) |>
-    dplyr::transmute(
-      fishing_unit   = .data$fishing_unit,
-      bac            = .data$bac,
-      pab            = NA_real_,
-      ac             = NA_real_,
-      days_in_period = .data$days_in_period
-    )
+      dplyr::left_join(
+        trips_summary |>
+          dplyr::transmute(
+            gear           = .data$gear_class,
+            year_month     = .data$year_month,
+            bac            = .data$mean_trips_per_month /
+              .env$days_in_period,
+            days_in_period = .env$days_in_period
+          ),
+        by = c("gear", "year_month")
+      ) |>
+      dplyr::filter(!is.na(.data$bac)) |>
+      dplyr::transmute(
+        fishing_unit   = .data$fishing_unit,
+        year_month     = .data$year_month,
+        bac            = .data$bac,
+        pab            = NA_real_,
+        ac             = NA_real_,
+        days_in_period = .data$days_in_period
+      )
+  } else {
+    out <- unique_fus |>
+      dplyr::left_join(
+        trips_summary |>
+          dplyr::transmute(
+            gear           = .data$gear_class,
+            bac            = .data$mean_trips_per_month /
+              .env$days_in_period,
+            days_in_period = .env$days_in_period
+          ),
+        by = "gear"
+      ) |>
+      dplyr::filter(!is.na(.data$bac)) |>
+      dplyr::transmute(
+        fishing_unit   = .data$fishing_unit,
+        bac            = .data$bac,
+        pab            = NA_real_,
+        ac             = NA_real_,
+        days_in_period = .data$days_in_period
+      )
+  }
+
+  out
 }
 
 
