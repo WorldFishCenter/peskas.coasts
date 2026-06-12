@@ -106,17 +106,17 @@ apply_gear_macros <- function(
 #' its own activity estimate — which is the FAO-orthodox approach
 #' (de Graaf et al. 2017, Section 3 of the toolkit: "BAC ... the probability
 #' that any boat will be active on any day during the month"). Set
-#' `by_period = FALSE` to fall back to a single annual mean per gear class.
+#' `by_period = FALSE` to fall back to a single annual mean per gear_class.
 #'
 #' The function joins the PDS trips (which carry `IMEI` and trip
 #' timestamps) with the Airtable `pds_devices` table (which carries
-#' `gear class` per IMEI), aggregates trips per boat per month, then
-#' computes the mean monthly trip count per (gear class [x year_month]).
+#' `gear_class` per IMEI), aggregates trips per boat per month, then
+#' computes the mean monthly trip count per (gear_class [x year_month]).
 #' Each unique `(vessel_type x gear_class)` combination in the landings is
 #' then assigned the corresponding BAC.
 #'
 #' When `by_period = TRUE`, months with no PDS observations for a given
-#' gear class are simply absent from the output -- the orchestrator will
+#' gear_class are simply absent from the output -- the orchestrator will
 #' fall back to observed days for those cells. To get a graceful fallback
 #' chain (monthly -> annual -> observed), call this function twice (once
 #' with `by_period = TRUE`, once with `by_period = FALSE`) and bind the
@@ -125,13 +125,13 @@ apply_gear_macros <- function(
 #' @param pds_trips    Tibble of GPS trips with `IMEI` and `Started` columns
 #'                     (as returned by reading the `pds-trips` parquet).
 #' @param pds_devices  Tibble from the Airtable `pds_devices` table with
-#'                     `imei` and `gear class` columns.
+#'                     `imei` and `gear_class` columns.
 #' @param landings     The landings tibble (used to derive which
 #'                     `(vessel_type, gear_class)` combinations exist).
 #' @param days_in_period Days in the analysis period. Default 30.
 #' @param by_period    Logical. If `TRUE` (default, FAO-orthodox), the BAC
 #'                     is calculated per (gear x year_month). If `FALSE`,
-#'                     a single annual mean per gear class is returned.
+#'                     a single annual mean per gear_class is returned.
 #'
 #' @return A tibble with columns `fishing_unit`, `bac`, `pab`, `ac`,
 #'         `days_in_period`, and (when `by_period = TRUE`) `year_month`.
@@ -156,7 +156,7 @@ build_pds_activity <- function(
         dplyr::transmute(
           .imei = as.character(.data$imei),
           boat_name = .data$boat_name,
-          gear_class = .data$`gear class`
+          gear_class = .data$`gear_class`
         ),
       by = ".imei"
     ) |>

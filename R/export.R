@@ -1058,3 +1058,76 @@ export_frame_data <- function(
 
   invisible(NULL)
 }
+
+#' Export FAO Catch & Effort Estimates to MongoDB
+#'
+#' @description
+#' Downloads the combined FAO catch & revenue estimates assembled by
+#' [aggregate_fao()] from cloud storage, applies the same USD currency
+#' conversion as [export_geos()] to the revenue field, and uploads the result
+#' to MongoDB for portal consumption.
+#'
+#' @details
+#' The collection has one document per `(country, gaul_2_name, fishing_unit,
+#' year_month)` with both catch and revenue totals, their compound relative
+#' errors, and the FAO quality flags. Downstream dashboards can filter by
+#' `quality_catch == "pass"` (or equivalently for revenue) to show only
+#' FAO-grade estimates.
+#'
+#' Currency factors mirror [export_geos()] (Zanzibar TZS, Kenya KES,
+#' Mozambique MZN -> USD).
+#'
+#' @param log_threshold The logging level threshold for the logger package.
+#' @param package       Name of the package whose `inst/conf.yml` to read.
+#'                      Defaults to `"coasts"`.
+#'
+#' @return Invisibly `NULL`. Uploads to MongoDB as a side effect.
+#'
+#' @examples
+#' \dontrun{
+#' export_fao()
+#' }
+#'
+#' @seealso
+#' * [aggregate_fao()] for the upstream estimation step
+#' * [mdb_collection_push()] for MongoDB upload functionality
+#'
+#' @keywords workflow export
+#' @export
+export_fao <- function(log_threshold = logger::DEBUG, package = "coasts") {
+
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+
+  logger::log_info("Downloading FAO estimates from cloud storage ...")
+  fao_estimates <- download_parquet_from_cloud(
+    prefix   = conf$fao$file_prefix,
+    provider = conf$storage$google$key,
+    options  = conf$storage$google$options
+  )
+
+  # Currency conversion to USD (factors mirror export_geos)
+  fao_estimates <- fao_estimates |>
+    dplyr::mutate(
+      total_revenue = dplyr::case_when(
+        .data$country == "zanzibar"    ~ .data$total_revenue * 0.00037,
+        .data$country == "kenya"       ~ .data$total_revenue * 0.0077,
+        .data$country == "mozambique"  ~ .data$total_revenue * 0.016,
+        TRUE                           ~ .data$total_revenue
+      )
+    )
+
+  logger::log_info(
+    "Pushing {nrow(fao_estimates)} FAO estimates to MongoDB ..."
+  )
+  mdb_collection_push(
+    data              = fao_estimates,
+    connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+    collection_name   = conf$storage$mongodb$coasts_portal$collection$fao_estimates,
+    db_name           = conf$storage$mongodb$coasts_portal$database_name,
+    geo               = FALSE
+  )
+
+  logger::log_success("Successfully exported FAO estimates to MongoDB")
+  invisible(NULL)
+}

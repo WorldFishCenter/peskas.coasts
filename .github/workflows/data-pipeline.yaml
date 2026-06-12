@@ -4,7 +4,7 @@ on:
   push:
   schedule:
     - cron: '0 0 * * *'
-  workflow_dispatch:  
+  workflow_dispatch:
 
 env:
   # PDS API Credentials
@@ -111,7 +111,7 @@ jobs:
         if: endsWith(github.ref, '/main')
         run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
       - name: Call merge_survey_trips()
-        run: Rscript -e 'coasts::merge_survey_trips()'      
+        run: Rscript -e 'coasts::merge_survey_trips()'
 
   ingest-pds-tracks:
     name: Ingest GPS tracks
@@ -143,7 +143,7 @@ jobs:
         if: endsWith(github.ref, '/main')
         run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
       - name: Call preprocess_pds_tracks()
-        run: Rscript -e 'coasts::preprocess_pds_tracks()'              
+        run: Rscript -e 'coasts::preprocess_pds_tracks()'
 
   export-data:
     name: Export WIO data
@@ -159,7 +159,7 @@ jobs:
         if: endsWith(github.ref, '/main')
         run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
       - name: Call export_geos()
-        run: Rscript -e 'coasts::export_geos()'        
+        run: Rscript -e 'coasts::export_geos()'
 
   export-fishers-stats:
     name: Export fishers stats
@@ -227,3 +227,34 @@ jobs:
       - name: Call export_pds_spatial()
         run: Rscript -e 'coasts::export_pds_spatial()'
 
+  aggregate-fao:
+    name: FAO catch & effort aggregation
+    needs: [ingest-static-assets, ingest-pds-trips]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call aggregate_fao()
+        run: Rscript -e 'coasts::aggregate_fao()'
+
+  export-fao:
+    name: Export FAO estimates to MongoDB
+    needs: aggregate-fao
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call export_fao()
+        run: Rscript -e 'coasts::export_fao()'

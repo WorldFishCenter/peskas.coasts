@@ -41,12 +41,14 @@ default:
         merged: wf-adnap-surveys-merged
       lurio:
         validated: wf-lurio-surveys-validated
+  fao:
+    file_prefix: fao-estimates
   pds:
     customers:
       - "WorldFish - Mozambique"
       - "Syberintel - distributor"
       - "Kenya"
-      - "Kenya AABS" 
+      - "Kenya AABS"
       - "WorldFish - Kenya"
       - "WorldFish - Tanzania AP"
       - "WorldFish - Zanzibar"
@@ -60,10 +62,10 @@ default:
       version: latest
     pds_tracks:
       file_prefix: pds-tracks
-      version: latest      
+      version: latest
     pds_tracks_predicted:
       file_prefix: predicted-pds-tracks
-      version: latest      
+      version: latest
     pds_tracks_h3_grid:
       file_prefix: predicted-pds-h3_grid
       version: latest
@@ -114,6 +116,7 @@ default:
           wio_gaul2: wio_gaul2
           metrics_gaul1: metrics_gaul1
           metrics_gaul2: metrics_gaul2
+          fao_estimates: fao_estimates
       tracks_app:
         connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_TRACKS')
         database_name: portal-dev

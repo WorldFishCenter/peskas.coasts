@@ -528,3 +528,180 @@ estimate_catch_fao <- function(
     quality = quality
   )
 }
+
+#' Run the FAO catch & effort estimation pipeline for all configured countries
+#'
+#' @description
+#' End-to-end workflow function called by the bi-daily GitHub Actions pipeline.
+#' Downloads validated landings for each country (Mozambique, Kenya, Zanzibar)
+#' from cloud storage, joins them with the Airtable frame survey and the PDS
+#' GPS-derived activity coefficients, runs [estimate_catch_fao()] twice (once
+#' for catch, once for revenue), merges the two streams at the major-stratum
+#' level, and uploads the combined estimates as a versioned parquet to GCS for
+#' downstream consumption by [export_fao()].
+#'
+#' @details
+#' The output parquet has one row per `(country, gaul_2_name, fishing_unit,
+#' year_month)` with both catch and revenue totals side by side, plus the
+#' compound relative errors and quality flags from both runs. Downstream
+#' consumers can filter on `quality_catch == "pass"` (or equivalently for
+#' revenue) when they want only FAO-grade estimates.
+#'
+#' @param log_threshold The logging level threshold for the logger package.
+#'                      See `logger::log_levels` for available options.
+#' @param package       Name of the package whose `inst/conf.yml` to read.
+#'                      Defaults to `"coasts"`.
+#'
+#' @return Invisibly `NULL`. Uploads one versioned parquet
+#'         (`{conf$fao$file_prefix}.parquet`) to GCS as a side effect.
+#'
+#' @examples
+#' \dontrun{
+#' # Run the FAO aggregation pipeline with default debug logging
+#' aggregate_fao()
+#' }
+#'
+#' @seealso
+#' * [estimate_catch_fao()] for the underlying estimation engine
+#' * [export_fao()] for the MongoDB export step that consumes this output
+#' * [download_fao_frame()] for retrieving the Airtable assets snapshot
+#'
+#' @keywords workflow
+#' @export
+aggregate_fao <- function(log_threshold = logger::DEBUG, package = "coasts") {
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+  coasts_opts <- resolve_storage_opts(conf, "coasts")
+
+  # ── Step 1. Download shared assets ──────────────────────────────────────────
+  # `assets$devices` is populated by ingest_assets() (which must include the
+  # `gear class` column in its select_cols). We avoid a redundant Airtable
+  # call by reusing the cached snapshot here.
+  logger::log_info("Downloading FAO frame and PDS trips ...")
+
+  assets <- download_fao_frame(conf)
+
+  pds_trips <- download_parquet_from_cloud(
+    prefix = conf$pds$pds_trips$file_prefix,
+    provider = conf$storage$google$key,
+    options = coasts_opts
+  )
+
+  pds_devices <- assets$devices
+
+  # ── Step 2. Per-country FAO estimation ──────────────────────────────────────
+  # Each country lives in its own GCS bucket and has its own validated-landings
+  # parquet prefix. The bucket is swapped into the options list per iteration.
+  countries <- list(
+    mozambique = list(
+      bucket = conf$storage$google$buckets$mozambique,
+      prefix = conf$surveys$mozambique$adnap$validated
+    ),
+    kenya = list(
+      bucket = conf$storage$google$buckets$kenya,
+      prefix = conf$surveys$kenya$kefs$validated
+    ),
+    zanzibar = list(
+      bucket = conf$storage$google$buckets$zanzibar,
+      prefix = conf$surveys$zanzibar$wf$validated
+    )
+  )
+
+  country_results <- purrr::imap(countries, function(.cfg, .name) {
+    logger::log_info("=== Country: {.name} ===")
+
+    country_opts <- coasts_opts
+    country_opts$bucket <- .cfg$bucket
+
+    landings <- download_parquet_from_cloud(
+      prefix = .cfg$prefix,
+      provider = conf$storage$google$key,
+      options = country_opts
+    )
+
+    # Catch run
+    logger::log_info("Running FAO estimator for catch ...")
+    out_catch <- estimate_catch_fao(
+      landings = landings,
+      assets = assets,
+      pds_trips = pds_trips,
+      pds_devices = pds_devices,
+      metric = "catch"
+    )
+
+    # Revenue run
+    logger::log_info("Running FAO estimator for revenue ...")
+    out_revenue <- estimate_catch_fao(
+      landings = landings,
+      assets = assets,
+      pds_trips = pds_trips,
+      pds_devices = pds_devices,
+      metric = "revenue"
+    )
+
+    # Merge catch + revenue side by side at the major-stratum level
+    join_keys <- intersect(
+      colnames(out_catch$major),
+      c("gaul_2_name", "fishing_unit", "year_month")
+    )
+
+    catch_part <- out_catch$major |>
+      dplyr::transmute(
+        dplyr::across(dplyr::all_of(join_keys)),
+        F_total = .data$F_total,
+        total_catch_kg = .data$total_catch_kg,
+        re_total_catch = .data$re_total_catch,
+        quality_catch = dplyr::case_when(
+          is.na(.data$re_total_catch) ~ "unknown",
+          .data$re_total_catch == 0 ~ "unknown",
+          .data$re_total_catch <= 0.15 ~ "pass",
+          .data$re_total_catch <= 0.20 ~ "warn",
+          TRUE ~ "fail"
+        )
+      )
+
+    revenue_part <- out_revenue$major |>
+      dplyr::transmute(
+        dplyr::across(dplyr::all_of(join_keys)),
+        total_revenue = .data$total_catch_kg,
+        re_total_revenue = .data$re_total_catch,
+        quality_revenue = dplyr::case_when(
+          is.na(.data$re_total_catch) ~ "unknown",
+          .data$re_total_catch == 0 ~ "unknown",
+          .data$re_total_catch <= 0.15 ~ "pass",
+          .data$re_total_catch <= 0.20 ~ "warn",
+          TRUE ~ "fail"
+        )
+      )
+
+    dplyr::left_join(catch_part, revenue_part, by = join_keys) |>
+      dplyr::mutate(country = .name, .before = 1L)
+  })
+
+  # ── Step 3. Bind across countries and upload to GCS ─────────────────────────
+  fao_estimates <- dplyr::bind_rows(country_results)
+
+  logger::log_info(
+    "FAO estimates assembled: {nrow(fao_estimates)} rows across ",
+    "{dplyr::n_distinct(fao_estimates$country)} countries."
+  )
+
+  filename <- add_version(
+    conf$fao$file_prefix,
+    extension = "parquet"
+  )
+  on.exit(
+    if (file.exists(filename)) file.remove(filename),
+    add = TRUE
+  )
+
+  arrow::write_parquet(fao_estimates, filename)
+  upload_cloud_file(
+    file = filename,
+    provider = conf$storage$google$key,
+    options = coasts_opts
+  )
+  logger::log_success("Uploaded {basename(filename)}")
+
+  invisible(NULL)
+}

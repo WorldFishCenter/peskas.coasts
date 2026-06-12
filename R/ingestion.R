@@ -345,7 +345,8 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
           "last_seen",
           "gaul_2",
           "region",
-          "community"
+          "community",
+          "gear_class"
         ),
         conf = conf
       ),
