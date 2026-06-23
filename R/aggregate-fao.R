@@ -1,89 +1,12 @@
 # FAO-aligned catch & effort estimation pipeline.
 #
-# Top-level entry point estimate_catch_fao() and the country adapter
-# prepare_kenya_landings() it dispatches on. The statistical engine
+# Top-level entry point estimate_catch_fao(). The statistical engine
 # lives in fao-estimation.R; pure numerical helpers in fao-helpers.R;
 # frame-survey and PDS activity helpers in fao-frame.R.
 #
 # Reference: de Graaf G., Stamatopoulos C., Jarrett T. (2017).
 # OPEN ARTFISH and the FAO ODK mobile phone application — a toolkit
 # for small-scale fisheries routine data collection. FAO, Rome.
-
-#' Reshape KEFS (Kenya) validated landings into FAO long format
-#'
-#' KEFS records each trip with a "priority" species (target catch, weighed
-#' in full) and a "sample" species (a sub-sample weighed for composition).
-#' The FAO estimator wants one row per species per trip with `catch_kg` and
-#' `catch_taxon`. This helper unions the priority and sample blocks into
-#' that shape, dropping rows with zero or missing weight / taxon.
-#'
-#' Called automatically by `estimate_catch_fao()` when the KEFS schema is
-#' detected. Exposed as an internal helper for testing only.
-#'
-#' Note: this is a basic union; full FAO compliance for KEFS would also
-#' raise the sample weight to total catch via
-#' `sample_weight_raised = sample_weight * total_catch_weight / sum(sample_weight)`
-#' per trip. Add this when the team confirms the sub-sampling protocol.
-#'
-#' @param landings_kefs Raw KEFS validated landings.
-#'
-#' @return Long-format tibble with `catch_kg` and `catch_taxon` ready
-#'         for `estimate_catch_fao()`.
-#' @keywords internal
-prepare_kenya_landings <- function(landings_kefs) {
-  carry <- intersect(
-    c(
-      "submission_id",
-      "gaul_1_name",
-      "gaul_2_name",
-      "landing_site",
-      "vessel_type",
-      "gear",
-      "boat_name",
-      "trip_duration",
-      "landing_date",
-      "total_catch_weight"
-    ),
-    colnames(landings_kefs)
-  )
-
-  # Priority block: revenue estimated from unit price
-  #   priority_revenue = priority_weight x total_price_kg
-  priority <- landings_kefs |>
-    dplyr::mutate(
-      .priority_revenue = .data$priority_weight * .data$total_price_kg
-    ) |>
-    dplyr::select(
-      dplyr::all_of(carry),
-      catch_taxon = "priority_scientific_name",
-      catch_kg = "priority_weight",
-      catch_price = ".priority_revenue"
-    )
-
-  # Sample block: revenue is given directly per row
-  sample <- landings_kefs |>
-    dplyr::select(
-      dplyr::all_of(carry),
-      catch_taxon = "sample_scientific_name",
-      catch_kg = "sample_weight",
-      catch_price = "sample_price"
-    )
-
-  out <- dplyr::bind_rows(priority, sample) |>
-    dplyr::filter(
-      !is.na(.data$catch_taxon),
-      !is.na(.data$catch_kg),
-      .data$catch_kg > 0
-    )
-
-  logger::log_info(
-    "prepare_kenya_landings: {nrow(landings_kefs)} input rows -> ",
-    "{nrow(out)} long-format rows ",
-    "({dplyr::n_distinct(out$submission_id)} unique trips)."
-  )
-  out
-}
-
 
 #' FAO-aligned catch & effort estimation pipeline
 #'
@@ -173,25 +96,25 @@ prepare_kenya_landings <- function(landings_kefs) {
 #'   }
 #' @export
 estimate_catch_fao <- function(
-  landings,
-  frame = NULL,
-  assets = NULL,
-  activity = NULL,
-  pds_trips = NULL,
-  pds_devices = NULL,
-  gear_lookup = default_gear_lookup,
-  apply_macros = TRUE,
-  hybrid_frame = TRUE,
-  metric = c("catch", "revenue"),
-  major_stratum = "gaul_2_name",
-  minor_stratum = "landing_site",
-  fu_cols = c("vessel_type", "gear"),
-  boat_col = "boat_name",
-  period_col = "year_month",
-  duration_col = "trip_duration",
-  duration_units = "hours",
-  alpha = 0.10,
-  re_threshold = 0.15
+    landings,
+    frame = NULL,
+    assets = NULL,
+    activity = NULL,
+    pds_trips = NULL,
+    pds_devices = NULL,
+    gear_lookup = default_gear_lookup,
+    apply_macros = TRUE,
+    hybrid_frame = TRUE,
+    metric = c("catch", "revenue"),
+    major_stratum = "gaul_2_name",
+    minor_stratum = "landing_site",
+    fu_cols = c("vessel_type", "gear"),
+    boat_col = "boat_name",
+    period_col = "year_month",
+    duration_col = "trip_duration",
+    duration_units = "hours",
+    alpha = 0.10,
+    re_threshold = 0.15
 ) {
   metric <- match.arg(metric)
   logger::log_info(
@@ -289,32 +212,13 @@ estimate_catch_fao <- function(
     }
   }
 
-  # ── 13.0c Auto-detect country schema and reshape to FAO long format
-  is_kefs <- all(
-    c(
-      "priority_scientific_name",
-      "priority_weight",
-      "sample_scientific_name",
-      "sample_weight"
-    ) %in%
-      colnames(landings)
-  )
-
-  if (is_kefs) {
-    logger::log_info(
-      "Detected KEFS (Kenya) schema -- reshaping priority + sample blocks ",
-      "into one row per species per trip."
-    )
-    landings <- prepare_kenya_landings(landings)
-  }
-
+  # ── 13.0c Schema sanity check
   if (!all(c("catch_kg", "catch_taxon") %in% colnames(landings))) {
     stop(
       "Landings must contain `catch_kg` and `catch_taxon` columns. ",
       "Got: ",
       paste(colnames(landings), collapse = ", "),
-      ". If this is a country with a different schema, add a branch ",
-      "to the schema-detection block in `estimate_catch_fao()`."
+      "."
     )
   }
 
@@ -533,14 +437,21 @@ estimate_catch_fao <- function(
 #'
 #' @description
 #' End-to-end workflow function called by the bi-daily GitHub Actions pipeline.
-#' Downloads validated landings for each country (Mozambique, Kenya, Zanzibar)
-#' from cloud storage, joins them with the Airtable frame survey and the PDS
-#' GPS-derived activity coefficients, runs [estimate_catch_fao()] twice (once
-#' for catch, once for revenue), merges the two streams at the major-stratum
-#' level, and uploads the combined estimates as a versioned parquet to GCS for
-#' downstream consumption by [export_fao()].
+#' Downloads landings for each country (Mozambique, Kenya, Zanzibar) from the
+#' unified Peskas API bucket, joins them with the Airtable frame survey and the
+#' PDS GPS-derived activity coefficients, runs [estimate_catch_fao()] twice
+#' (once for catch, once for revenue), merges the two streams at the
+#' major-stratum level, and uploads the combined estimates as a versioned
+#' parquet to GCS for downstream consumption by [export_fao()].
 #'
 #' @details
+#' Landings come from the API bucket (`conf$api$trips$bucket`) which has a
+#' uniform schema across countries (Kenya already in long format -- no need
+#' for KEFS-specific reshaping anymore). Records are filtered to
+#' `landing_date >= 2024-01-01` to align with the PDS GPS coverage window
+#' used for the BAC, and rows missing `gaul_2_name` are dropped (about 25%
+#' of the Kenya feed at the time of writing -- see Lorenzo's geo join).
+#'
 #' The output parquet has one row per `(country, gaul_2_name, fishing_unit,
 #' year_month)` with both catch and revenue totals side by side, plus the
 #' compound relative errors and quality flags from both runs. Downstream
@@ -590,34 +501,60 @@ aggregate_fao <- function(log_threshold = logger::DEBUG, package = "coasts") {
   pds_devices <- assets$devices
 
   # ── Step 2. Per-country FAO estimation ──────────────────────────────────────
-  # Each country lives in its own GCS bucket and has its own validated-landings
-  # parquet prefix. The bucket is swapped into the options list per iteration.
+  # Landings come from the unified API bucket (peskas-api-dev / peskas-api-prod)
+  # under a country-specific cloud_path. Schema is identical across countries
+  # so the same bridge applies everywhere.
   countries <- list(
-    mozambique = list(
-      bucket = conf$storage$google$buckets$mozambique,
-      prefix = conf$surveys$mozambique$adnap$validated
-    ),
-    kenya = list(
-      bucket = conf$storage$google$buckets$kenya,
-      prefix = conf$surveys$kenya$kefs$validated
-    ),
-    zanzibar = list(
-      bucket = conf$storage$google$buckets$zanzibar,
-      prefix = conf$surveys$zanzibar$wf$validated
-    )
+    mozambique = conf$api$trips$mozambique$validated$cloud_path,
+    kenya      = conf$api$trips$kenya$validated$cloud_path,
+    zanzibar   = conf$api$trips$zanzibar$validated$cloud_path
   )
 
-  country_results <- purrr::imap(countries, function(.cfg, .name) {
+  country_results <- purrr::imap(countries, function(.prefix, .name) {
     logger::log_info("=== Country: {.name} ===")
 
-    country_opts <- coasts_opts
-    country_opts$bucket <- .cfg$bucket
-
     landings <- download_parquet_from_cloud(
-      prefix = .cfg$prefix,
-      provider = conf$storage$google$key,
-      options = country_opts
-    )
+      prefix      = .prefix,
+      provider    = conf$storage$google$key,
+      options     = conf$storage$google$options,
+      bucket_name = conf$api$trips$bucket
+    ) |>
+      dplyr::filter(
+        !is.na(.data$gaul_2_name),
+        .data$landing_date >= as.Date("2024-01-01")
+      ) |>
+      dplyr::mutate(
+        boat_name     = .data$trip_id,
+        submission_id = .data$survey_id,
+        trip_duration = .data$trip_duration_hrs,
+        landing_site  = NA_character_
+      )
+
+    # Some countries (MZ, ZN) report revenue only at trip level
+    # (`tot_catch_price`) while Kenya has per-record `catch_price`. Fall back
+    # to the trip-level total distributed proportionally to catch_kg within
+    # each trip when the per-record price is empty.
+    if (
+      "tot_catch_price" %in% colnames(landings) &&
+      !any(landings$catch_price > 0, na.rm = TRUE)
+    ) {
+      logger::log_info(
+        "catch_price empty for {.name} -- distributing tot_catch_price ",
+        "weighted by catch_kg within each trip."
+      )
+      landings <- landings |>
+        dplyr::group_by(.data$trip_id) |>
+        dplyr::mutate(
+          .trip_kg_sum = sum(.data$catch_kg, na.rm = TRUE),
+          catch_price  = dplyr::if_else(
+            .data$.trip_kg_sum > 0,
+            .data$tot_catch_price * .data$catch_kg / .data$.trip_kg_sum,
+            0
+          )
+        ) |>
+        dplyr::ungroup() |>
+        dplyr::select(-".trip_kg_sum")
+    }
 
     # Catch run
     logger::log_info("Running FAO estimator for catch ...")
@@ -705,3 +642,4 @@ aggregate_fao <- function(log_threshold = logger::DEBUG, package = "coasts") {
 
   invisible(NULL)
 }
+

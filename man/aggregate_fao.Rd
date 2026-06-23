@@ -19,14 +19,21 @@ Invisibly `NULL`. Uploads one versioned parquet
 }
 \description{
 End-to-end workflow function called by the bi-daily GitHub Actions pipeline.
-Downloads validated landings for each country (Mozambique, Kenya, Zanzibar)
-from cloud storage, joins them with the Airtable frame survey and the PDS
-GPS-derived activity coefficients, runs [estimate_catch_fao()] twice (once
-for catch, once for revenue), merges the two streams at the major-stratum
-level, and uploads the combined estimates as a versioned parquet to GCS for
-downstream consumption by [export_fao()].
+Downloads landings for each country (Mozambique, Kenya, Zanzibar) from the
+unified Peskas API bucket, joins them with the Airtable frame survey and the
+PDS GPS-derived activity coefficients, runs [estimate_catch_fao()] twice
+(once for catch, once for revenue), merges the two streams at the
+major-stratum level, and uploads the combined estimates as a versioned
+parquet to GCS for downstream consumption by [export_fao()].
 }
 \details{
+Landings come from the API bucket (`conf$api$trips$bucket`) which has a
+uniform schema across countries (Kenya already in long format -- no need
+for KEFS-specific reshaping anymore). Records are filtered to
+`landing_date >= 2024-01-01` to align with the PDS GPS coverage window
+used for the BAC, and rows missing `gaul_2_name` are dropped (about 25%
+of the Kenya feed at the time of writing -- see Lorenzo's geo join).
+
 The output parquet has one row per `(country, gaul_2_name, fishing_unit,
 year_month)` with both catch and revenue totals side by side, plus the
 compound relative errors and quality flags from both runs. Downstream
