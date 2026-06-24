@@ -338,6 +338,7 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
         table_name = "pds_devices",
         select_cols = c(
           "customer_name",
+          "country_unlink",
           "imei",
           "boat_name",
           "registration_number",
@@ -345,14 +346,15 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
           "last_seen",
           "gaul_2",
           "region",
-          "community"
+          "community",
+          "gear_class",
+          "vessel_class"
         ),
         conf = conf
       ),
       frame = fetch_asset(
         table_name = "frame",
         select_cols = c(
-          "country",
           "gaul_1_name",
           "gaul_1_code",
           "gaul_2_name",

@@ -76,9 +76,15 @@ prepare_tracks_for_effort <- function(df, h3_res) {
 #'
 #' ## Grid schema
 #'
-#' The grid includes a `year` column for temporal effort maps (see
-#' [plot_effort_map()]). An all-time aggregate is obtained by summing over
-#' `year`. Primary effort columns:
+#' The grid is partitioned by `year`, `gear`, and `country`, so there may be
+#' several rows per `(h3_index, year)` — one per `(gear, country)` combination.
+#' `gear` and `country` come from the per-trip device metadata
+#' (trip → IMEI → Airtable `pds_devices`); trips with no device metadata are
+#' kept under `gear = "unknown"` / `country = "unknown"` so totals are
+#' preserved. Because each trip maps to exactly one gear and one country,
+#' summing over `gear` and `country` (and `year`) recovers the all-time,
+#' all-fleet totals — see [plot_effort_map()] for temporal maps. Primary
+#' effort columns:
 #'
 #' - `fishing_hours`: accumulated fishing time (sum of capped inter-ping
 #'   intervals). This is the primary effort metric.
@@ -110,10 +116,10 @@ prepare_tracks_for_effort <- function(df, h3_res) {
 #'   package with a compatible configuration.
 #'
 #' @return Invisibly returns the merged H3 grid data frame (columns:
-#'   `h3_index`, `year`, `fishing_hours`, `unique_trips`, `n_active_days`,
-#'   `first_active_date`, `last_active_date`, `avg_fidelity_sum`,
-#'   `n_trips_for_fidelity`, `fishing_pings`), or `NULL` if there was nothing
-#'   to process.
+#'   `h3_index`, `year`, `gear`, `country`, `fishing_hours`, `unique_trips`,
+#'   `n_active_days`, `first_active_date`, `last_active_date`,
+#'   `avg_fidelity_sum`, `n_trips_for_fidelity`, `fishing_pings`), or `NULL` if
+#'   there was nothing to process.
 #'
 #' @seealso [predict_pds_tracks()], [derive_fishing_grounds()],
 #'   [rollup_h3_resolution()], [plot_effort_map()]
@@ -139,6 +145,50 @@ aggregate_pds_effort <- function(
   # --- Model version ---
   model_version <- ssfaitk::ssfaitk_version()[[1]]
   logger::log_info("Model version: {model_version}")
+
+  # --- Build trip -> (gear, country) lookup ---
+  # gear and country are trip-level attributes (trip -> imei -> device metadata),
+  # used to partition the effort grid. Each trip maps to exactly one gear and one
+  # country, so this is a loss-free refinement of the grid.
+  logger::log_info("Building trip -> gear/country lookup...")
+
+  pds_trips <- download_parquet_from_cloud(
+    prefix = conf$pds$pds_trips$file_prefix,
+    provider = conf$storage$google$key,
+    version = conf$pds$pds_trips$version,
+    options = country_opts
+  ) |>
+    janitor::clean_names() |>
+    dplyr::transmute(
+      trip = as.character(.data$trip),
+      imei = as.character(.data$imei)
+    )
+
+  devices <- conf$metadata$airtable$name |>
+    cloud_object_name(
+      provider = conf$storage$google$key,
+      version = "latest",
+      extension = "rds",
+      options = conf$storage$google$options
+    ) |>
+    download_cloud_file(
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options
+    ) |>
+    readr::read_rds() |>
+    purrr::pluck("devices") |>
+    dplyr::transmute(
+      imei = as.character(.data$imei),
+      gear = .data$gear_class,
+      country = .data$country_unlink
+    )
+
+  # One row per trip; distinct() guards against an imei mapping to multiple
+  # device rows, which would otherwise fan out (and double-count) track rows.
+  trip_lookup <- pds_trips |>
+    dplyr::left_join(devices, by = "imei") |>
+    dplyr::select("trip", "gear", "country") |>
+    dplyr::distinct(.data$trip, .keep_all = TRUE)
 
   logger::log_info("Listing predicted track files...")
   cloud_storage_authenticate(conf$pds_storage$google$key, pds_opts)
@@ -205,14 +255,17 @@ aggregate_pds_effort <- function(
 
   # --- Detect schema change → force full rebuild ---
   # `active_dates` was added so that incremental merges can deduplicate days
-  # by union rather than by sum. Older grids lack this column and cannot be
-  # merged correctly, so discard them and re-aggregate all parquets.
+  # by union rather than by sum; `gear`/`country` partition the grid. Older
+  # grids lack these columns and cannot be merged correctly, so discard them
+  # and re-aggregate all parquets.
+  required_cols <- c("active_dates", "gear", "country")
   schema_changed <- !is.null(existing_grid) &&
-    !"active_dates" %in% names(existing_grid)
+    !all(required_cols %in% names(existing_grid))
 
   if (schema_changed) {
     logger::log_info(
-      "Grid schema is outdated (missing `active_dates`), rebuilding from scratch"
+      "Grid schema is outdated (missing one of: ",
+      "{paste(required_cols, collapse = ', ')}), rebuilding from scratch"
     )
     already_aggregated <- character(0)
     existing_grid <- NULL
@@ -265,6 +318,18 @@ aggregate_pds_effort <- function(
 
   future::plan(future::sequential)
 
+  # Attach gear/country; trips with no device metadata are kept as "unknown" so
+  # that aggregate totals are preserved when collapsing the grid back over them.
+  if (nrow(new_tracks) > 0) {
+    new_tracks <- new_tracks |>
+      dplyr::mutate(trip = as.character(.data$trip)) |>
+      dplyr::left_join(trip_lookup, by = "trip") |>
+      dplyr::mutate(
+        gear = dplyr::coalesce(.data$gear, "unknown"),
+        country = dplyr::coalesce(.data$country, "unknown")
+      )
+  }
+
   if (nrow(new_tracks) == 0) {
     logger::log_info("All new files were empty, nothing to aggregate")
     saveRDS(c(already_aggregated, new_files), manifest_local)
@@ -288,7 +353,13 @@ aggregate_pds_effort <- function(
 
   # Step 1: trip × cell summary — needed to compute per-trip fidelity (avg_trip_share)
   trip_cell <- prepared |>
-    dplyr::group_by(.data$trip, .data$h3_index, .data$year) |>
+    dplyr::group_by(
+      .data$trip,
+      .data$h3_index,
+      .data$year,
+      .data$gear,
+      .data$country
+    ) |>
     dplyr::summarise(
       cell_hours = sum(.data$dt_hours, na.rm = TRUE),
       trip_total = dplyr::first(.data$trip_total_hours),
@@ -304,7 +375,7 @@ aggregate_pds_effort <- function(
 
   # Fidelity per cell: sum and count of trip_share (stored raw for correct merge)
   cell_fidelity <- trip_cell |>
-    dplyr::group_by(.data$h3_index, .data$year) |>
+    dplyr::group_by(.data$h3_index, .data$year, .data$gear, .data$country) |>
     dplyr::summarise(
       avg_fidelity_sum = sum(.data$trip_share, na.rm = TRUE),
       n_trips_for_fidelity = sum(!is.na(.data$trip_share)),
@@ -317,7 +388,7 @@ aggregate_pds_effort <- function(
   # across batches double-counts days when the same cell is visited by trips
   # from different aggregation runs on the same calendar day.
   new_grid <- prepared |>
-    dplyr::group_by(.data$h3_index, .data$year) |>
+    dplyr::group_by(.data$h3_index, .data$year, .data$gear, .data$country) |>
     dplyr::summarise(
       fishing_hours = sum(.data$dt_hours, na.rm = TRUE),
       unique_trips = dplyr::n_distinct(.data$trip),
@@ -325,7 +396,10 @@ aggregate_pds_effort <- function(
       fishing_pings = dplyr::n(),
       .groups = "drop"
     ) |>
-    dplyr::left_join(cell_fidelity, by = c("h3_index", "year"))
+    dplyr::left_join(
+      cell_fidelity,
+      by = c("h3_index", "year", "gear", "country")
+    )
 
   # --- Merge with existing grid ---
   if (!is.null(existing_grid) && nrow(existing_grid) > 0) {
@@ -341,7 +415,7 @@ aggregate_pds_effort <- function(
     new_grid$active_dates <- lapply(new_grid$active_dates, as.Date)
 
     h3_grid <- dplyr::bind_rows(existing_grid, new_grid) |>
-      dplyr::group_by(.data$h3_index, .data$year) |>
+      dplyr::group_by(.data$h3_index, .data$year, .data$gear, .data$country) |>
       dplyr::summarise(
         fishing_hours = sum(.data$fishing_hours),
         unique_trips = sum(.data$unique_trips),

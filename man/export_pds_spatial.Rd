@@ -24,16 +24,21 @@ include in fishing grounds derivation. Default is `3L`.}
 to `"coasts"`.}
 }
 \value{
-Invisibly `NULL`. Uploads three files to GCS as a side effect.
+Invisibly `NULL`. Uploads the web-ready files described above to GCS
+  as a side effect.
 }
 \description{
 Reads the pre-computed H3 effort grid and CPUE Parquet files from cloud
 storage, derives fishing grounds, and uploads web-ready files that can be
 fetched directly by a Next.js / DeckGL application.
 
-Three versioned files are produced (following the package's `add_version()`
+Versioned files are produced (following the package's `add_version()`
 convention, i.e. `prefix__YYYYMMDDHHMMSS__extension`):
-- `pds-h3-effort-r{h3_res}__*__json`: JSON array for `H3HexagonLayer`
+- `pds-h3-effort-r{h3_res}__*__json`: all-fleet JSON array for
+  `H3HexagonLayer` (one row per `h3_index` × `year`)
+- `pds-h3-effort-gear-r{h3_res}__*__json`: same metrics broken down by
+  `gear` and `country` (one row per `h3_index` × `year` × `gear` × `country`);
+  only emitted when the effort grid carries the `gear`/`country` columns
 - `pds-cpue-r{h3_res}__*__json`: JSON array for `H3HexagonLayer`
 - `pds-fishing-grounds__*__geojson`: GeoJSON `FeatureCollection` for `GeoJsonLayer`
 }
@@ -47,9 +52,12 @@ Schema for each file:
   `[{h3_index, year, fishing_hours, unique_trips, n_active_days,
   avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
   hours_per_trip}]`
+- **Effort-by-gear JSON** (per H3 cell × year × gear × country): the effort
+  schema with `gear` and `country` inserted after `year`.
 - **CPUE JSON**: `[{h3_index, country, species, cpue, n_trips, lon, lat}]`
-- **Fishing grounds GeoJSON** (same metrics, plus ground-specific):
-  `{ground_id, area_km2, n_cells, fishing_hours, unique_trips, n_active_days,
+- **Fishing grounds GeoJSON** (same metrics, plus ground-specific; `country`
+  is included when the effort grid carries it):
+  `{ground_id, country, area_km2, n_cells, fishing_hours, unique_trips, n_active_days,
   avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
   hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2,
   hours_per_day_per_km2}`
