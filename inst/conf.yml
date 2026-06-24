@@ -76,6 +76,9 @@ default:
       effort:
         file_prefix: pds-h3-effort-r
         version: latest
+      effort_gear:
+        file_prefix: pds-h3-effort-gear-r
+        version: latest
       cpue:
         file_prefix: pds-cpue-r
         version: latest

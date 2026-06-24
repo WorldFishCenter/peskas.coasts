@@ -712,9 +712,13 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 #' storage, derives fishing grounds, and uploads web-ready files that can be
 #' fetched directly by a Next.js / DeckGL application.
 #'
-#' Three versioned files are produced (following the package's `add_version()`
+#' Versioned files are produced (following the package's `add_version()`
 #' convention, i.e. `prefix__YYYYMMDDHHMMSS__extension`):
-#' - `pds-h3-effort-r{h3_res}__*__json`: JSON array for `H3HexagonLayer`
+#' - `pds-h3-effort-r{h3_res}__*__json`: all-fleet JSON array for
+#'   `H3HexagonLayer` (one row per `h3_index` × `year`)
+#' - `pds-h3-effort-gear-r{h3_res}__*__json`: same metrics broken down by
+#'   `gear` and `country` (one row per `h3_index` × `year` × `gear` × `country`);
+#'   only emitted when the effort grid carries the `gear`/`country` columns
 #' - `pds-cpue-r{h3_res}__*__json`: JSON array for `H3HexagonLayer`
 #' - `pds-fishing-grounds__*__geojson`: GeoJSON `FeatureCollection` for `GeoJsonLayer`
 #'
@@ -728,9 +732,12 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 #'   `[{h3_index, year, fishing_hours, unique_trips, n_active_days,
 #'   avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
 #'   hours_per_trip}]`
+#' - **Effort-by-gear JSON** (per H3 cell × year × gear × country): the effort
+#'   schema with `gear` and `country` inserted after `year`.
 #' - **CPUE JSON**: `[{h3_index, country, species, cpue, n_trips, lon, lat}]`
-#' - **Fishing grounds GeoJSON** (same metrics, plus ground-specific):
-#'   `{ground_id, area_km2, n_cells, fishing_hours, unique_trips, n_active_days,
+#' - **Fishing grounds GeoJSON** (same metrics, plus ground-specific; `country`
+#'   is included when the effort grid carries it):
+#'   `{ground_id, country, area_km2, n_cells, fishing_hours, unique_trips, n_active_days,
 #'   avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
 #'   hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2,
 #'   hours_per_day_per_km2}`
@@ -743,7 +750,8 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`.
 #'
-#' @return Invisibly `NULL`. Uploads three files to GCS as a side effect.
+#' @return Invisibly `NULL`. Uploads the web-ready files described above to GCS
+#'   as a side effect.
 #'
 #' @seealso [aggregate_pds_effort()], [model_cpue()], [derive_fishing_grounds()]
 #'
@@ -786,47 +794,59 @@ export_pds_spatial <- function(
     " {dplyr::n_distinct(effort$h3_index)} cells"
   )
 
+  # The stored grid is partitioned by gear/country (several rows per
+  # (h3_index, year)). `effort_all` collapses those dimensions back to one row
+  # per (h3_index, year) for the historical all-fleet export; the raw grid is
+  # kept for the per-gear/country export below. No-op on older grids that
+  # predate the gear/country columns.
+  has_gear <- all(c("gear", "country") %in% names(effort))
+  effort_all <- if (has_gear) {
+    logger::log_info("Collapsing effort grid over gear/country ...")
+    effort |>
+      dplyr::group_by(.data$h3_index, .data$year) |>
+      dplyr::summarise(
+        fishing_hours = sum(.data$fishing_hours),
+        unique_trips = sum(.data$unique_trips),
+        active_dates = list(sort(unique(do.call(c, .data$active_dates)))),
+        avg_fidelity_sum = sum(.data$avg_fidelity_sum, na.rm = TRUE),
+        n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
+        fishing_pings = sum(.data$fishing_pings),
+        .groups = "drop"
+      ) |>
+      dplyr::mutate(
+        n_active_days = lengths(.data$active_dates),
+        first_active_date = as.Date(purrr::map_dbl(
+          .data$active_dates,
+          \(d) if (length(d) > 0) as.numeric(min(d)) else NA_real_
+        )),
+        last_active_date = as.Date(purrr::map_dbl(
+          .data$active_dates,
+          \(d) if (length(d) > 0) as.numeric(max(d)) else NA_real_
+        ))
+      )
+  } else {
+    effort
+  }
+
   # Compute n_total_days from the stored date range so per-day metrics are
-  # consistent between cell and ground exports.
+  # consistent between cell and ground exports (and across both effort files).
   n_total_days <- if (
-    all(c("first_active_date", "last_active_date") %in% names(effort)) &&
-      !all(is.na(effort$first_active_date))
+    all(c("first_active_date", "last_active_date") %in% names(effort_all)) &&
+      !all(is.na(effort_all$first_active_date))
   ) {
     as.numeric(
-      max(effort$last_active_date, na.rm = TRUE) -
-        min(effort$first_active_date, na.rm = TRUE)
+      max(effort_all$last_active_date, na.rm = TRUE) -
+        min(effort_all$first_active_date, na.rm = TRUE)
     ) +
       1
   } else {
-    length(unique(effort$year)) * 365L
+    length(unique(effort_all$year)) * 365L
   }
   logger::log_info("Study period inferred: {round(n_total_days)} days")
 
-  # Derive informative per-cell metrics; drop internal / QA columns.
-  effort_export <- effort |>
-    dplyr::mutate(
-      avg_fidelity = dplyr::if_else(
-        .data$n_trips_for_fidelity > 0,
-        .data$avg_fidelity_sum / .data$n_trips_for_fidelity,
-        NA_real_
-      ),
-      constancy = .data$n_active_days / n_total_days,
-      avg_hours_per_day = dplyr::if_else(
-        .data$n_active_days > 0,
-        .data$fishing_hours / .data$n_active_days,
-        NA_real_
-      ),
-      avg_visits_per_day = dplyr::if_else(
-        .data$n_active_days > 0,
-        .data$unique_trips / .data$n_active_days,
-        NA_real_
-      ),
-      hours_per_trip = dplyr::if_else(
-        .data$unique_trips > 0,
-        .data$fishing_hours / .data$unique_trips,
-        NA_real_
-      )
-    ) |>
+  # -- All-fleet effort JSON (unchanged historical shape: one row per cell/year)
+  effort_export <- effort_all |>
+    add_cell_effort_metrics(n_total_days) |>
     dplyr::select(
       "h3_index",
       "year",
@@ -856,6 +876,48 @@ export_pds_spatial <- function(
     options = coasts_opts
   )
   logger::log_info("Uploaded: {basename(effort_filename)}")
+
+  # -- Per-gear / per-country effort JSON (new; powers the future dashboard
+  # filter). Identical per-cell metrics, but one row per
+  # (h3_index, year, gear, country). Skipped on older grids without the columns.
+  if (has_gear) {
+    effort_gear_export <- effort |>
+      add_cell_effort_metrics(n_total_days) |>
+      dplyr::select(
+        "h3_index",
+        "year",
+        "gear",
+        "country",
+        "fishing_hours",
+        "unique_trips",
+        "n_active_days",
+        "avg_fidelity",
+        "constancy",
+        "avg_hours_per_day",
+        "avg_visits_per_day",
+        "hours_per_trip"
+      )
+
+    effort_gear_prefix <- paste0(
+      conf$pds$portal$effort_gear$file_prefix,
+      h3_res
+    )
+    effort_gear_filename <- add_version(effort_gear_prefix, extension = "json")
+    on.exit(
+      if (file.exists(effort_gear_filename)) file.remove(effort_gear_filename),
+      add = TRUE
+    )
+    writeLines(
+      jsonlite::toJSON(effort_gear_export, auto_unbox = TRUE),
+      effort_gear_filename
+    )
+    upload_cloud_file(
+      file = effort_gear_filename,
+      provider = conf$storage$google$key,
+      options = coasts_opts
+    )
+    logger::log_info("Uploaded: {basename(effort_gear_filename)}")
+  }
 
   # -- CPUE ----------------------------------------------------------------------
   cpue_prefix <- paste0(conf$pds$pds_cpue$file_prefix, "_r", h3_res)
@@ -902,16 +964,42 @@ export_pds_spatial <- function(
   logger::log_info(
     "Deriving fishing grounds (min_trips = {min_trips_grounds}) ..."
   )
-  grounds <- derive_fishing_grounds(effort, min_trips = min_trips_grounds)
+  grounds <- derive_fishing_grounds(effort_all, min_trips = min_trips_grounds)
 
   if (!is.null(grounds)) {
     logger::log_info("Fishing grounds: {nrow(grounds)} polygons")
+
+    # Tag each ground with its country. WIO countries are spatially disjoint, so
+    # every contiguous ground sits inside exactly one of them: join cell
+    # centroids (which carry country) to the ground polygons and take the
+    # dominant country per ground. Geometry/metrics/thresholds are untouched --
+    # this only appends a `country` attribute. No-op on grids without `country`.
+    if ("country" %in% names(effort)) {
+      cell_country <- dplyr::distinct(effort, .data$h3_index, .data$country)
+      cell_pts <- sf::st_sf(
+        cell_country["country"],
+        geometry = h3jsr::cell_to_point(cell_country$h3_index, simple = TRUE),
+        crs = 4326
+      )
+      ground_country <- sf::st_join(
+        cell_pts,
+        grounds["ground_id"],
+        join = sf::st_within
+      ) |>
+        sf::st_drop_geometry() |>
+        dplyr::filter(!is.na(.data$ground_id)) |>
+        dplyr::count(.data$ground_id, .data$country) |>
+        dplyr::slice_max(.data$n, by = "ground_id", with_ties = FALSE) |>
+        dplyr::select("ground_id", "country")
+      grounds <- dplyr::left_join(grounds, ground_country, by = "ground_id")
+    }
 
     # Explicit column selection mirrors the cell-level export: same informative
     # metrics, plus ground-specific ones (area, n_cells, per-km² densities).
     grounds_export <- dplyr::select(
       grounds,
       "ground_id",
+      dplyr::any_of("country"),
       "area_km2",
       "fishing_hours",
       "unique_trips",
@@ -951,6 +1039,269 @@ export_pds_spatial <- function(
 
   logger::log_info("=== Web spatial export complete ===")
   invisible(NULL)
+}
+
+
+#' Derive Informative Per-Cell Effort Metrics
+#'
+#' @description
+#' Adds the normalised, dashboard-facing effort metrics (`avg_fidelity`,
+#' `constancy`, `avg_hours_per_day`, `avg_visits_per_day`, `hours_per_trip`) to
+#' an H3 effort table. Shared by the all-fleet and per-gear/country exports in
+#' [export_pds_spatial()] so both use identical formulas.
+#'
+#' @param df A data frame with the raw effort columns `fishing_hours`,
+#'   `unique_trips`, `n_active_days`, `avg_fidelity_sum`, and
+#'   `n_trips_for_fidelity`.
+#' @param n_total_days Numeric. Length of the study period in days, used as the
+#'   denominator for `constancy`.
+#'
+#' @return `df` with the five metric columns appended.
+#'
+#' @keywords internal
+add_cell_effort_metrics <- function(df, n_total_days) {
+  df |>
+    dplyr::mutate(
+      avg_fidelity = dplyr::if_else(
+        .data$n_trips_for_fidelity > 0,
+        .data$avg_fidelity_sum / .data$n_trips_for_fidelity,
+        NA_real_
+      ),
+      constancy = .data$n_active_days / n_total_days,
+      avg_hours_per_day = dplyr::if_else(
+        .data$n_active_days > 0,
+        .data$fishing_hours / .data$n_active_days,
+        NA_real_
+      ),
+      avg_visits_per_day = dplyr::if_else(
+        .data$n_active_days > 0,
+        .data$unique_trips / .data$n_active_days,
+        NA_real_
+      ),
+      hours_per_trip = dplyr::if_else(
+        .data$unique_trips > 0,
+        .data$fishing_hours / .data$unique_trips,
+        NA_real_
+      )
+    )
+}
+
+
+#' Export Per-Country Gear-Specific Effort as Zipped Shapefiles
+#'
+#' @description
+#' Builds, for each country, an all-time H3 fishing-effort layer broken down by
+#' gear class and uploads it to cloud storage as a zipped ESRI Shapefile bundle
+#' (the shapefile set plus a plain-text data dictionary). Intended for partners
+#' who consume GIS files rather than the web JSON exports from
+#' [export_pds_spatial()].
+#'
+#' @details
+#' Reads the gear/country-partitioned H3 effort grid
+#' (`predicted-pds-h3_grid_r{h3_res}`) produced by [aggregate_pds_effort()].
+#' For each country it:
+#' 1. Collapses the per-year rows to one row per `(h3_index, gear)`, summing
+#'    `fishing_hours` and `unique_trips` and taking the **union** of
+#'    `active_dates` for an exact active-day count (so `hrs_day` is correct
+#'    across years).
+#' 2. Attaches H3 hexagon polygons via [create_spatial_grid()].
+#' 3. Renames columns to <=10-character names (the ESRI Shapefile DBF limit).
+#' 4. Writes the shapefile set and a `README.txt` data dictionary, zips them,
+#'    and uploads a versioned `.zip` to the coasts bucket.
+#'
+#' Shapefile fields: `h3_id`, `gear_class`, `fish_hrs` (total fishing hours),
+#' `trips` (unique trips), `n_days` (active days), `hrs_day` (fishing hours per
+#' active day).
+#'
+#' @param h3_res Integer. H3 resolution of the effort grid to export.
+#'   Default `9L`.
+#' @param countries Optional character vector of country names to export. When
+#'   `NULL` (default) every country present in the grid is exported, except the
+#'   `"unknown"` bucket (trips with no device metadata).
+#' @param log_threshold Logging threshold. Default `logger::DEBUG`.
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`.
+#'
+#' @return Invisibly, a character vector of the uploaded `.zip` object names
+#'   (or `NULL` if the grid was unavailable or lacked the gear/country columns).
+#'
+#' @seealso [aggregate_pds_effort()], [export_pds_spatial()],
+#'   [create_spatial_grid()]
+#'
+#' @keywords workflow export
+#' @export
+export_effort_gear_shapefiles <- function(
+  h3_res = 9L,
+  countries = NULL,
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+  coasts_opts <- resolve_storage_opts(conf, "coasts")
+  cloud_storage_authenticate(conf$storage$google$key, coasts_opts)
+
+  grid_prefix <- paste0(conf$pds$pds_tracks_h3_grid$file_prefix, "_r", h3_res)
+  logger::log_info("Loading effort grid ({grid_prefix}) ...")
+  effort <- tryCatch(
+    download_parquet_from_cloud(
+      prefix = grid_prefix,
+      provider = conf$storage$google$key,
+      options = coasts_opts
+    ),
+    error = function(e) {
+      logger::log_warn(
+        "Effort grid not found -- skipping ({conditionMessage(e)})"
+      )
+      NULL
+    }
+  )
+  if (is.null(effort)) {
+    return(invisible(NULL))
+  }
+
+  if (!all(c("gear", "country", "active_dates") %in% names(effort))) {
+    logger::log_warn(
+      "Grid lacks gear/country/active_dates columns -- nothing to export"
+    )
+    return(invisible(NULL))
+  }
+
+  # Countries to export (drop the "unknown" bucket of metadata-less trips).
+  if (is.null(countries)) {
+    countries <- effort |>
+      dplyr::distinct(.data$country) |>
+      dplyr::pull(.data$country) |>
+      setdiff("unknown")
+  }
+  countries <- countries[!is.na(countries)]
+
+  if (length(countries) == 0) {
+    logger::log_warn("No countries to export")
+    return(invisible(NULL))
+  }
+  logger::log_info(
+    "Exporting gear shapefiles for: {paste(countries, collapse = ', ')}"
+  )
+
+  uploaded <- character(0)
+
+  for (this_country in countries) {
+    df <- dplyr::filter(effort, .data$country == this_country)
+    if (nrow(df) == 0) {
+      logger::log_warn("No rows for {this_country} -- skipping")
+      next
+    }
+
+    # Collapse years to one row per (h3_index, gear). active_dates is unioned
+    # (not summed) so the active-day count -- and therefore hrs_day -- is exact
+    # across years.
+    by_cell <- df |>
+      dplyr::summarise(
+        .by = c("h3_index", "gear"),
+        fishing_hours = sum(.data$fishing_hours, na.rm = TRUE),
+        unique_trips = sum(.data$unique_trips, na.rm = TRUE),
+        n_active_days = length(unique(do.call(c, .data$active_dates)))
+      ) |>
+      dplyr::mutate(
+        avg_hours_per_day = dplyr::if_else(
+          .data$n_active_days > 0,
+          .data$fishing_hours / .data$n_active_days,
+          NA_real_
+        )
+      )
+
+    # Polygonize, then shorten names to the ESRI Shapefile 10-char DBF limit.
+    sf_obj <- by_cell |>
+      create_spatial_grid() |>
+      dplyr::rename(
+        h3_id = "h3_index",
+        gear_class = "gear",
+        fish_hrs = "fishing_hours",
+        trips = "unique_trips",
+        n_days = "n_active_days",
+        hrs_day = "avg_hours_per_day"
+      )
+
+    # --- Write shapefile set + data dictionary into an isolated temp dir ---
+    slug <- gsub("[^a-z0-9]+", "_", tolower(this_country))
+    layer <- paste0(slug, "_effort_gear_h3res", h3_res)
+    work_dir <- file.path(tempdir(), layer)
+    unlink(work_dir, recursive = TRUE)
+    dir.create(work_dir, showWarnings = FALSE, recursive = TRUE)
+
+    sf::st_write(
+      sf_obj,
+      dsn = file.path(work_dir, paste0(layer, ".shp")),
+      delete_dsn = TRUE,
+      quiet = TRUE
+    )
+
+    yr <- range(df$year, na.rm = TRUE)
+    cell_m2 <- tryCatch(
+      as.numeric(mean(sf::st_area(sf_obj))),
+      error = function(e) NA_real_
+    )
+    geom_line <- if (is.finite(cell_m2)) {
+      sprintf(
+        "Geometry: H3 resolution-%d hexagons (~%.4f km2 / ~%.2f ha per cell), WGS84",
+        h3_res,
+        cell_m2 / 1e6,
+        cell_m2 / 1e4
+      )
+    } else {
+      sprintf("Geometry: H3 resolution-%d hexagons, WGS84", h3_res)
+    }
+    writeLines(
+      c(
+        paste0(layer, " - field descriptions"),
+        geom_line,
+        sprintf(
+          "Country: %s. Values aggregated across %d-%d.",
+          this_country,
+          yr[1],
+          yr[2]
+        ),
+        "",
+        sprintf("h3_id     : H3 cell index (resolution %d)", h3_res),
+        "gear_class: gear class",
+        "fish_hrs  : total fishing hours (sum across years)",
+        "trips     : unique trips (sum across years)",
+        "n_days    : active days (distinct calendar days, union across years)",
+        "hrs_day   : fishing hours per active day (fish_hrs / n_days)"
+      ),
+      file.path(work_dir, "README.txt")
+    )
+
+    # --- Zip the bundle (flat, no directory entries) and upload it ---
+    zip_name <- add_version(layer, extension = "zip")
+    zip_path <- file.path(tempdir(), zip_name)
+    if (file.exists(zip_path)) {
+      file.remove(zip_path)
+    }
+    utils::zip(
+      zipfile = zip_path,
+      files = list.files(work_dir, full.names = TRUE),
+      flags = "-j9X"
+    )
+
+    upload_cloud_file(
+      file = zip_path,
+      provider = conf$storage$google$key,
+      options = coasts_opts,
+      name = zip_name
+    )
+    logger::log_info("Uploaded: {zip_name}")
+    uploaded <- c(uploaded, zip_name)
+
+    unlink(work_dir, recursive = TRUE)
+    file.remove(zip_path)
+  }
+
+  logger::log_success(
+    "Gear shapefiles exported for {length(uploaded)} country(ies)"
+  )
+  invisible(uploaded)
 }
 
 
