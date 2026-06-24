@@ -23,10 +23,10 @@ package with a compatible configuration.}
 }
 \value{
 Invisibly returns the merged H3 grid data frame (columns:
-  `h3_index`, `year`, `fishing_hours`, `unique_trips`, `n_active_days`,
-  `first_active_date`, `last_active_date`, `avg_fidelity_sum`,
-  `n_trips_for_fidelity`, `fishing_pings`), or `NULL` if there was nothing
-  to process.
+  `h3_index`, `year`, `gear`, `country`, `fishing_hours`, `unique_trips`,
+  `n_active_days`, `first_active_date`, `last_active_date`,
+  `avg_fidelity_sum`, `n_trips_for_fidelity`, `fishing_pings`), or `NULL` if
+  there was nothing to process.
 }
 \description{
 Downloads all per-trip predicted fishing track files produced by
@@ -52,9 +52,15 @@ Predicted track files contain fishing-only GPS points (columns: `trip`,
 
 ## Grid schema
 
-The grid includes a `year` column for temporal effort maps (see
-[plot_effort_map()]). An all-time aggregate is obtained by summing over
-`year`. Primary effort columns:
+The grid is partitioned by `year`, `gear`, and `country`, so there may be
+several rows per `(h3_index, year)` — one per `(gear, country)` combination.
+`gear` and `country` come from the per-trip device metadata
+(trip → IMEI → Airtable `pds_devices`); trips with no device metadata are
+kept under `gear = "unknown"` / `country = "unknown"` so totals are
+preserved. Because each trip maps to exactly one gear and one country,
+summing over `gear` and `country` (and `year`) recovers the all-time,
+all-fleet totals — see [plot_effort_map()] for temporal maps. Primary
+effort columns:
 
 - `fishing_hours`: accumulated fishing time (sum of capped inter-ping
   intervals). This is the primary effort metric.

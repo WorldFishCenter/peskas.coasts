@@ -226,4 +226,6 @@ jobs:
         run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
       - name: Call export_pds_spatial()
         run: Rscript -e 'coasts::export_pds_spatial()'
+      - name: Call export_effort_gear_shapefiles()
+        run: Rscript -e 'coasts::export_effort_gear_shapefiles()'
 
