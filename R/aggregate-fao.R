@@ -449,8 +449,7 @@ estimate_catch_fao <- function(
 #' uniform schema across countries (Kenya already in long format -- no need
 #' for KEFS-specific reshaping anymore). Records are filtered to
 #' `landing_date >= 2024-01-01` to align with the PDS GPS coverage window
-#' used for the BAC, and rows missing `gaul_2_name` are dropped (about 25%
-#' of the Kenya feed at the time of writing -- see Lorenzo's geo join).
+#' used for the BAC, and rows missing `gaul_2_name` are dropped.
 #'
 #' The output parquet has one row per `(country, gaul_2_name, fishing_unit,
 #' year_month)` with both catch and revenue totals side by side, plus the
@@ -526,8 +525,7 @@ aggregate_fao <- function(log_threshold = logger::DEBUG, package = "coasts") {
       dplyr::mutate(
         boat_name     = .data$trip_id,
         submission_id = .data$survey_id,
-        trip_duration = .data$trip_duration_hrs,
-        landing_site  = NA_character_
+        trip_duration = .data$trip_duration_hrs
       )
 
     # Some countries (MZ, ZN) report revenue only at trip level
