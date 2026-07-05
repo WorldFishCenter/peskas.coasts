@@ -4,9 +4,21 @@
 \alias{summarize_data}
 \title{Summarize WorldFish Survey Data}
 \usage{
-summarize_data(log_threshold = logger::DEBUG, package = "coasts")
+summarize_data(
+  exclude_dashboard_ids = NULL,
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+)
 }
 \arguments{
+\item{exclude_dashboard_ids}{Optional character vector of `survey_id` values
+to keep out of the dashboard summaries (e.g. legacy sources or forms that
+should not surface in the portal). Rows matching these ids are dropped from
+the input before summarising. Defaults to `NULL`, in which case the list is
+read from the package config at `surveys$summaries$exclude_dashboard_ids`
+(each downstream package manages its own list). If neither is set, all
+surveys are kept.}
+
 \item{log_threshold}{The logging level threshold for the logger package (e.g., DEBUG, INFO)
 See `logger::log_levels` for available options.}
 
@@ -53,6 +65,13 @@ summarize_data()
 
 # Summarize with info-level logging only
 summarize_data(logger::INFO)
+
+# Keep specific forms out of the dashboard explicitly (overrides config list)
+summarize_data(exclude_dashboard_ids = c(
+  conf$ingestion$wcs$koboform$asset_id,
+  conf$ingestion$wcs$koboform_kf$asset_id_kf,
+  "legacy"
+))
 }
 
 }

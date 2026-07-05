@@ -29,6 +29,13 @@
 #' - Number of submissions and fishers
 #' - Trip duration
 #'
+#' @param exclude_dashboard_ids Optional character vector of `survey_id` values
+#'   to keep out of the dashboard summaries (e.g. legacy sources or forms that
+#'   should not surface in the portal). Rows matching these ids are dropped from
+#'   the input before summarising. Defaults to `NULL`, in which case the list is
+#'   read from the package config at `surveys$summaries$exclude_dashboard_ids`
+#'   (each downstream package manages its own list). If neither is set, all
+#'   surveys are kept.
 #' @param log_threshold The logging level threshold for the logger package (e.g., DEBUG, INFO)
 #'   See `logger::log_levels` for available options.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
@@ -44,6 +51,13 @@
 #'
 #' # Summarize with info-level logging only
 #' summarize_data(logger::INFO)
+#'
+#' # Keep specific forms out of the dashboard explicitly (overrides config list)
+#' summarize_data(exclude_dashboard_ids = c(
+#'   conf$ingestion$wcs$koboform$asset_id,
+#'   conf$ingestion$wcs$koboform_kf$asset_id_kf,
+#'   "legacy"
+#' ))
 #' }
 #'
 #' @seealso
@@ -54,9 +68,29 @@
 #'
 #' @keywords workflow pipeline mining
 #' @export
-summarize_data <- function(log_threshold = logger::DEBUG, package = "coasts") {
+summarize_data <- function(
+  exclude_dashboard_ids = NULL,
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
+
+  # survey_id values to keep out of the dashboard summaries (e.g. legacy sources
+  # or forms that should not surface in the portal). When not passed explicitly
+  # (e.g. from a GitHub pipeline calling `summarize_data(package = ...)`), fall
+  # back to the package's own config so each downstream package manages its own
+  # list under `surveys$summaries$exclude_dashboard_ids`. unlist() tolerates both
+  # a YAML sequence (character vector) and a nested list, and leaves NULL as NULL.
+  if (is.null(exclude_dashboard_ids)) {
+    exclude_dashboard_ids <- conf$surveys$summaries$exclude_dashboard_ids
+  }
+  exclude_dashboard_ids <- unlist(exclude_dashboard_ids, use.names = FALSE)
+  if (length(exclude_dashboard_ids)) {
+    logger::log_info(
+      "Excluding {length(exclude_dashboard_ids)} survey form(s) from dashboard summaries"
+    )
+  }
 
   asfis <- coasts::download_parquet_from_cloud(
     prefix = "asfis",
@@ -83,7 +117,9 @@ summarize_data <- function(log_threshold = logger::DEBUG, package = "coasts") {
     dplyr::mutate(catch_taxon = .data$scientific_name) |>
     dplyr::select(
       -c("scientific_name", "english_name")
-    )
+    ) |>
+    # Drop forms excluded from the dashboard; with NULL this keeps all rows
+    dplyr::filter(!.data$survey_id %in% exclude_dashboard_ids)
 
   f_metrics <- calculate_fishery_metrics(data = clean_data)
 

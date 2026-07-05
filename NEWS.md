@@ -1,3 +1,7 @@
+# coasts 4.4.1
+
+* **ENHANCED** `summarize_data()` - New `exclude_dashboard_ids` argument drops listed `survey_id` values from the dashboard summaries. Defaults to the package config at `surveys$summaries$exclude_dashboard_ids`, so each pipeline manages its own list without changing the call; unset keeps all surveys.
+
 # coasts 4.4.0
 
 * **NEW** Gear and country dimension for the fishing-effort grid. `aggregate_pds_effort()` now partitions the H3 grid by `gear` and `country` in addition to `year`, so a cell can hold several rows (one per gear/country combination). Both attributes are resolved per trip (trip → IMEI → Airtable `pds_devices` metadata); trips with no device match are retained under `gear = "unknown"` / `country = "unknown"` so fleet-wide totals never shift. Because each trip maps to exactly one gear and one country, summing over them (and `year`) exactly reproduces the previous all-fleet grid. A one-time full rebuild is triggered automatically when an older grid lacking these columns is detected.
