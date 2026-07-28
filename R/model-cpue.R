@@ -80,7 +80,7 @@ download_predicted_tracks <- function(trip_ids, conf) {
   }
 
   predicted_ids <- as.numeric(
-    stringr::str_extract(file_list$name, "trip_(\\d+)_", group = 1)
+    predicted_track_trip_id(file_list$name)
   )
   file_list <- file_list[predicted_ids %in% as.numeric(trip_ids), ]
 
@@ -137,12 +137,27 @@ download_predicted_tracks <- function(trip_ids, conf) {
 #' @param tracks A data frame of predicted fishing points with columns
 #'   `trip`, `timestamp`, `latitude`, `longitude`.
 #' @param h3_res Integer (0-15). H3 resolution for cell assignment.
+#' @param max_gap_hours,gap_policy How silent stretches of a track are counted,
+#'   passed to [prepare_tracks_for_effort()] and forwarded by [model_cpue()].
+#'   The defaults match [aggregate_pds_effort()], so CPUE is per hour of the
+#'   same effort the H3 grid reports; raising them inflates the denominator and
+#'   lowers CPUE.
 #'
 #' @return A tibble with columns `trip`, `h3_index`, `year`, `fishing_hours`.
 #'
 #' @keywords internal
-aggregate_trip_effort <- function(tracks, h3_res) {
-  effort <- prepare_tracks_for_effort(tracks, h3_res) |>
+aggregate_trip_effort <- function(
+  tracks,
+  h3_res,
+  max_gap_hours = 0.25,
+  gap_policy = c("cap", "drop")
+) {
+  effort <- prepare_tracks_for_effort(
+    tracks,
+    h3_res,
+    max_gap_hours = max_gap_hours,
+    gap_policy = match.arg(gap_policy)
+  ) |>
     dplyr::group_by(.data$trip, .data$h3_index, .data$year) |>
     dplyr::summarise(
       fishing_hours = sum(.data$dt_hours, na.rm = TRUE),
@@ -473,6 +488,12 @@ run_nnls_cpue <- function(trips, top_n, min_trips) {
 #'   required to retain a cell in the CPUE output. Default is `3L`.
 #' @param method Character. CPUE estimation method: `"weighted"` (default)
 #'   or `"nnls"`. See Details.
+#' @param max_gap_hours,gap_policy How silent stretches of a track are counted
+#'   when building the effort denominator, passed to
+#'   [prepare_tracks_for_effort()]. Pass the same values used for
+#'   [aggregate_pds_effort()]: CPUE is catch per hour of effort, so measuring
+#'   hours differently from the H3 grid would publish two incompatible views of
+#'   the same fishing.
 #' @param log_threshold The logging threshold to use. Default is
 #'   `logger::DEBUG`.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
@@ -496,10 +517,13 @@ model_cpue <- function(
   top_n = 5L,
   min_trips = 3L,
   method = c("weighted", "nnls"),
+  max_gap_hours = 0.25,
+  gap_policy = c("cap", "drop"),
   log_threshold = logger::DEBUG,
   package = "coasts"
 ) {
   method <- match.arg(method)
+  gap_policy <- match.arg(gap_policy)
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
 
@@ -513,7 +537,12 @@ model_cpue <- function(
   # -- Matched tracks -> per-trip effort for CPUE model --------------------------
   logger::log_info("Downloading matched predicted tracks for CPUE model ...")
   tracks_m <- download_predicted_tracks(unique(matched$pds_trip), conf)
-  effort_m <- aggregate_trip_effort(tracks_m, h3_res)
+  effort_m <- aggregate_trip_effort(
+    tracks_m,
+    h3_res,
+    max_gap_hours = max_gap_hours,
+    gap_policy = gap_policy
+  )
   rm(tracks_m)
 
   # -- Catch matrix + join -------------------------------------------------------

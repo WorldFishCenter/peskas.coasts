@@ -4,13 +4,24 @@
 \alias{aggregate_trip_effort}
 \title{Aggregate Predicted Tracks to Per-Trip H3 Effort}
 \usage{
-aggregate_trip_effort(tracks, h3_res)
+aggregate_trip_effort(
+  tracks,
+  h3_res,
+  max_gap_hours = 0.25,
+  gap_policy = c("cap", "drop")
+)
 }
 \arguments{
 \item{tracks}{A data frame of predicted fishing points with columns
 `trip`, `timestamp`, `latitude`, `longitude`.}
 
 \item{h3_res}{Integer (0-15). H3 resolution for cell assignment.}
+
+\item{max_gap_hours, gap_policy}{How silent stretches of a track are counted,
+passed to [prepare_tracks_for_effort()] and forwarded by [model_cpue()].
+The defaults match [aggregate_pds_effort()], so CPUE is per hour of the
+same effort the H3 grid reports; raising them inflates the denominator and
+lowers CPUE.}
 }
 \value{
 A tibble with columns `trip`, `h3_index`, `year`, `fishing_hours`.

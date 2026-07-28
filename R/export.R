@@ -828,25 +828,32 @@ export_pds_spatial <- function(
     effort
   }
 
-  # Compute n_total_days from the stored date range so per-day metrics are
-  # consistent between cell and ground exports (and across both effort files).
-  n_total_days <- if (
-    all(c("first_active_date", "last_active_date") %in% names(effort_all)) &&
-      !all(is.na(effort_all$first_active_date))
-  ) {
-    as.numeric(
-      max(effort_all$last_active_date, na.rm = TRUE) -
-        min(effort_all$first_active_date, na.rm = TRUE)
-    ) +
-      1
+  # Bounds of the study period, inferred from the stored date range. Cell rows
+  # are per year, so `constancy` divides by the days of *that* year inside these
+  # bounds; the ground export collapses years first and uses the whole span.
+  has_dates <- all(
+    c("first_active_date", "last_active_date") %in% names(effort_all)
+  ) &&
+    !all(is.na(effort_all$first_active_date))
+
+  study_start <- if (has_dates) {
+    min(effort_all$first_active_date, na.rm = TRUE)
   } else {
-    length(unique(effort_all$year)) * 365L
+    as.Date(paste0(min(effort_all$year), "-01-01"))
   }
-  logger::log_info("Study period inferred: {round(n_total_days)} days")
+  study_end <- if (has_dates) {
+    max(effort_all$last_active_date, na.rm = TRUE)
+  } else {
+    as.Date(paste0(max(effort_all$year), "-12-31"))
+  }
+  logger::log_info(
+    "Study period inferred: {as.character(study_start)} to {as.character(study_end)}",
+    " ({as.numeric(study_end - study_start) + 1} days)"
+  )
 
   # -- All-fleet effort JSON (unchanged historical shape: one row per cell/year)
   effort_export <- effort_all |>
-    add_cell_effort_metrics(n_total_days) |>
+    add_cell_effort_metrics(study_start, study_end) |>
     dplyr::select(
       "h3_index",
       "year",
@@ -882,7 +889,7 @@ export_pds_spatial <- function(
   # (h3_index, year, gear, country). Skipped on older grids without the columns.
   if (has_gear) {
     effort_gear_export <- effort |>
-      add_cell_effort_metrics(n_total_days) |>
+      add_cell_effort_metrics(study_start, study_end) |>
       dplyr::select(
         "h3_index",
         "year",
@@ -1050,24 +1057,42 @@ export_pds_spatial <- function(
 #' an H3 effort table. Shared by the all-fleet and per-gear/country exports in
 #' [export_pds_spatial()] so both use identical formulas.
 #'
-#' @param df A data frame with the raw effort columns `fishing_hours`,
+#' `constancy` is the share of the available days on which the cell was fished.
+#' Rows are per `(cell, year)`, so the denominator is the days of that row's
+#' year that fall inside the study period -- not the length of the whole series,
+#' which would compare one year's activity against three years of calendar and
+#' put every value in the third decimal. A cell fished every available day of
+#' its year scores 1, and years are comparable with each other: the first and
+#' last years of the series are measured against the part of them the study
+#' actually covers.
+#'
+#' @param df A data frame with the raw effort columns `year`, `fishing_hours`,
 #'   `unique_trips`, `n_active_days`, `avg_fidelity_sum`, and
 #'   `n_trips_for_fidelity`.
-#' @param n_total_days Numeric. Length of the study period in days, used as the
-#'   denominator for `constancy`.
+#' @param study_start,study_end Dates bounding the study period. Each year's
+#'   `constancy` denominator is clipped to them.
 #'
 #' @return `df` with the five metric columns appended.
 #'
 #' @keywords internal
-add_cell_effort_metrics <- function(df, n_total_days) {
+add_cell_effort_metrics <- function(df, study_start, study_end) {
   df |>
     dplyr::mutate(
+      year_days = as.numeric(
+        pmin(as.Date(paste0(.data$year, "-12-31")), study_end) -
+          pmax(as.Date(paste0(.data$year, "-01-01")), study_start)
+      ) +
+        1,
       avg_fidelity = dplyr::if_else(
         .data$n_trips_for_fidelity > 0,
         .data$avg_fidelity_sum / .data$n_trips_for_fidelity,
         NA_real_
       ),
-      constancy = .data$n_active_days / n_total_days,
+      constancy = dplyr::if_else(
+        .data$year_days > 0,
+        .data$n_active_days / .data$year_days,
+        NA_real_
+      ),
       avg_hours_per_day = dplyr::if_else(
         .data$n_active_days > 0,
         .data$fishing_hours / .data$n_active_days,
@@ -1083,7 +1108,8 @@ add_cell_effort_metrics <- function(df, n_total_days) {
         .data$fishing_hours / .data$unique_trips,
         NA_real_
       )
-    )
+    ) |>
+    dplyr::select(-"year_days")
 }
 
 

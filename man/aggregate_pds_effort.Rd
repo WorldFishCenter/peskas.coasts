@@ -7,6 +7,8 @@
 aggregate_pds_effort(
   log_threshold = logger::DEBUG,
   h3_res = 9L,
+  max_gap_hours = 0.25,
+  gap_policy = c("cap", "drop"),
   package = "coasts"
 )
 }
@@ -16,6 +18,11 @@ aggregate_pds_effort(
 \item{h3_res}{Integer (0–15). H3 resolution level for the output grid.
 Default is `9` (~174 m edge length). Different resolutions write to
 separate cloud prefixes.}
+
+\item{max_gap_hours, gap_policy}{How silent stretches of a track are counted,
+passed to [prepare_tracks_for_effort()]. Both are recorded with the
+aggregation state: changing either makes every stored figure incomparable,
+so the grid is rebuilt from the predicted tracks.}
 
 \item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
 to `"coasts"`. Pass your own package name when calling from a downstream
@@ -45,10 +52,45 @@ Predicted track files contain fishing-only GPS points (columns: `trip`,
 3. Prepares each track with [prepare_tracks_for_effort()], which computes
    per-ping time intervals (`dt_hours`), assigns H3 cell indices, and
    records per-trip total hours for fidelity computation.
-4. Runs a **two-pass aggregation**: first a trip × cell summary to compute
-   the fidelity components (`avg_fidelity_sum`, `n_trips_for_fidelity`),
-   then a cell-level summary for effort totals.
-5. Merges with the previously stored grid and uploads the updated version.
+4. Removes tracks PDS has already delivered under another trip identifier,
+   whole trips first ([index_trip_duplicates()]) and then the pings two
+   partially overlapping trips share ([drop_overlapping_pings()]).
+5. Adds what survives to the per-trip effort store ([build_trip_effort()]).
+6. Derives the whole grid from that store ([derive_effort_grid()]) and
+   uploads it.
+
+## Incremental state
+
+Four side files sit next to the grid. `aggregated_manifest.rds` lists the
+objects already aggregated with the modification time they were aggregated
+at; `aggregated_trips.rds` lists every trip seen, with its device, its
+window, the fingerprint of its track and the trip it duplicates if it was
+dropped; `aggregated_trip_effort.parquet` holds fishing hours and pings per
+trip, cell, year, gear, country and day; `aggregated_settings.rds` records
+the gap handling those hours were measured under.
+
+The store — not the published grid — is what carries between runs, and the
+grid is rebuilt from it in full every time. That is what makes a trip
+*removable*: PDS revises trips continuously (identifiers are retired, and
+the same identifier can come to describe a different window), so
+[predict_pds_tracks()] deletes and replaces files, and effort that was
+already counted has to be taken back out. A grid of running totals cannot do
+that; a per-trip store can, by dropping the affected trips' rows — together
+with any trip that was dropped as a duplicate of them, and any trip that
+might share pings with the incoming batch ([recall_overlapping_trips()]) —
+and re-reading only the handful of files involved. Deriving from the whole
+store each run also makes the result independent of how trips were batched,
+so `unique_trips` is a distinct count rather than a sum of per-batch counts.
+
+A trip's rows are replaced rather than added to, so reading a file twice
+changes nothing. Everything is re-read from the predicted tracks only when
+the state is missing or written by an older schema, or when `max_gap_hours` /
+`gap_policy` differ from the values the stored hours were measured under —
+settings that leave no trace in the files themselves. A new model version
+needs no trigger of its own: [predict_pds_tracks()] deletes every
+old-version file and writes new ones, which the per-file comparison already
+sees, and it sees precisely which files moved rather than assuming all of
+them did.
 
 ## Grid schema
 

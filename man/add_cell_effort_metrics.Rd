@@ -4,15 +4,15 @@
 \alias{add_cell_effort_metrics}
 \title{Derive Informative Per-Cell Effort Metrics}
 \usage{
-add_cell_effort_metrics(df, n_total_days)
+add_cell_effort_metrics(df, study_start, study_end)
 }
 \arguments{
-\item{df}{A data frame with the raw effort columns `fishing_hours`,
+\item{df}{A data frame with the raw effort columns `year`, `fishing_hours`,
 `unique_trips`, `n_active_days`, `avg_fidelity_sum`, and
 `n_trips_for_fidelity`.}
 
-\item{n_total_days}{Numeric. Length of the study period in days, used as the
-denominator for `constancy`.}
+\item{study_start, study_end}{Dates bounding the study period. Each year's
+`constancy` denominator is clipped to them.}
 }
 \value{
 `df` with the five metric columns appended.
@@ -22,5 +22,14 @@ Adds the normalised, dashboard-facing effort metrics (`avg_fidelity`,
 `constancy`, `avg_hours_per_day`, `avg_visits_per_day`, `hours_per_trip`) to
 an H3 effort table. Shared by the all-fleet and per-gear/country exports in
 [export_pds_spatial()] so both use identical formulas.
+
+`constancy` is the share of the available days on which the cell was fished.
+Rows are per `(cell, year)`, so the denominator is the days of that row's
+year that fall inside the study period -- not the length of the whole series,
+which would compare one year's activity against three years of calendar and
+put every value in the third decimal. A cell fished every available day of
+its year scores 1, and years are comparable with each other: the first and
+last years of the series are measured against the part of them the study
+actually covers.
 }
 \keyword{internal}

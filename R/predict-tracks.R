@@ -133,6 +133,109 @@ predict_and_upload_track <- function(
 }
 
 
+#' Read the Trip Identifier Out of a Predicted Track Object Name
+#'
+#' @description
+#' The counterpart to the `trip_{id}_v{version}.parquet` names
+#' [predict_and_upload_track()] writes, kept beside them so that the convention
+#' is stated once rather than re-derived by every reader.
+#'
+#' @param names Character vector of cloud object names.
+#'
+#' @return Character vector of trip identifiers, `NA` where a name does not
+#'   follow the convention.
+#'
+#' @seealso [aggregate_pds_effort()], [download_predicted_tracks()]
+#'
+#' @keywords internal
+predicted_track_trip_id <- function(names) {
+  stringr::str_extract(names, "(?<=trip_)\\d+")
+}
+
+
+#' Delete Predicted Track Files from Cloud Storage
+#'
+#' @description
+#' Removes predicted-track objects one by one, logging rather than raising when
+#' an individual delete fails so that a single bad object cannot abort the run.
+#'
+#' @param names Character vector of cloud object names to delete.
+#' @param bucket Character. Name of the bucket holding the objects.
+#'
+#' @return Invisibly `NULL`.
+#'
+#' @keywords internal
+delete_predicted_files <- function(names, bucket) {
+  purrr::walk(names, \(f) {
+    tryCatch(
+      {
+        googleCloudStorageR::gcs_delete_object(f, bucket = bucket)
+        logger::log_debug("Deleted: {f}")
+      },
+      error = function(e) {
+        logger::log_warn("Failed to delete {f}: {conditionMessage(e)}")
+      }
+    )
+  })
+  invisible(NULL)
+}
+
+
+#' Delete Predicted Track Files Within a Run's Deletion Budget
+#'
+#' @description
+#' Deletes objects only while the run's total deletions stay within
+#' `max_delete_frac` of the store, and reports how much of the budget is left.
+#'
+#' @details
+#' [predict_pds_tracks()] deletes on two occasions — trips the API no longer
+#' lists, and refreshes that produced nothing — and the cap is meant to bound
+#' what one run can remove *in total*. Checking each occasion separately against
+#' the same store size would let a single run delete nearly twice the documented
+#' share, so the budget is carried between them: what has already gone counts
+#' against what may still go.
+#'
+#' @param names Character vector of cloud object names to delete.
+#' @param bucket Character. Name of the bucket holding the objects.
+#' @param spent Integer. Objects already deleted in this run.
+#' @param total Integer. Size of the store the budget is a fraction of.
+#' @param max_delete_frac Numeric. Share of `total` this run may delete.
+#' @param reason Character. What is being deleted, for the log line.
+#'
+#' @return The number of objects deleted so far in this run, including these.
+#'
+#' @keywords internal
+delete_within_budget <- function(
+  names,
+  bucket,
+  spent,
+  total,
+  max_delete_frac,
+  reason
+) {
+  if (length(names) == 0) {
+    return(spent)
+  }
+
+  budget <- max_delete_frac * max(total, 1L)
+
+  if (spent + length(names) > budget) {
+    logger::log_warn(
+      "Keeping {length(names)} file(s) that would be deleted as {reason}:",
+      " that would put this run at {spent + length(names)} of {total} files,",
+      " over the {round(100 * max_delete_frac, 1)}% a single run may remove.",
+      " This looks like an incomplete trip listing or an API outage rather",
+      " than individual bad trips"
+    )
+    return(spent)
+  }
+
+  logger::log_info("Deleting {length(names)} file(s): {reason}")
+  delete_predicted_files(names, bucket)
+  spent + length(names)
+}
+
+
 #' Predict Fishing Activity from PDS Tracks
 #'
 #' @description
@@ -155,6 +258,34 @@ predict_and_upload_track <- function(
 #' `RETICULATE_PYTHON` environment variable to specify the Python interpreter
 #' path when running in CI or container environments.
 #'
+#' ## Keeping the store in step with PDS
+#'
+#' PDS revises trips after we have read them: it retires identifiers whose
+#' points move to a new trip, and reassigns others so the same identifier comes
+#' to describe a different window. Skipping every trip already predicted at the
+#' current model version would freeze those first readings in place, leaving the
+#' store holding several identifiers for one physical track — which
+#' [aggregate_pds_effort()] then counts as several vessels. Two passes keep the
+#' store aligned with the API:
+#'
+#' - trips whose PDS `Updated` timestamp is newer than the file we wrote are
+#'   re-fetched and re-predicted, replacing the stale snapshot. Where the fetch
+#'   comes back empty or fails, the stale file is deleted instead: PDS has said
+#'   the trip changed, so keeping a snapshot from before it did would preserve
+#'   the very duplicate this pass exists to remove, and queue the trip again on
+#'   every future run. The trip is still listed, so a later run reads it as new
+#'   and the file returns if the failure was transient;
+#' - files for trips the API no longer lists are deleted, provided their
+#'   identifier falls inside the range the listing covered — identifiers rise
+#'   over time, so a file from before `date_from` is missing from the listing
+#'   for a reason that has nothing to do with retirement.
+#'
+#' Both deletions are skipped, with a warning, when they would exceed
+#' `max_delete_frac` of the store, so a truncated listing or an API outage
+#' cannot empty it. Both passes leave [aggregate_pds_effort()] with changed
+#' inputs, which makes it withdraw the affected trips from its effort store and
+#' read them again.
+#'
 #' @param log_threshold The logging threshold to use. Default is `logger::DEBUG`.
 #' @param date_from Character. Start date for trip retrieval in "YYYY-MM-DD"
 #'   format. Default is `"2023-01-01"`.
@@ -167,6 +298,21 @@ predict_and_upload_track <- function(
 #'   `"skipped_too_long"` in the summary). This guards against corrupted or
 #'   never-reset device tracks that would cause extreme memory and CPU usage.
 #'   Default is `5`. Set to `NULL` to disable the filter.
+#' @param refresh_updated Logical. Re-predict trips PDS modified after we
+#'   fetched them. Default is `TRUE`. Set to `FALSE` to restore the previous
+#'   fetch-once behaviour.
+#' @param max_refresh Integer or NULL. Cap on how many stale trips are refreshed
+#'   per run, most recently modified first. `NULL` (default) refreshes all of
+#'   them; set it when working through a backlog so a scheduled run stays within
+#'   its time budget.
+#' @param max_delete_frac Numeric between 0 and 1. Largest share of the current
+#'   predicted files that may be deleted in one run, applied separately to
+#'   unlisted trips and to failed refreshes. Above it nothing is deleted, on the
+#'   assumption the trip listing is incomplete or the API is unwell. Default is
+#'   `0.1`; `0` disables deletion entirely. Note the listing is filtered to the
+#'   IMEIs of `conf$pds$customers`, so a device leaving the Airtable registry
+#'   makes its trips look retired -- the cap is what keeps a registry change
+#'   from clearing a fleet's history in one run.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`. Pass your own package name when calling from a downstream
 #'   package with a compatible configuration.
@@ -174,7 +320,8 @@ predict_and_upload_track <- function(
 #' @return Invisibly returns a data frame summarising the outcome for each trip
 #'   (columns: `trip`, `status`).
 #'
-#' @seealso [get_trips()], [get_trip_points()], [resolve_storage_opts()]
+#' @seealso [get_trips()], [get_trip_points()], [resolve_storage_opts()],
+#'   [aggregate_pds_effort()]
 #'
 #' @keywords workflow modeling
 #' @export
@@ -184,6 +331,9 @@ predict_pds_tracks <- function(
   n_workers = NULL,
   batch_size = 500L,
   max_trip_days = 5,
+  refresh_updated = TRUE,
+  max_refresh = NULL,
+  max_delete_frac = 0.1,
   package = "coasts"
 ) {
   logger::log_threshold(log_threshold)
@@ -232,8 +382,10 @@ predict_pds_tracks <- function(
     dplyr::filter(.data$customer_name %in% conf$pds$customers)
 
   # --- Fetch trip IDs from PDS API ---
+  # `updated` is kept so that trips revised after we predicted them can be
+  # refreshed instead of frozen at their first reading.
   logger::log_info("Fetching trips from PDS API (from {date_from})...")
-  all_trips <- get_trips(
+  pds_trips <- get_trips(
     token = conf$pds$token,
     secret = conf$pds$secret,
     dateFrom = date_from,
@@ -241,9 +393,21 @@ predict_pds_tracks <- function(
     deviceInfo = TRUE,
     imeis = unique(devices$imei)
   ) |>
-    dplyr::pull("Trip") |>
-    unique() |>
-    as.character()
+    janitor::clean_names() |>
+    dplyr::transmute(
+      trip = as.character(.data$trip),
+      pds_updated = lubridate::as_datetime(.data$updated)
+    ) |>
+    # A trip can be listed more than once; keep its latest revision, since
+    # taking whichever row arrived first would hide a revision behind an
+    # earlier timestamp and leave the trip permanently unrefreshed.
+    dplyr::slice_max(
+      .data$pds_updated,
+      by = "trip",
+      with_ties = FALSE
+    )
+
+  all_trips <- pds_trips$trip
 
   logger::log_info("Total trips to consider: {length(all_trips)}")
 
@@ -262,6 +426,12 @@ predict_pds_tracks <- function(
   )
 
   already_done <- character(0)
+  refresh_trips <- character(0)
+  refresh_files <- tibble::tibble(trip_id = character(0), name = character(0))
+  n_current_files <- 0L
+  # Deletions are budgeted across the whole run, not per occasion — see
+  # [delete_within_budget()].
+  deleted_this_run <- 0L
 
   if (
     !is.null(existing_files) &&
@@ -270,16 +440,19 @@ predict_pds_tracks <- function(
   ) {
     existing_parsed <- existing_files |>
       dplyr::mutate(
-        trip_id = stringr::str_extract(.data$name, "(?<=trip_)\\d+"),
+        trip_id = predicted_track_trip_id(.data$name),
         file_version = stringr::str_extract(
           .data$name,
           "(?<=_v)\\d+\\.\\d+\\.\\d+"
-        )
+        ),
+        fetched = lubridate::as_datetime(.data$updated)
       )
 
-    already_done <- existing_parsed |>
-      dplyr::filter(.data$file_version == model_version) |>
-      dplyr::pull(.data$trip_id)
+    current_files <- existing_parsed |>
+      dplyr::filter(.data$file_version == model_version)
+
+    already_done <- current_files$trip_id
+    n_current_files <- nrow(current_files)
 
     outdated_files <- existing_parsed |>
       dplyr::filter(.data$file_version != model_version)
@@ -288,24 +461,72 @@ predict_pds_tracks <- function(
       logger::log_info(
         "Deleting {nrow(outdated_files)} files from previous model versions"
       )
-      purrr::walk(outdated_files$name, \(f) {
-        tryCatch(
-          {
-            googleCloudStorageR::gcs_delete_object(f, bucket = pds_opts$bucket)
-            logger::log_debug("Deleted: {f}")
-          },
-          error = function(e) {
-            logger::log_warn("Failed to delete {f}: {conditionMessage(e)}")
-          }
+      delete_predicted_files(outdated_files$name, pds_opts$bucket)
+    }
+
+    # --- Trips the API no longer lists → their points now live under another
+    # trip id, so the file is a duplicate that would be counted forever ---
+    # Only files inside the window just queried can be judged: PDS identifiers
+    # increase over time, so a file whose identifier falls outside the range the
+    # listing returned simply predates `date_from` (or follows `dateTo`) and is
+    # absent for that reason, not because the trip was retired.
+    listed_range <- range(as.numeric(all_trips), na.rm = TRUE)
+    retired_files <- current_files |>
+      dplyr::filter(
+        !(.data$trip_id %in% all_trips),
+        as.numeric(.data$trip_id) >= listed_range[1],
+        as.numeric(.data$trip_id) <= listed_range[2]
+      )
+
+    if (nrow(retired_files) > 0) {
+      spent <- deleted_this_run
+      deleted_this_run <- delete_within_budget(
+        retired_files$name,
+        bucket = pds_opts$bucket,
+        spent = deleted_this_run,
+        total = n_current_files,
+        max_delete_frac = max_delete_frac,
+        reason = "their trip is no longer listed by PDS"
+      )
+      if (deleted_this_run > spent) {
+        already_done <- setdiff(already_done, retired_files$trip_id)
+      }
+    }
+
+    # --- Trips PDS revised after we fetched them → re-predict, since our
+    # snapshot may describe a window that has since moved to another trip ---
+    if (isTRUE(refresh_updated)) {
+      stale_files <- current_files |>
+        dplyr::inner_join(pds_trips, by = c("trip_id" = "trip")) |>
+        dplyr::filter(.data$pds_updated > .data$fetched) |>
+        dplyr::arrange(dplyr::desc(.data$pds_updated))
+
+      if (!is.null(max_refresh) && nrow(stale_files) > max_refresh) {
+        logger::log_info(
+          "{nrow(stale_files)} trips were revised by PDS since we fetched them,",
+          " refreshing the {max_refresh} most recent (max_refresh)"
         )
-      })
+        stale_files <- dplyr::slice_head(stale_files, n = max_refresh)
+      }
+
+      refresh_trips <- stale_files$trip_id
+      refresh_files <- dplyr::select(stale_files, "trip_id", "name")
+
+      if (length(refresh_trips) > 0) {
+        logger::log_info(
+          "Re-predicting {length(refresh_trips)} trips revised by PDS since they were fetched"
+        )
+        already_done <- setdiff(already_done, refresh_trips)
+      }
     }
   }
 
   trips_to_process <- setdiff(all_trips, already_done)
 
   logger::log_info(
-    "Skipping {length(already_done)} trips at v{model_version}, {length(trips_to_process)} to process"
+    "Skipping {length(already_done)} trips at v{model_version},",
+    " {length(trips_to_process)} to process",
+    " ({length(refresh_trips)} of them refreshed after a PDS revision)"
   )
 
   if (length(trips_to_process) == 0) {
@@ -414,6 +635,41 @@ predict_pds_tracks <- function(
       data.frame(trip = as.character(x$trip), status = x$status)
     })
   )
+
+  # --- Refreshes that produced nothing ---
+  # A trip queued for refresh whose fetch failed keeps its old file, and would
+  # be queued again on every future run: PDS says the trip changed, we still
+  # hold the snapshot from before it did. That snapshot is the stale window this
+  # release removes, so it goes. The trip is still listed, so a later run picks
+  # it up as new and the file comes back if the failure was transient.
+  # Trips skipped for length are left alone: they can never be predicted, and
+  # deleting their file would drop real effort for good.
+  unrefreshed <- results_df |>
+    dplyr::filter(
+      .data$trip %in% refresh_trips,
+      !(.data$status %in% c("success", "no_fishing", "skipped_too_long"))
+    )
+  stuck <- intersect(refresh_trips, results_df$trip[
+    results_df$status == "skipped_too_long"
+  ])
+
+  if (length(stuck) > 0) {
+    logger::log_warn(
+      "{length(stuck)} trip(s) revised by PDS are too long to predict;",
+      " their files stay as they are and will be queued again next run"
+    )
+  }
+
+  if (nrow(unrefreshed) > 0) {
+    deleted_this_run <- delete_within_budget(
+      refresh_files$name[refresh_files$trip_id %in% unrefreshed$trip],
+      bucket = pds_opts$bucket,
+      spent = deleted_this_run,
+      total = n_current_files,
+      max_delete_frac = max_delete_frac,
+      reason = "their refresh produced nothing, so they are not re-fetched forever"
+    )
+  }
 
   logger::log_info("Pipeline complete. Summary:")
   results_df |>

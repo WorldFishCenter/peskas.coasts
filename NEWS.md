@@ -1,3 +1,56 @@
+# coasts 4.5.0
+
+## The same fishing trip was counted many times over
+
+A trip in PDS is not a fixed record. PDS decides where one trip ends and the next begins as data arrives, and revisits that decision later: trip IDs are retired when their points are merged into another trip, and an ID we have already read can end up describing a different stretch of time than it did when we read it. Two examples from the store: 92 different trip IDs fetched on 2026-05-27 all returned the same 304 GPS points (one boat, one night off Vanga) and 91 of those IDs no longer exist today; and our file for trip 14576327 holds the track PDS now files under trip 15040695, while trip 14576327 itself now describes a different day.
+
+`predict_pds_tracks()` read each trip once and never looked at it again, so the predicted-track store filled up with several IDs holding the same GPS points. `aggregate_pds_effort()` counts one file as one vessel, so one boat was counted as many.
+
+Measured on the production grid: 570 of 29,021 predicted files (2.0%) belonged to trips PDS no longer lists, contributing 3,105 duplicated fishing hours (2.2% of the grid) across 892 cell-years. One cell off Vanga held 124 copies of a single 8-hour track and reported 1,001 fishing hours over 2 active days — an `avg_hours_per_day` of 501, meaning roughly 21 boats fishing a 0.12 km² hexagon around the clock.
+
+Copies multiply `fishing_hours`, `unique_trips`, `fishing_pings` and `avg_fidelity_sum`, but not `n_active_days`, which is a union of dates and so stays put. That is why the per-day rates blew up while the per-trip ratios (`hours_per_trip`, `avg_fidelity`) stayed plausible and hid the problem.
+
+* **NEW** `index_trip_duplicates()` - Fingerprints each trip's `(timestamp, latitude, longitude)` set and collapses trips sharing a fingerprint to one survivor, preferring the trip PDS still lists so the surviving cell keeps its `gear`/`country` instead of falling into the `"unknown"` bucket. Duplicates are recognised across runs too, via the new trip registry.
+* **NEW** `drop_overlapping_pings()` - Removes pings carried by more than one trip, for the partial overlaps left when PDS moves only part of a track. Runs after `dt_hours` is computed within each trip, so removing a ping cannot turn into an artificial gap that inflates the survivors.
+* **NEW** `recall_overlapping_trips()` - Exact copies are caught by fingerprint, but when PDS moves only *part* of a track the two copies overlap without being identical, and they can arrive in different runs — where nothing would ever set them side by side. Before reading a batch, the trips already stored that could share pings with it (same device, overlapping window) are withdrawn and read again alongside it, so the shared pings are deduplicated rather than counted twice for good.
+* **NEW** `aggregated_trips.rds` - Registry of every trip seen: its device, window, fingerprint, source object and the trip it duplicates if it was dropped. This is what lets a later run recognise a duplicate, and what lets a withdrawal take the trips discarded in that trip's favour with it.
+* **ENHANCED** `predict_pds_tracks()` - Re-predicts trips whose PDS `Updated` timestamp is newer than the file we wrote (`refresh_updated`, on by default, capped per run with `max_refresh`), and deletes files for trips the API no longer lists. 24% of live trips currently carry a PDS revision newer than our snapshot, so the first run works through a backlog. Three things bound the damage this can do:
+  - a trip listed twice is judged on its **latest** revision, not on whichever row the API happened to return first, which would otherwise hide a revision behind an older timestamp and leave the trip permanently unrefreshed;
+  - only files whose identifier falls inside the range the listing covered can be judged retired. Identifiers rise over time, so a file from before `date_from` is missing from the listing for a reason that has nothing to do with retirement, and running with a later `date_from` no longer deletes the earlier years;
+  - a refresh whose fetch fails or comes back empty deletes the stale file rather than leaving it: PDS has said the trip changed, so the snapshot from before it did is the duplicate this pass exists to remove, and keeping it would queue the trip again on every future run. The trip is still listed, so a later run reads it as new. Trips skipped for length are left alone, since they can never be re-predicted.
+  
+  Both deletions are skipped with a warning above `max_delete_frac` (default 10%), so a truncated listing or an API outage cannot empty the store.
+* **ENHANCED** `aggregate_pds_effort()` - The manifest now records the modification time each object was aggregated at, so files deleted or replaced by `predict_pds_tracks()` are detected. Manifest, registry and effort store are loaded as a unit: previously a manifest that downloaded while the grid did not left the pipeline skipping files whose effort was in no grid at all.
+
+## The effort grid is now derived, not accumulated
+
+The grid used to be a running total that each run added to, which meant effort could never be taken back out — the only way to remove anything was to re-read all 29,021 predicted tracks. With PDS revising trips every single day (revisions landed on 180 of the last 180 days, about 29 trips a day), keeping the store in step with the API would have meant a full rebuild every day, hours per run.
+
+* **NEW** `build_trip_effort()` / `derive_effort_grid()` - `aggregate_pds_effort()` now keeps `aggregated_trip_effort.parquet`, one row per trip, cell, year, gear, country and day, and derives the published grid from it in full on every run. Revised trips are withdrawn from the store row by row — along with any trip dropped as a duplicate of them — and only the files that actually changed are re-read; a rebuild is seconds rather than hours. The published grid keeps its columns and values unchanged.
+* **FIX** `unique_trips` is now a distinct count over the whole store rather than a sum of per-batch counts, so it no longer depends on how trips were spread across runs, and a trip fishing across midnight on New Year is no longer counted twice.
+
+## Silent devices no longer read as hours of fishing
+
+`dt_hours` is the time since the previous ping, credited in full to the cell holding the *later* one — so a gap does not just inflate the total, it puts unobserved time in one particular hexagon, wherever the vessel resurfaced. The 4-hour limit on that was far too generous. Devices report every few seconds (median interval 7 s across 3,814 trips, 95% of intervals under 1.5 min), yet intervals longer than an hour — 0.6% of the data — produced **half of all fishing hours**, and the 0.15% pinned exactly at the 4-hour limit produced a fifth of them on their own.
+
+* **CHANGED** `prepare_tracks_for_effort()` gains `max_gap_hours` (default `0.25`, i.e. 15 minutes) and `gap_policy` (`"cap"`, the default, or `"drop"` to count only observed time). Fifteen minutes is around 130 missed pings, so normal reporting is untouched, while a single dropout can add at most a quarter of an hour to one cell instead of four. On a clean sample this takes fishing hours to 56% of their former value; `"drop"` takes them to 43%.
+* `aggregate_pds_effort()`, `aggregate_trip_effort()` and `model_cpue()` all take and forward both settings, so the H3 grid and CPUE cannot end up measuring effort differently. **CPUE roughly doubles**: the same catch is now divided by hours that no longer include device silence.
+* The settings are recorded in `aggregated_settings.rds` beside the effort store. Changing either rebuilds the grid from the predicted tracks rather than mixing hours measured two different ways.
+
+## Incremental state, hardened
+
+* The manifest is uploaded **last** and a trip's rows **replace** rather than add to what is stored, so a run interrupted mid-upload leaves the batch to be read again — harmlessly — instead of recording files whose effort never arrived.
+* A file that cannot be read is left out of the manifest, so a transient storage error no longer retires its effort permanently.
+* The state check covers every column the derivation reads, so a store written by an older schema rebuilds instead of failing partway through.
+* An empty bucket listing returns cleanly again rather than erroring on a column that is not there.
+* A model version bump no longer needs a rebuild trigger of its own. `predict_pds_tracks()` deletes every old-version file and writes new ones, which the per-file comparison already sees — and it sees exactly which files moved, where the old check assumed all of them had. Running the aggregation against an unchanged store after a version bump no longer re-reads 29,021 files to arrive at the same grid.
+* Gap settings are normalised before comparison, so passing `1L` where `1` was stored no longer sets off an hours-long rebuild for a setting that did not change.
+* `prepare_tracks_for_effort()` no longer computes `trip_total_hours`: the fidelity denominator is derived from the store, and the column had no readers left.
+
+## `constancy` is now a fraction of the year, not of the series
+
+* **FIX** `add_cell_effort_metrics()` divided per-year active days by the length of the *whole* study period (977 days), so every cell landed in the third decimal and years could not be compared: a 2023 cell had at most 39 days available but was divided by 977 all the same. The denominator is now the days of that row's year inside the study period. Measured on the production grid, the median stopped being 1/977 for every year alike, and the most consistently fished cell reads 0.72 — fished on 149 of the 207 available days of 2026 — instead of 0.153. `derive_fishing_grounds()` is unchanged: it collapses years before computing the metric, so its numerator and denominator already agreed.
+
 # coasts 4.4.1
 
 * **ENHANCED** `summarize_data()` - New `exclude_dashboard_ids` argument drops listed `survey_id` values from the dashboard summaries. Defaults to the package config at `surveys$summaries$exclude_dashboard_ids`, so each pipeline manages its own list without changing the call; unset keeps all surveys.

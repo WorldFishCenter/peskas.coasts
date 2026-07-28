@@ -4,31 +4,56 @@
 \alias{prepare_tracks_for_effort}
 \title{Prepare Predicted Tracks for Effort Aggregation}
 \usage{
-prepare_tracks_for_effort(df, h3_res)
+prepare_tracks_for_effort(
+  df,
+  h3_res,
+  max_gap_hours = 0.25,
+  gap_policy = c("cap", "drop")
+)
 }
 \arguments{
 \item{df}{Data frame of predicted fishing points with columns `trip`,
 `timestamp`, `latitude`, `longitude`.}
 
 \item{h3_res}{Integer (0–15). H3 resolution for cell assignment.}
+
+\item{max_gap_hours}{Numeric. Longest inter-ping interval treated as fishing
+time. Default is `0.25` (15 minutes).}
+
+\item{gap_policy}{How intervals above `max_gap_hours` are handled.
+`"cap"` (default) counts `max_gap_hours` of them, assuming the vessel kept
+fishing where it was next seen; `"drop"` counts none of them, so effort is
+only observed time. Changing either setting changes every effort figure the
+pipeline produces.}
 }
 \value{
 The input data frame with additional columns:
   \describe{
     \item{`year`}{Integer year extracted from `timestamp`.}
     \item{`dt_hours`}{Interval in hours to the previous ping within the
-      same trip (0 for the first ping; capped at 4).}
+      same trip (0 for the first ping), limited per `gap_policy`.}
     \item{`h3_index`}{H3 cell identifier at resolution `h3_res`.}
-    \item{`trip_total_hours`}{Total fishing hours for the trip across all
-      H3 cells (sum of `dt_hours` within the trip). Used to compute the
-      per-cell trip share for the fidelity metric.}
   }
 }
 \description{
 Enriches predicted fishing track points with time-based effort, H3 cell
 assignment, and per-trip total hours (used downstream for the fidelity
-metric). For each trip the inter-ping time interval (`dt_hours`) is
-computed from consecutive timestamps and capped at 4 hours to guard against
-GPS-off gaps inflating effort estimates.
+metric). For each trip the inter-ping time interval (`dt_hours`) is computed
+from consecutive timestamps, then limited by `max_gap_hours` so that a silent
+device does not read as hours of fishing.
+}
+\details{
+Each interval is credited in full to the cell holding the **later** ping, so
+a long gap does not merely inflate the effort total — it puts unobserved time
+in one particular hexagon, wherever the vessel happened to resurface.
+
+Devices report every few seconds (median interval across a 3,814-trip sample:
+7 seconds, with 95% of intervals under 1.5 minutes), so anything beyond a few
+minutes means the device stopped reporting rather than the vessel slowing
+down. Long gaps are rare and dominant at the same time: in that sample
+intervals above one hour were 0.6% of the data and half of all fishing hours.
+The default 15-minute limit is roughly 130 missed pings — ample room for a
+genuine signal glitch — while holding any single dropout to a quarter of an
+hour in one cell.
 }
 \keyword{internal}

@@ -9,6 +9,8 @@ model_cpue(
   top_n = 5L,
   min_trips = 3L,
   method = c("weighted", "nnls"),
+  max_gap_hours = 0.25,
+  gap_policy = c("cap", "drop"),
   log_threshold = logger::DEBUG,
   package = "coasts"
 )
@@ -25,6 +27,13 @@ required to retain a cell in the CPUE output. Default is `3L`.}
 
 \item{method}{Character. CPUE estimation method: `"weighted"` (default)
 or `"nnls"`. See Details.}
+
+\item{max_gap_hours, gap_policy}{How silent stretches of a track are counted
+when building the effort denominator, passed to
+[prepare_tracks_for_effort()]. Pass the same values used for
+[aggregate_pds_effort()]: CPUE is catch per hour of effort, so measuring
+hours differently from the H3 grid would publish two incompatible views of
+the same fishing.}
 
 \item{log_threshold}{The logging threshold to use. Default is
 `logger::DEBUG`.}

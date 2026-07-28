@@ -10,6 +10,9 @@ predict_pds_tracks(
   n_workers = NULL,
   batch_size = 500L,
   max_trip_days = 5,
+  refresh_updated = TRUE,
+  max_refresh = NULL,
+  max_delete_frac = 0.1,
   package = "coasts"
 )
 }
@@ -30,6 +33,24 @@ this number of days are skipped before prediction (they are recorded as
 `"skipped_too_long"` in the summary). This guards against corrupted or
 never-reset device tracks that would cause extreme memory and CPU usage.
 Default is `5`. Set to `NULL` to disable the filter.}
+
+\item{refresh_updated}{Logical. Re-predict trips PDS modified after we
+fetched them. Default is `TRUE`. Set to `FALSE` to restore the previous
+fetch-once behaviour.}
+
+\item{max_refresh}{Integer or NULL. Cap on how many stale trips are refreshed
+per run, most recently modified first. `NULL` (default) refreshes all of
+them; set it when working through a backlog so a scheduled run stays within
+its time budget.}
+
+\item{max_delete_frac}{Numeric between 0 and 1. Largest share of the current
+predicted files that may be deleted in one run, applied separately to
+unlisted trips and to failed refreshes. Above it nothing is deleted, on the
+assumption the trip listing is incomplete or the API is unwell. Default is
+`0.1`; `0` disables deletion entirely. Note the listing is filtered to the
+IMEIs of `conf$pds$customers`, so a device leaving the Airtable registry
+makes its trips look retired -- the cap is what keeps a registry change
+from clearing a fleet's history in one run.}
 
 \item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
 to `"coasts"`. Pass your own package name when calling from a downstream
@@ -58,9 +79,38 @@ Requires the `ssfaitk` package for fishing activity classification and a
 working Python environment accessible via `reticulate`. Set the
 `RETICULATE_PYTHON` environment variable to specify the Python interpreter
 path when running in CI or container environments.
+
+## Keeping the store in step with PDS
+
+PDS revises trips after we have read them: it retires identifiers whose
+points move to a new trip, and reassigns others so the same identifier comes
+to describe a different window. Skipping every trip already predicted at the
+current model version would freeze those first readings in place, leaving the
+store holding several identifiers for one physical track — which
+[aggregate_pds_effort()] then counts as several vessels. Two passes keep the
+store aligned with the API:
+
+- trips whose PDS `Updated` timestamp is newer than the file we wrote are
+  re-fetched and re-predicted, replacing the stale snapshot. Where the fetch
+  comes back empty or fails, the stale file is deleted instead: PDS has said
+  the trip changed, so keeping a snapshot from before it did would preserve
+  the very duplicate this pass exists to remove, and queue the trip again on
+  every future run. The trip is still listed, so a later run reads it as new
+  and the file returns if the failure was transient;
+- files for trips the API no longer lists are deleted, provided their
+  identifier falls inside the range the listing covered — identifiers rise
+  over time, so a file from before `date_from` is missing from the listing
+  for a reason that has nothing to do with retirement.
+
+Both deletions are skipped, with a warning, when they would exceed
+`max_delete_frac` of the store, so a truncated listing or an API outage
+cannot empty it. Both passes leave [aggregate_pds_effort()] with changed
+inputs, which makes it withdraw the affected trips from its effort store and
+read them again.
 }
 \seealso{
-[get_trips()], [get_trip_points()], [resolve_storage_opts()]
+[get_trips()], [get_trip_points()], [resolve_storage_opts()],
+  [aggregate_pds_effort()]
 }
 \keyword{modeling}
 \keyword{workflow}
