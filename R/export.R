@@ -64,10 +64,12 @@ export_geos <- function(package = "coasts") {
     c(
       "KEN_boundaries_gaul1",
       "ZAN_boundaries_gaul1",
+      "TLS_boundaries_gaul1",
       "MOZ_boundaries_gaul1",
       "KEN_boundaries_gaul2",
       "ZAN_boundaries_gaul2",
-      "MOZ_boundaries_gaul2"
+      "MOZ_boundaries_gaul2",
+      "TLS_boundaries_gaul2"
     ) |>
     purrr::map(
       ~ cloud_object_name(
