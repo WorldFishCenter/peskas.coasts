@@ -16,7 +16,8 @@ get_trip_points(
   errant = FALSE,
   withLastSeen = FALSE,
   tags = NULL,
-  overwrite = TRUE
+  overwrite = TRUE,
+  max_tries = 5
 )
 }
 \arguments{
@@ -51,6 +52,10 @@ Default is FALSE.}
 
 \item{overwrite}{Logical. If TRUE, will overwrite existing file when path is provided.
 Default is TRUE.}
+
+\item{max_tries}{Integer. Maximum number of attempts before giving up.
+Default is 5. Set to 1 to disable retrying. Transport failures and HTTP
+429/5xx are retried with exponential backoff via [httr2::req_retry()].}
 }
 \value{
 If path is NULL, returns a tibble containing the trip points data.

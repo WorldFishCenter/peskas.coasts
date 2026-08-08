@@ -9,6 +9,7 @@ aggregate_pds_effort(
   h3_res = 9L,
   max_gap_hours = 0.25,
   gap_policy = c("cap", "drop"),
+  batch_size = 8000L,
   package = "coasts"
 )
 }
@@ -23,6 +24,12 @@ separate cloud prefixes.}
 passed to [prepare_tracks_for_effort()]. Both are recorded with the
 aggregation state: changing either makes every stored figure incomparable,
 so the grid is rebuilt from the predicted tracks.}
+
+\item{batch_size}{Integer. Most predicted-track objects to hold in memory at
+once. The function reads the whole backlog either way; this only sets how
+much of it is in flight at a time. The default of `8000` is far above a
+normal delta, so ordinary runs are a single batch and are unaffected.
+Lower it on a smaller machine. See the batching section below.}
 
 \item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
 to `"coasts"`. Pass your own package name when calling from a downstream
@@ -91,6 +98,37 @@ needs no trigger of its own: [predict_pds_tracks()] deletes every
 old-version file and writes new ones, which the per-file comparison already
 sees, and it sees precisely which files moved rather than assuming all of
 them did.
+
+## Batching large backlogs
+
+Peak memory is set by how many points are read at once, not by how many the
+store holds, and the two are normally unrelated: a daily run reads the delta
+since the last one --- of the order of 300 objects and 100,000 points. A
+region registered for the first time breaks that assumption, because its
+whole history is new at once. Read in one go, 25 million points need roughly
+25 GB and the run is killed by the operating system rather than failing in R.
+
+So the backlog is read in batches of `batch_size` objects, and the loop is
+inside this function: there is one way to call it, and it does the whole
+backlog whatever size that is. A normal delta is smaller than a single batch
+and behaves exactly as it did before batching existed.
+
+Each batch checkpoints the aggregation state before the next begins, so an
+interrupted backlog resumes from the last completed batch instead of
+starting over --- which matters when the reading alone can run for hours. The
+grid is derived once at the end rather than per batch, since it is rebuilt
+from the whole store every time regardless.
+
+Batching does not change the result. Trips that might share pings are
+recalled whatever batch they fall in ([recall_overlapping_trips()]), and the
+grid is derived from the entire store, so how the trips were divided leaves
+no trace. A store built over eleven batches and one built in a single pass
+agree on cell count, `unique_trips` and per-cell effort to floating-point
+summation order.
+
+As a guide to sizing, predicted-track objects hold a few hundred points each,
+so the default 8,000 is roughly two million points, or about 2.7 GB. Lower it
+if the machine is smaller than that; there is no reason to raise it.
 
 ## Grid schema
 

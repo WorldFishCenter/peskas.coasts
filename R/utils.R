@@ -123,18 +123,36 @@ read_config <- function(package = "coasts") {
 #'     Always uses `conf$pds_storage$google$options`, which resolves to the
 #'     correct bucket per package (`pds-peskas-coasts` in coasts,
 #'     `pds-mozambique-prod` in the Mozambique pipeline, etc.).
+#'   - `"public"`: the publicly readable bucket serving portal JSON. Uses
+#'     `conf$public_storage$google$options`, falling back to
+#'     `conf$storage$google$options_public`. Optional — see `error_if_missing`.
+#'
+#' @param error_if_missing Logical. Controls what happens when the requested
+#'   type is not configured. `FALSE` (the default) returns `NULL`, which is how
+#'   this function has always behaved for an unconfigured key and what makes
+#'   `"public"` safe to ask for from a package that has no public bucket. Pass
+#'   `TRUE` to fail fast with a message naming the expected configuration key.
 #'
 #' @return A named list of Google Cloud Storage options suitable for passing
-#'   to [cloud_object_name()], [download_cloud_file()], or [upload_cloud_file()].
+#'   to [cloud_object_name()], [download_cloud_file()], or [upload_cloud_file()];
+#'   or `NULL` when the type is unconfigured and `error_if_missing = FALSE`.
 #'
 #' @details
-#' The three bucket types map to the following storage contexts:
+#' The bucket types map to the following storage contexts:
 #'
 #' | `type`     | coasts package        | downstream package         |
 #' |------------|-----------------------|----------------------------|
 #' | `"coasts"` | `peskas-coasts-dev`   | `peskas-coasts-dev`        |
 #' | `"country"`| `peskas-coasts-dev`   | `mozambique-dev`           |
 #' | `"pds"`    | `pds-peskas-coasts`   | `pds-mozambique-dev`       |
+#' | `"public"` | *(unconfigured)*      | `timor-public-dev`         |
+#'
+#' `"public"` is deliberately optional. `coasts` itself has no public bucket, so
+#' asking for it here returns `NULL`; a caller can then decide whether to skip
+#' the publishing step or fail. The Timor-Leste
+#' pipeline, which serves live portal JSON from a public bucket, previously had
+#' to reach into its config directly because this helper could not express the
+#' bucket at all.
 #'
 #' @examples
 #' \dontrun{
@@ -148,6 +166,13 @@ read_config <- function(package = "coasts") {
 #'
 #' # Access raw GPS tracks from PDS bucket
 #' pds_opts <- resolve_storage_opts(conf, "pds")
+#'
+#' # Public portal bucket, tolerating its absence
+#' public_opts <- resolve_storage_opts(conf, "public")
+#' if (is.null(public_opts)) message("no public bucket configured")
+#'
+#' # Fail fast instead
+#' public_opts <- resolve_storage_opts(conf, "public", error_if_missing = TRUE)
 #' }
 #'
 #' @seealso [read_config()], [download_cloud_file()], [upload_cloud_file()]
@@ -155,13 +180,42 @@ read_config <- function(package = "coasts") {
 #' @export
 #'
 #' @keywords internal
-resolve_storage_opts <- function(conf, type = c("coasts", "country", "pds")) {
+resolve_storage_opts <- function(
+  conf,
+  type = c("coasts", "country", "pds", "public"),
+  error_if_missing = FALSE
+) {
   type <- match.arg(type)
-  switch(
+
+  opts <- switch(
     type,
     coasts = conf$storage$google$options_coasts %||%
       conf$storage$google$options,
     country = conf$storage$google$options,
-    pds = conf$pds_storage$google$options
+    pds = conf$pds_storage$google$options,
+    public = conf$public_storage$google$options %||%
+      conf$storage$google$options_public
   )
+
+  if (is.null(opts) && isTRUE(error_if_missing)) {
+    stop(
+      "No storage options configured for type '",
+      type,
+      "'. Expected ",
+      switch(
+        type,
+        coasts = "'storage.google.options_coasts' or 'storage.google.options'",
+        country = "'storage.google.options'",
+        pds = "'pds_storage.google.options'",
+        public = paste(
+          "'public_storage.google.options' or",
+          "'storage.google.options_public'"
+        )
+      ),
+      " in the active configuration. Pass error_if_missing = FALSE to get NULL ",
+      "instead."
+    )
+  }
+
+  opts
 }

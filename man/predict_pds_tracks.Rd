@@ -6,7 +6,7 @@
 \usage{
 predict_pds_tracks(
   log_threshold = logger::DEBUG,
-  date_from = "2023-01-01",
+  date_from = "2018-01-01",
   n_workers = NULL,
   batch_size = 500L,
   max_trip_days = 5,

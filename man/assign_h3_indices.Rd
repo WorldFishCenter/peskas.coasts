@@ -22,9 +22,11 @@ The input data frame (minus rows with missing coordinates) with an
 }
 \description{
 Adds an `h3_index` column to a GPS data frame by mapping each coordinate to
-its containing H3 hexagon at the specified resolution. Rows with missing
-coordinates are dropped. The data frame is returned in its original
-unprojected (WGS84) form with the index appended.
+its containing H3 hexagon at the specified resolution. Rows whose coordinates
+are not usable positions are dropped --- missing, non-finite, or outside the
+latitude/longitude range, all of which [valid_coordinates()] describes. The
+data frame is returned in its original unprojected (WGS84) form with the
+index appended.
 }
 \seealso{
 [aggregate_h3_effort()], [rollup_h3_resolution()]

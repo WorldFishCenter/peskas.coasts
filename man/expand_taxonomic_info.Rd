@@ -4,13 +4,20 @@
 \alias{expand_taxonomic_info}
 \title{Expand Taxa to FishBase / SeaLifeBase Species Matches}
 \usage{
-expand_taxonomic_info(data)
+expand_taxonomic_info(data, strip_parentheticals = FALSE)
 }
 \arguments{
 \item{data}{A data frame with at minimum the following columns:
-- `alpha3_code`: Three-letter country/region code.
+- `alpha3_code`: FAO 3-alpha (interagency) code identifying the taxon
+  group, e.g. `"EMP"` for emperors. Passed through untouched.
 - `scientific_name`: Scientific name at any taxonomic rank; trailing
   ` spp` is stripped before matching.}
+
+\item{strip_parentheticals}{Logical. If `TRUE`, a trailing parenthetical is
+removed from `scientific_name` before matching, so that
+`"Haemulidae (=Pomadasyidae)"` matches the family `Haemulidae`. Defaults to
+`FALSE`, which preserves the historical behaviour of leaving such names
+unmatched. See Details.}
 }
 \value{
 A tibble with columns:
@@ -30,14 +37,35 @@ matching species. Matching is attempted at multiple taxonomic ranks: species
 The function builds a lookup dictionary by pivoting the taxonomy backbone
 wide-to-long across ranks, so a single join resolves names at any level.
 Records that do not match any rank are silently dropped (inner join).
+
+Matching is against the FishBase / SeaLifeBase backbone only. It therefore
+resolves nothing for names that are not ranks those databases carry —
+tribes (`"Thunnini"`), infraorders (`"Reptantia"`, `"Brachyura"`), informal
+groupings (`"Osteichthyes"`, `"Algae"`, `"Selachimorpha"`) — nor for
+superseded binomials (`"Leiognathus equulus"`, which FishBase now lists as
+*Leiognathus equula*). Such taxa need a synonym or common-name route.
+
+`strip_parentheticals` exists because some FAO names carry an alternative
+name in brackets. Three appear in the Peskas frame:
+`"Haemulidae (=Pomadasyidae)"`, `"Selachimorpha (Pleurotremata)"` and
+`"Labridae (ex Scaridae)"`. It is off by default precisely because turning it
+on changes results for taxa that existing pipelines already publish — with it
+on, `Haemulidae` gains 138 species and `Labridae` 569, where today both match
+nothing. Enable it deliberately, per pipeline, and re-baseline when you do.
 }
 \examples{
 \dontrun{
 taxa <- data.frame(
-  alpha3_code = c("KEN", "TZA"),
+  alpha3_code = c("LEN", "SNA"),
   scientific_name = c("Lethrinus nebulosus", "Lutjanidae")
 )
 expand_taxonomic_info(taxa)
+
+# Resolve names that carry a bracketed synonym
+expand_taxonomic_info(
+  data.frame(alpha3_code = "GRX", scientific_name = "Haemulidae (=Pomadasyidae)"),
+  strip_parentheticals = TRUE
+)
 }
 }
 \keyword{taxa}

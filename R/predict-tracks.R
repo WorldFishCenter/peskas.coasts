@@ -103,7 +103,8 @@ predict_and_upload_track <- function(
           bucket = pds_opts$bucket,
           name = glue::glue(
             "{file_prefix}/trip_{trip_id}_v{model_version}.parquet"
-          )
+          ),
+          predefinedAcl = "bucketLevel"
         )
 
         return(list(trip = trip_id, status = "no_fishing"))
@@ -115,7 +116,8 @@ predict_and_upload_track <- function(
         bucket = pds_opts$bucket,
         name = glue::glue(
           "{file_prefix}/trip_{trip_id}_v{model_version}.parquet"
-        )
+        ),
+        predefinedAcl = "bucketLevel"
       )
 
       logger::log_info(
@@ -327,7 +329,7 @@ delete_within_budget <- function(
 #' @export
 predict_pds_tracks <- function(
   log_threshold = logger::DEBUG,
-  date_from = "2023-01-01",
+  date_from = "2018-01-01",
   n_workers = NULL,
   batch_size = 500L,
   max_trip_days = 5,
@@ -390,10 +392,17 @@ predict_pds_tracks <- function(
     secret = conf$pds$secret,
     dateFrom = date_from,
     dateTo = Sys.Date(),
-    deviceInfo = TRUE,
-    imeis = unique(devices$imei)
+    deviceInfo = TRUE
   ) |>
     janitor::clean_names() |>
+    # Filter locally rather than through the API's `imeis` parameter. That
+    # parameter goes into the URL, so a device list this size has to be split
+    # across several requests, and the server then re-scans the whole date
+    # window once per chunk. Measured over 90 days with 850 devices: three
+    # chunked requests 11.5s, one unfiltered request 2.8s, for a 2% overfetch
+    # and an identical trip set. The gap widens as the window grows.
+    # `get_trips()` still chunks when a caller does pass `imeis`.
+    dplyr::filter(.data$imei %in% as.numeric(unique(devices$imei))) |>
     dplyr::transmute(
       trip = as.character(.data$trip),
       pds_updated = lubridate::as_datetime(.data$updated)
@@ -649,9 +658,12 @@ predict_pds_tracks <- function(
       .data$trip %in% refresh_trips,
       !(.data$status %in% c("success", "no_fishing", "skipped_too_long"))
     )
-  stuck <- intersect(refresh_trips, results_df$trip[
-    results_df$status == "skipped_too_long"
-  ])
+  stuck <- intersect(
+    refresh_trips,
+    results_df$trip[
+      results_df$status == "skipped_too_long"
+    ]
+  )
 
   if (length(stuck) > 0) {
     logger::log_warn(

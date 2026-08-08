@@ -25,6 +25,13 @@ default:
         validated:
           file_prefix: trips-validated
           cloud_path: zanzibar/validated
+      timor:
+        raw:
+          file_prefix: trips-raw
+          cloud_path: timor/raw
+        validated:
+          file_prefix: trips-validated
+          cloud_path: timor/validated
   surveys:
     zanzibar:
       wf:
@@ -42,14 +49,25 @@ default:
       lurio:
         validated: wf-lurio-surveys-validated
   pds:
+    # PDS `device.directCustomer.name` values, verified against the live API.
+    # Used to filter the device set in ingest_pds_trips(); a name added here
+    # widens the device filter for every country, so only add names whose
+    # devices belong unambiguously to one country.
     customers:
       - "WorldFish - Mozambique"
       - "Syberintel - distributor"
       - "Kenya"
-      - "Kenya AABS" 
+      - "Kenya AABS"
       - "WorldFish - Kenya"
       - "WorldFish - Tanzania AP"
       - "WorldFish - Zanzibar"
+      # Timor-Leste. 844 devices, timezone Asia/Dili, spanning every Timorese
+      # municipality (Atauro, Lautem, Covalima, Manufahi, Manatutu, Viqueque,
+      # Oe-Cusse, Liquica, Bobonaro, Baucau, Ainaro, Dili).
+      # The two other Dili-timezone customers, "Traders" (17 devices) and
+      # "FSSP2: Traders" (8), are trader rather than vessel devices and
+      # "Traders" also carries Asia/Kuala_Lumpur devices, so they are left out.
+      - "MAF / WorldFish"
     token: !expr Sys.getenv('PDS_TOKEN')
     secret: !expr Sys.getenv('PDS_SECRET')
     username: !expr Sys.getenv('PDS_USERNAME')
@@ -130,7 +148,7 @@ default:
       key: gcs
       options:
         project: peskas
-        bucket: pds-peskas-coasts
+        bucket: pds-peskas-coasts-dev
         service_account_key: !expr Sys.getenv('GCP_SA_KEY')
   metadata:
     google_sheets:
@@ -141,6 +159,26 @@ default:
     airtable:
       name: assets
     fishbase:
+      # FAO major fishing area(s) that enrich_taxa() and
+      # get_taxa_morphometrics() restrict species to. Species with no area
+      # assignment in FishBase/SeaLifeBase are always kept.
+      #   51 = Indian Ocean, Western     <- Kenya, Mozambique, Zanzibar
+      #   57 = Indian Ocean, Eastern
+      #   71 = Pacific, Western Central  <- Timor-Leste
+      # Releases up to 4.5.0 hardcoded this as `57  # Western Indian Ocean`.
+      # That label was wrong: 57 is the EASTERN Indian Ocean, and the Western
+      # one — the water Kenya, Mozambique and Zanzibar actually fish — is 51.
+      #
+      # Both are kept, rather than 51 alone, because FishBase's area
+      # assignments are incomplete at family level: 51 on its own drops 19
+      # taxon codes entirely, including CLP (Clupeidae, "Herrings, sardines
+      # nei"), whose 15 backbone species carry area 57 but none carry 51.
+      # Since the filter is a disjunction, [51, 57] is a strict superset of
+      # pre-4.6.0 output — nothing that resolved before stops resolving.
+      # Pass fao_areas = 57 to reproduce pre-4.6.0 output exactly.
+      fao_areas:
+        - 51
+        - 57
       taxa_enriched:
         file_prefix: taxa-fishbase-enriched
         version: latest

@@ -55,5 +55,11 @@ intervals above one hour were 0.6% of the data and half of all fishing hours.
 The default 15-minute limit is roughly 130 missed pings — ample room for a
 genuine signal glitch — while holding any single dropout to a quarter of an
 hour in one cell.
+
+Points whose coordinates are not usable positions ([valid_coordinates()]) are
+dropped before any of this, and counted in a warning. A ping with no position
+is a ping the grid has nowhere to put, so it is treated as one the device
+never sent: the time it covers passes to the next ping that does have a
+position, and `max_gap_hours` limits it there like any other silence.
 }
 \keyword{internal}

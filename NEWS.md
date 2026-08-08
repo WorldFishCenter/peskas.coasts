@@ -1,3 +1,107 @@
+# coasts 4.6.0
+
+Opens the taxa pipeline to countries outside the Indian Ocean, gives it the length-weight and length-length coefficients that country pipelines were each fetching themselves, and corrects the FAO area the Western Indian Ocean countries were being filtered against.
+
+**This release changes the enriched taxa table for Kenya, Mozambique and Zanzibar.** It does so only by *adding*: the new default is a strict superset of 4.5.0's output — 1,265 rows gained, **zero lost** — because the wrong area was being used, not because anything was reinterpreted. Set `fao_areas = 57` to reproduce 4.5.0 byte-for-byte, which is verified `identical()`.
+
+## The taxa pipeline was filtering against the wrong ocean
+
+`enrich_taxa()` filtered species with `AreaCode %in% c(NA_integer_, 57)`, annotated "Western Indian Ocean". **FAO Area 57 is the Eastern Indian Ocean.** The Western Indian Ocean — the water Kenya, Mozambique and Zanzibar actually fish — is Area **51**. Separately, for any country outside the Indian Ocean altogether the hardcoded filter removes precisely the species the function exists to enrich: Timor-Leste is Area 71, so calling it there enriched almost nothing.
+
+* **NEW** `metadata.fishbase.fao_areas` configuration key and a matching `fao_areas` argument on `enrich_taxa()`. Resolution order is argument, then config, then `c(51, 57)`.
+* **CHANGED** the default is now `c(51, 57)`, not `57`. Measured over the production assets snapshot:
+
+  | | 57 (4.5.0) | 51 alone | **51 + 57 (4.6.0)** |
+  |---|---|---|---|
+  | rows | 4,053 | 4,092 | **5,318** |
+  | distinct species | 2,924 | 2,886 | **3,898** |
+  | taxon codes covered | 695 | 754 | **773** |
+  | rows lost vs 4.5.0 | — | 1,226 | **0** |
+
+  Both areas are kept rather than 51 alone because FishBase's area assignments are incomplete at family level. Restricting to 51 by itself drops 19 taxon codes *entirely*, among them `CLP` — Clupeidae, "Herrings, sardines nei" — whose 15 backbone species all carry area assignments, 2 of which include 57 and none of which include 51. Losing a major Kenyan and Zanzibari fishery to a gap in reference metadata is the wrong trade. `c(51, 57)` keeps all 19.
+
+  Column set and types are unchanged. Trait and nutrient column means move by under 4% (`omega3` +3.5%, `vulnerability_fishing` −3.7%, the rest smaller) — the arithmetic of averaging over 33% more species, not a change in any species' values.
+* **NEW** `resolve_fao_areas()` / `filter_by_fao_area()` - the resolution and filtering steps, factored out so the new coefficient functions apply the same rule.
+
+## There were no length-weight or length-length coefficients at all
+
+`enrich_taxa()` emitted traits and nutrients only. Every pipeline that needed to turn a measured length into a weight fetched `a` and `b` itself, and length-length conversion existed in exactly one place, unshared.
+
+* **NEW** `get_length_weight_coeffs()` - `a`, `b`, `aTL`, `Type`, `EsQ`, `LengthMin`/`LengthMax` and study metadata, keyed `alpha3_code` → species → coefficients, from **both** FishBase and SeaLifeBase. Dual-server matters more than it sounds: `rfishbase::species()` is FishBase-only, which is why Timor-Leste had no coefficients whatsoever for 11 of its 56 taxon codes. SeaLifeBase supplies 7 of them — cockles, sea cucumbers, cuttlefish, octopus, penaeid shrimps, spiny lobster and flyingfish now have coefficients where before they had none.
+* **NEW** `get_length_length_coeffs()` - `aL`, `bL`, `Length1`, `Length2`, filtered by default to `TL`/`FL`. Required, not decorative: where a survey records fork length and the coefficients are expressed in total length, every catch record carrying a measured length otherwise yields no weight at all.
+* **NEW** `get_taxa_morphometrics()` - one call, one expansion, both tables back, guaranteed consistently keyed.
+* **No filtering on `Type` or `EsQ` is applied**, deliberately. Restricting to `Type == "TL"` — the obvious simplification, and what one existing pipeline does — was measured to discard more than half the matched species for four of Timor's taxon codes (`CJX` 10 → 3, `EMP` 25 → 12, `MOB` 9 → 4, `YDX` 11 → 4). Since a weight estimate aggregates coefficients across the species in a code, that silently shifts the estimate. The caller filters.
+
+## Filtering coefficients by FAO area costs 40% of them
+
+Restricting by area is right for distributional traits. For `a` and `b` it is a coverage decision, not a correctness one — body form does not stop applying at an FAO boundary, and FishBase's area assignments are incomplete. Over Timor's 57 taxa, area 71 yields 764 species with usable coefficients against 1,283 unrestricted.
+
+* **NEW** `filter_by_area` argument on `get_taxa_morphometrics()` (default `TRUE`, i.e. filter). The measured trade-off is tabulated in `?get_taxa_morphometrics`.
+* **NEW** `strip_parentheticals` argument on `expand_taxonomic_info()` (default `FALSE`). Some FAO names carry a bracketed synonym — `"Haemulidae (=Pomadasyidae)"`, `"Labridae (ex Scaridae)"`, `"Selachimorpha (Pleurotremata)"` — and match nothing as written. It is off by default because switching it on changes results for taxa existing pipelines already publish: `Haemulidae` gains 138 species and `Labridae` 569. Enable it per pipeline, and re-baseline when you do.
+* Documented, not fixed: `expand_taxonomic_info()` matches the FishBase/SeaLifeBase backbone, so it resolves nothing for tribes (`Thunnini`), infraorders (`Reptantia`, `Brachyura`), informal groupings (`Osteichthyes`, `Algae`) or superseded binomials (`Leiognathus equulus`, now *L. equula*). These need a synonym or common-name route.
+
+## The enriched snapshot was written where nothing reads it
+
+`enrich_taxa()` wrote to the country bucket while every reader — `ingest_pds_trips()` among them — looks in the shared hub via `resolve_storage_opts(conf, "coasts")`. The hub holds 118 production copies of the object, so the hub was already the de-facto home and the writer was simply pointing elsewhere.
+
+* **CHANGED** `enrich_taxa()` resolves both the assets snapshot it reads and the enriched table it writes through `resolve_storage_opts(conf, "coasts")`. Inside `coasts` the hub and country buckets are the same object, so this is a no-op; from a downstream package defining `storage.google.options_coasts` it stops scattering per-country copies.
+
+## Nothing retried anything
+
+There was no retry logic anywhere in the package — not in the API layer, not in storage. The largest request in the pipeline, the PDS trip fetch, streams the entire trip history in one response, and a `Recv failure: Connection reset by peer` on it failed a production run on 2026-07-31.
+
+* **ENHANCED** `get_trips()` and `get_trip_points()` gain `max_tries` (default 5) and wrap the request in `httr2::req_retry(retry_on_failure = TRUE)`, so low-level transport failures — not just HTTP status codes — are retried with exponential backoff. HTTP 429 and 5xx are treated as transient.
+* **FIX** `get_trips()` sends `imeis` as a comma-separated query parameter, so a long device list built a URL past the 8192-byte limit that nginx, Apache and most CDNs enforce, and the server answered **HTTP 400 Bad Request** — an error that gives no hint the URL was the problem. At ~16 characters per IMEI only about 500 devices fit. Registering Timor-Leste in this release took the device list from 408 to 850 and the URL from 6,639 to 13,711 characters, which broke `predict_pds_tracks()`, the one caller that filtered server-side rather than locally. Fixed at both ends:
+  - `get_trips()` now splits an oversized `imeis` list across as many requests as needed and row-binds the results, so no caller can build an over-long URL. New `max_url_chars` argument, default `7000`.
+  - **CHANGED** `predict_pds_tracks()` no longer passes `imeis` at all; it fetches the window once and filters locally, the same way `ingest_pds_trips()` always has. This is also the faster route, because the `imeis` parameter forces the server to re-scan the whole date window once per chunk: measured over 90 days with 850 devices, three chunked requests took 11.5s against 2.8s for one unfiltered request, for a 2% overfetch. The gap widens with the window — three scans of the 2018-onward history did not finish in ten minutes.
+
+  Verified against the live API: the two routes return identical trip sets.
+* **NEW** `with_storage_retry()`, `insistent_upload_cloud_file()`, `insistent_download_cloud_file()` - `purrr::insistently()` plus `purrr::rate_backoff(pause_cap = 300, max_times = 10)`, the policy country pipelines were each maintaining by hand. The existing `upload_cloud_file()` / `download_cloud_file()` are untouched, so nothing changes for current callers until they opt in.
+* **FIX** `ingest_pds_tracks(batch_size = n)` sliced with `new_trip_ids[1:n]`, which pads with `NA` once `n` exceeds the number of trips remaining — so the final batch of a run sent trip id `NA` to the API once per slot in the overshoot. Now `utils::head()`, which returns what is left instead. Unreachable from the pipeline, which never passes `batch_size`, but it hit interactive backfills, and the retry logic above had just multiplied its cost: a malformed id answered with a 5xx would be retried five times with backoff rather than failing once.
+
+## `aggregate_pds_effort()` could not absorb a region's history in one run
+
+Registering Timor made the unaggregated delta the entire store at once — 25.2M points across 101,246 trips, against the 99,078 points and 266 trips of a normal daily run, **254x**. The run was killed by the operating system rather than failing in R, and because state is written only at the end, nothing was saved and every retry met the same wall. A GitHub-hosted runner has 7 GB, so this would have failed in production the same way.
+
+Two independent causes, both fixed, and neither sufficient alone:
+
+* **FIX** `prepare_tracks_for_effort()` passed every point to `h3jsr::point_to_cell()` in a single call. That function is a bridge to a JavaScript H3 build, not compiled code — it materialises one object per point in a V8 heap that grows with the input and is never returned to the OS. Now blocked through `h3_index_chunked()` at 100,000 points per call. Measured at resolution 9, peak resident memory scales at **0.22 GB per million points instead of 1.6**, while wall time is unchanged (at 4M points, 1.75 GB / 21.3s blocked against 2.69 GB / 21.7s in one call). Output is byte-identical, verified to 4M points and across block boundaries.
+* **NEW** `batch_size` argument on `aggregate_pds_effort()`, default `8000`. Blocking the H3 call alone does not rescue the backfill — measured end to end, the post-download work costs **0.95 GB per million points**, so 25.2M needs roughly 25 GB — and no single machine in this pipeline has that. The backlog is therefore read a batch at a time.
+
+  **The loop is inside the function.** `aggregate_pds_effort()` is still called exactly as before, with no arguments, and still does the whole backlog; `batch_size` only sets how much is in flight at once. A normal delta (~307 files) is well under one batch and runs precisely as it always has, so the GitHub Actions step is unchanged.
+
+  Each batch checkpoints the aggregation state before the next begins, so an interrupted backlog resumes from the last completed batch rather than starting over — the failure that motivated this, where hours of reading were lost to a crash at the end. The grid is derived once after the last batch instead of per batch, since it is rebuilt from the whole store either way.
+
+  Batching does not change the result: trips that might share pings are recalled whatever batch they fall in, and the grid is derived from the entire store. Verified — a store accumulated over 11 batches and one built in a single pass agree on cell count, row count, `unique_trips` and per-cell effort, differing only by floating-point summation order (max 5.6e-17 hours on 4 of 49,139 rows).
+
+  Files are taken in trip **start-time** order rather than by object name. Both are deterministic, but `recall_overlapping_trips()` pre-filters the registry on the batch's own minimum and maximum span before its many-to-many join on device; a name-ordered batch is scattered across every year in the store, which makes that span the whole store and leaves the pre-filter doing nothing. A batch also leaves the queue whether or not it could be read — files that fail stay out of the *manifest* so a later run retries them, but selection is deterministic, so re-offering them to the same loop would never terminate.
+
+* **FIX** `download_predicted_files()` held the per-file frames and the bound result live at the same time, roughly doubling peak memory at the worst moment. The wrapper list is now dropped before `bind_rows()`, so the parts are freed as they are consumed.
+* **FIX** `drop_overlapping_pings()` tested for shared pings with `duplicated(ping) | duplicated(ping, fromLast = TRUE)`. `duplicated()` on a *data frame* first rebuilds it as one list element per row — `do.call(Map, ...)` inside `duplicated.data.frame` — and that version pays for it twice. Measured on the `(timestamp, latitude, longitude)` triple, the cost is **705 MB and 8.2s per million rows against 50 MB and 0.04s** for `vctrs::vec_duplicate_detect()`, which expresses the same "duplicated anywhere" flag in a single C-level pass. Unnoticeable on a daily delta; ~18 GB and an out-of-memory kill on a full backfill, *after* the tracks have been downloaded. Output is `identical()` to the previous implementation, verified including the `NA`/`NaN`/`-0` cases. `vctrs` added to `Imports` (already a transitive dependency via dplyr).
+
+## A bad coordinate could abort a run, or quietly move fishing to the Arctic
+
+Nothing between the PDS API and the effort grid checked that a position was a position. `h3jsr::point_to_cell()` fails in opposite directions on the two ways it can be wrong, and the quiet one was doing the real damage. Neither is a regression — both were reachable before — but a backfill reading 101,246 files across eight years is far likelier to meet them than a 300-file daily run.
+
+* **FIX** a non-finite coordinate (`NA`, `NaN`, `Inf`) raised *Latitude or longitude arguments were outside of acceptable range* and **aborted the entire run**. One bad ping among millions was enough, and because the aggregation state is only uploaded at the end, nothing was saved and the retry met the same ping again.
+* **FIX** an out-of-range *finite* coordinate raised nothing whatsoever. Despite that error's wording, H3 does not reject these — it wraps them and returns an ordinary-looking cell. Latitude is where it does harm, because the wrap reflects over the pole and swings longitude by 180°: measured at resolution 9, a point off the Tanzanian coast with a corrupt latitude of 91 returns a cell at **89°N, 141°W — the Arctic Ocean, some 10,000 km away**, and a latitude of 900 lands in the mid-Pacific. Either entered the grid as a real hexagon carrying real fishing hours, with no error and no log line.
+* **NEW** `valid_coordinates()` — the shared test for both. `prepare_tracks_for_effort()` now drops unusable points and warns with the count; `assign_h3_indices()` used it to replace an `is.na()` filter that caught neither case.
+
+  Points are dropped **before** intervals are measured, not after the H3 column is added. An unusable ping still carries a good timestamp but has no cell to credit its interval to, so removing it first hands that time to the next ping that does have a position, where `max_gap_hours` limits it like any other silence. Removing it afterwards would have measured an interval into a row about to be discarded and silently lost that stretch of the trip. Verified: a track with points poisoned three different ways yields exactly the same total hours as the same track cleaned beforehand.
+
+  Out-of-range *longitude* is rejected too, though it is the harmless case — longitude is cyclic, so 181° resolves correctly to 179°W. A device reporting outside ±180 is reporting something wrong, and the value being recoverable is no reason to trust the rest of that ping.
+
+* **FIX** `h3_index_chunked()` and `assign_h3_indices()` return an empty result for empty input instead of failing. `point_to_cell()` errors on zero rows (*arguments imply differing number of rows: 2, 0*), which the new filtering makes reachable whenever every position on a trip is unusable.
+
+On clean data all of this is a no-op: output is `identical()` to the previous behaviour, so no existing effort figure moves.
+
+## Smaller things
+
+* **NEW** `cloud_object_names()` - enumerates every object matching a prefix. `cloud_object_name()` returns `selected_rows$name[1]`, a *single* name, despite grouping internally by base name and extension; pointed at a prefix covering many distinct base names — one object per GPS trip, say — it silently hands back an arbitrary one of tens of thousands rather than erroring. That behaviour is now documented prominently and left exactly as it is, since downstream code depends on it; use the plural form to enumerate.
+* **ENHANCED** `resolve_storage_opts()` accepts `type = "public"`, resolving `public_storage.google.options` or `storage.google.options_public`, and a `error_if_missing` argument (default `FALSE`, preserving the previous return-`NULL` behaviour) for callers that would rather fail fast with a message naming the expected key.
+* **NEW** `timor` block under `api.trips`, and `"MAF / WorldFish"` added to `pds.customers` — read off the live PDS API, not guessed: 844 devices, timezone `Asia/Dili`, spanning every Timorese municipality. The two other `Asia/Dili` customers, `"Traders"` (17 devices) and `"FSSP2: Traders"` (8), are deliberately excluded — they are trader rather than vessel devices, and `"Traders"` also carries `Asia/Kuala_Lumpur` devices, which would widen the shared device filter for every country.
+* **FIX** `expand_taxonomic_info()`'s `alpha3_code` was documented as a "three-letter country/region code". It is the FAO 3-alpha code identifying the *taxon* group.
+
 # coasts 4.5.0
 
 ## The same fishing trip was counted many times over
