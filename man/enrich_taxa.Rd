@@ -4,11 +4,18 @@
 \alias{enrich_taxa}
 \title{Enrich Taxa with FishBase and SeaLifeBase Biological Data}
 \usage{
-enrich_taxa(log_threshold = logger::DEBUG)
+enrich_taxa(log_threshold = logger::DEBUG, fao_areas = NULL)
 }
 \arguments{
 \item{log_threshold}{Logging threshold passed to [logger::log_threshold()].
 Defaults to [logger::DEBUG].}
+
+\item{fao_areas}{Optional numeric vector of FAO major fishing area codes to
+restrict species to. If `NULL` (default) the value is resolved from the
+`metadata.fishbase.fao_areas` configuration key, falling back to
+`c(51, 57)` (Western and Eastern Indian Ocean). Timor-Leste is Area 71.
+Pass `57` to reproduce pre-4.6.0 output — see [resolve_fao_areas()] for
+why 57 alone was never right for the Western Indian Ocean.}
 }
 \value{
 Invisible NULL. Called for its side effect of uploading the enriched
@@ -16,27 +23,48 @@ Invisible NULL. Called for its side effect of uploading the enriched
 }
 \description{
 Main pipeline function that downloads the taxa metadata from cloud storage,
-expands each record to matching FishBase / SeaLifeBase species (filtered to
-FAO Area 57 — Western Indian Ocean), and joins biological attributes
-including vulnerability, trophic level, feeding guild, and nutrient
-composition. The final dataset is uploaded as a versioned Parquet file to
-the project cloud bucket.
+expands each record to matching FishBase / SeaLifeBase species (restricted to
+the configured FAO major fishing areas — 51 and 57, the Western and Eastern
+Indian Ocean, by default), and joins biological attributes including
+vulnerability, trophic level, feeding guild, and nutrient composition. The
+final dataset is uploaded as a versioned Parquet file to the shared coasts
+bucket.
 }
 \details{
 The function performs the following steps:
 1. Downloads the latest metadata RDS file (Airtable assets) from GCS.
 2. Extracts the `taxa` table and calls [expand_taxonomic_info()].
-3. Filters species to FAO Area 57 (or those without an area assignment).
+3. Restricts species to the resolved FAO area(s) via [filter_by_fao_area()],
+   always keeping species with no area assignment.
 4. Joins species-level data from the `species`, `ecology`, and `estimate`
    tables.
 5. Deduplicates by taking the first non-`NA` value per group.
 6. Cleans column names with [janitor::clean_names()].
 7. Uploads the result via [upload_parquet_to_cloud()] using the
    `metadata.fishbase.taxa_enriched.file_prefix` configuration key.
+
+Both the assets snapshot it reads and the enriched table it writes resolve
+through `resolve_storage_opts(conf, "coasts")` — the shared hub bucket, which
+is where [ingest_pds_trips()] and the other readers of these objects look.
+Within the `coasts` package itself the hub and country buckets are the same,
+so this is a no-op; in a downstream package that defines
+`storage.google.options_coasts` it directs both ends at the hub rather than
+scattering per-country copies.
+
+This function emits traits and nutrients only. For length-weight and
+length-length coefficients see [get_taxa_morphometrics()].
 }
 \examples{
 \dontrun{
+# Indian Ocean, Western + Eastern (the default)
 coasts::enrich_taxa()
+
+# Western Central Pacific
+coasts::enrich_taxa(fao_areas = 71)
 }
+}
+\seealso{
+[get_taxa_morphometrics()], [resolve_fao_areas()],
+  [resolve_storage_opts()]
 }
 \keyword{workflow}

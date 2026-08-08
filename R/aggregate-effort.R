@@ -21,6 +21,12 @@
 #' genuine signal glitch — while holding any single dropout to a quarter of an
 #' hour in one cell.
 #'
+#' Points whose coordinates are not usable positions ([valid_coordinates()]) are
+#' dropped before any of this, and counted in a warning. A ping with no position
+#' is a ping the grid has nowhere to put, so it is treated as one the device
+#' never sent: the time it covers passes to the next ping that does have a
+#' position, and `max_gap_hours` limits it there like any other silence.
+#'
 #' @param df Data frame of predicted fishing points with columns `trip`,
 #'   `timestamp`, `latitude`, `longitude`.
 #' @param h3_res Integer (0–15). H3 resolution for cell assignment.
@@ -49,6 +55,22 @@ prepare_tracks_for_effort <- function(
 ) {
   gap_policy <- match.arg(gap_policy)
 
+  # Dropped here, before the intervals are measured, rather than after the H3
+  # column is added. An unusable ping still carries a good timestamp, but there
+  # is no cell to credit its interval to; removing it first hands that time to
+  # the next ping that does have a position, where `max_gap_hours` limits it in
+  # the ordinary way. Removing it afterwards would measure an interval into a
+  # row about to be discarded, and silently lose that stretch of the trip.
+  usable <- valid_coordinates(df$longitude, df$latitude)
+
+  if (!all(usable)) {
+    logger::log_warn(
+      "Dropping {sum(!usable)} of {nrow(df)} point(s) whose coordinates are",
+      " not usable positions; their time is credited to the next good ping"
+    )
+    df <- df[usable, , drop = FALSE]
+  }
+
   df |>
     dplyr::mutate(
       trip = as.character(.data$trip),
@@ -70,11 +92,124 @@ prepare_tracks_for_effort <- function(
     ) |>
     dplyr::ungroup() |>
     dplyr::mutate(
-      h3_index = h3jsr::point_to_cell(
+      h3_index = h3_index_chunked(
         cbind(.data$longitude, .data$latitude),
         res = h3_res
       )
     )
+}
+
+
+#' Flag Coordinates H3 Can Be Trusted With
+#'
+#' @description
+#' Tests longitude/latitude pairs for the two ways a position can be unusable:
+#' not a number at all, or outside the range it is meant to occupy.
+#'
+#' @details
+#' [h3jsr::point_to_cell()] fails in opposite directions on the two, and the
+#' quiet one is the more damaging.
+#'
+#' A non-finite coordinate (`NA`, `NaN`, `Inf`) raises *Latitude or longitude
+#' arguments were outside of acceptable range*, which aborts the entire run --- a
+#' single bad ping in a batch of millions, and nothing is written, because the
+#' aggregation state is only uploaded at the end.
+#'
+#' An out-of-range *finite* coordinate raises nothing at all. Despite the
+#' wording of that error, H3 does not reject these: it wraps them and returns a
+#' perfectly ordinary-looking cell. Latitude is where this does damage, because
+#' the wrap is not a wrap at all --- it reflects over the pole and swings
+#' longitude by 180°. Measured at resolution 9, a point off the Tanzanian coast
+#' with a corrupt latitude of 91 comes back as a cell at 89°N, 141°W, in the
+#' Arctic Ocean some 10,000 km away; a latitude of 900 lands in the mid-Pacific.
+#' Either would enter the grid as a real hexagon carrying real fishing hours,
+#' with no error and no log line to explain it.
+#'
+#' Longitude out of range is the harmless case --- longitude is genuinely cyclic,
+#' so 181° resolves to 179°W, which is the correct point. It is rejected anyway:
+#' a device reporting outside ±180 is reporting something wrong, and the value
+#' being recoverable is not a reason to trust the rest of that ping.
+#'
+#' @param longitude,latitude Numeric vectors of equal length.
+#'
+#' @return Logical vector, `TRUE` where the pair is a position H3 can be given.
+#'
+#' @seealso [h3_index_chunked()], [prepare_tracks_for_effort()]
+#'
+#' @keywords internal
+valid_coordinates <- function(longitude, latitude) {
+  is.finite(longitude) &
+    is.finite(latitude) &
+    latitude >= -90 &
+    latitude <= 90 &
+    longitude >= -180 &
+    longitude <= 180
+}
+
+
+#' Assign H3 Cells in Bounded Blocks
+#'
+#' @description
+#' Maps coordinates to H3 cell identifiers a block at a time, so that peak
+#' memory is set by the block size rather than by the number of points.
+#'
+#' @details
+#' [h3jsr::point_to_cell()] is a bridge to a JavaScript H3 build, not compiled
+#' code: it pushes the whole coordinate set into a V8 heap as one object per
+#' point, loops over them in JavaScript, and ships the strings back. The heap
+#' that requires grows with the input and is not returned to the operating
+#' system, so a single call over a full backfill is an out-of-memory kill rather
+#' than a slow run.
+#'
+#' Splitting the call costs nothing. Measured at H3 resolution 9 on 4M points,
+#' peak resident memory falls monotonically with block size --- 2.69 GB in one
+#' call, 1.75 GB at 100,000, 1.68 GB at 50,000 --- while wall time stays flat
+#' (21.7s against 20.5s), because the work per point is unchanged and only the
+#' number of round trips differs. The default of 100,000 sits at the point where
+#' the memory curve has flattened but the round trips are still few.
+#'
+#' Blocking does not change the result: each point's cell depends only on its
+#' own coordinates, so the concatenated output is identical to the single call
+#' (verified byte-for-byte up to 4M points). The one deliberate departure is the
+#' empty input, which [h3jsr::point_to_cell()] errors on rather than answering;
+#' here it returns `character(0)`.
+#'
+#' Coordinates are assumed to have been checked already --- see
+#' [valid_coordinates()] for what happens if they have not been.
+#'
+#' @param xy Two-column numeric matrix of longitude and latitude, in that order.
+#'   Every row must be a valid position; blocking does not make
+#'   [h3jsr::point_to_cell()] any more tolerant of one that is not.
+#' @param res Integer (0--15). H3 resolution.
+#' @param chunk Integer. Maximum points per call. Default `100000`.
+#'
+#' @return Character vector of H3 cell identifiers, one per row of `xy`.
+#'
+#' @seealso [prepare_tracks_for_effort()]
+#'
+#' @keywords internal
+h3_index_chunked <- function(xy, res, chunk = 100000L) {
+  n <- nrow(xy)
+
+  # `point_to_cell()` does not survive an empty input --- it fails building its
+  # own working frame ("arguments imply differing number of rows: 2, 0") --- and
+  # an empty input is reachable whenever a trip's positions are all unusable.
+  if (n == 0) {
+    return(character(0))
+  }
+
+  if (n <= chunk) {
+    return(h3jsr::point_to_cell(xy, res = res))
+  }
+
+  blocks <- split(seq_len(n), ceiling(seq_len(n) / chunk))
+
+  unlist(
+    lapply(blocks, function(i) {
+      h3jsr::point_to_cell(xy[i, , drop = FALSE], res = res)
+    }),
+    use.names = FALSE
+  )
 }
 
 
@@ -211,8 +346,18 @@ drop_overlapping_pings <- function(df, prefer = character(0)) {
   # Shared pings are a fraction of a percent of a batch, so the ordering that
   # decides which copy survives is established over just those rows: sorting
   # the whole frame would cost more than the deduplication it serves.
+  #
+  # `vec_duplicate_detect()` rather than `duplicated(ping) | duplicated(ping,
+  # fromLast = TRUE)`: the two express the same thing, but `duplicated()` on a
+  # *data frame* first rebuilds it as one list element per row
+  # (`do.call(Map, ...)` inside `duplicated.data.frame`), and the base version
+  # pays for that twice. Measured on this triple, that is 705 MB and 8.2s per
+  # million rows against 50 MB and 0.04s -- survivable on a daily delta, ~18 GB
+  # and an out-of-memory kill on a full backfill, after the tracks have already
+  # been downloaded. The vctrs form is a single C-level pass and returns the
+  # "duplicated anywhere, first occurrence included" flag directly.
   ping <- df[c("timestamp", "latitude", "longitude")]
-  shared <- duplicated(ping) | duplicated(ping, fromLast = TRUE)
+  shared <- vctrs::vec_duplicate_detect(ping)
 
   if (!any(shared)) {
     return(df)
@@ -363,6 +508,65 @@ withdraw_trips <- function(state, seed, extra_files = character(0)) {
 }
 
 
+#' Take the Next Batch of Predicted Track Files
+#'
+#' @description
+#' Takes the first `max_files` objects of the queue in trip start order, so that
+#' a backlog is worked through a batch at a time instead of being held in memory
+#' at once.
+#'
+#' @details
+#' The cap exists because peak memory is set by the number of points held at
+#' once, and a store that has just gained a region's full history is not the
+#' small daily delta the pipeline is otherwise sized for. [aggregate_pds_effort()]
+#' calls this once per batch until its queue is empty.
+#'
+#' Ordering is by the trip's start time rather than by object name, and this is
+#' what keeps the cap cheap rather than merely correct. Both orders are
+#' deterministic, but [recall_overlapping_trips()] pre-filters the aggregated
+#' registry on the batch's own minimum and maximum span before joining on the
+#' device. A batch drawn in name order is scattered across every year the store
+#' covers, so that span is the whole store, the pre-filter stops discriminating,
+#' and the many-to-many join on device is left to pair each device's entire
+#' history against its incoming trips. Ordering by time keeps a batch inside a
+#' narrow window, which is the shape that pre-filter was written for.
+#'
+#' Correctness does not rest on the order. A capped batch is judged exactly as a
+#' full one is: the cap is applied *before* the recall step, so trips already
+#' aggregated that might share pings with it are still pulled back in, and the
+#' grid is re-derived from the whole store every run --- which is what makes the
+#' result independent of how trips were batched.
+#'
+#' @param files Character vector of candidate object names.
+#' @param trip_lookup Trip metadata with columns `trip` and `started`.
+#' @param max_files Integer, or `NULL` to take everything.
+#'
+#' @return A character vector of at most `max_files` object names.
+#'
+#' @seealso [recall_overlapping_trips()], [aggregate_pds_effort()]
+#'
+#' @keywords internal
+select_effort_batch <- function(files, trip_lookup, max_files) {
+  if (is.null(max_files) || length(files) <= max_files) {
+    return(files)
+  }
+
+  ordered <- tibble::tibble(
+    name = files,
+    trip = predicted_track_trip_id(files)
+  ) |>
+    dplyr::left_join(
+      dplyr::select(trip_lookup, "trip", "started"),
+      by = "trip"
+    ) |>
+    # Trips carrying no metadata sort last (arrange puts NA last), and the name
+    # breaks ties, so the same backlog is always consumed in the same order.
+    dplyr::arrange(.data$started, .data$name)
+
+  ordered$name[seq_len(max_files)]
+}
+
+
 #' Download a Batch of Predicted Track Files
 #'
 #' @description
@@ -427,8 +631,15 @@ download_predicted_files <- function(names, provider, options) {
     )
   }
 
+  # The per-file frames and the bound result would otherwise be live at the
+  # same time, doubling peak memory at the worst possible moment. Dropping the
+  # wrapper list first leaves `bind_rows()` holding the only other reference,
+  # so the parts are freed as it consumes them.
+  parts <- purrr::map(results, "data")
+  rm(results)
+
   list(
-    tracks = dplyr::bind_rows(purrr::map(results, "data")),
+    tracks = dplyr::bind_rows(parts),
     failed = failed
   )
 }
@@ -851,6 +1062,37 @@ upload_aggregation_state <- function(state, names, provider, options) {
 #' sees, and it sees precisely which files moved rather than assuming all of
 #' them did.
 #'
+#' ## Batching large backlogs
+#'
+#' Peak memory is set by how many points are read at once, not by how many the
+#' store holds, and the two are normally unrelated: a daily run reads the delta
+#' since the last one --- of the order of 300 objects and 100,000 points. A
+#' region registered for the first time breaks that assumption, because its
+#' whole history is new at once. Read in one go, 25 million points need roughly
+#' 25 GB and the run is killed by the operating system rather than failing in R.
+#'
+#' So the backlog is read in batches of `batch_size` objects, and the loop is
+#' inside this function: there is one way to call it, and it does the whole
+#' backlog whatever size that is. A normal delta is smaller than a single batch
+#' and behaves exactly as it did before batching existed.
+#'
+#' Each batch checkpoints the aggregation state before the next begins, so an
+#' interrupted backlog resumes from the last completed batch instead of
+#' starting over --- which matters when the reading alone can run for hours. The
+#' grid is derived once at the end rather than per batch, since it is rebuilt
+#' from the whole store every time regardless.
+#'
+#' Batching does not change the result. Trips that might share pings are
+#' recalled whatever batch they fall in ([recall_overlapping_trips()]), and the
+#' grid is derived from the entire store, so how the trips were divided leaves
+#' no trace. A store built over eleven batches and one built in a single pass
+#' agree on cell count, `unique_trips` and per-cell effort to floating-point
+#' summation order.
+#'
+#' As a guide to sizing, predicted-track objects hold a few hundred points each,
+#' so the default 8,000 is roughly two million points, or about 2.7 GB. Lower it
+#' if the machine is smaller than that; there is no reason to raise it.
+#'
 #' ## Grid schema
 #'
 #' The grid is partitioned by `year`, `gear`, and `country`, so there may be
@@ -892,6 +1134,11 @@ upload_aggregation_state <- function(state, names, provider, options) {
 #'   passed to [prepare_tracks_for_effort()]. Both are recorded with the
 #'   aggregation state: changing either makes every stored figure incomparable,
 #'   so the grid is rebuilt from the predicted tracks.
+#' @param batch_size Integer. Most predicted-track objects to hold in memory at
+#'   once. The function reads the whole backlog either way; this only sets how
+#'   much of it is in flight at a time. The default of `8000` is far above a
+#'   normal delta, so ordinary runs are a single batch and are unaffected.
+#'   Lower it on a smaller machine. See the batching section below.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`. Pass your own package name when calling from a downstream
 #'   package with a compatible configuration.
@@ -912,6 +1159,7 @@ aggregate_pds_effort <- function(
   h3_res = 9L,
   max_gap_hours = 0.25,
   gap_policy = c("cap", "drop"),
+  batch_size = 8000L,
   package = "coasts"
 ) {
   gap_policy <- match.arg(gap_policy)
@@ -1064,152 +1312,210 @@ aggregate_pds_effort <- function(
     )
   }
 
-  # --- Filter to only new files ---
-  new_files <- setdiff(predicted_files$name, state$manifest$name)
+  # --- Work through the new files in bounded batches ---
+  # Peak memory is set by how many points are held at once, not by the size of
+  # the store, so the backlog is consumed a batch at a time. A normal delta is
+  # smaller than one batch and runs exactly as it always has; only a backlog
+  # large enough to exhaust memory is split, and it is split here rather than
+  # by the caller, so there is one way to call this function whatever it finds.
+  pending <- setdiff(predicted_files$name, state$manifest$name)
 
-  if (length(new_files) == 0 && length(changed_files) == 0) {
+  if (length(pending) == 0 && length(changed_files) == 0) {
     logger::log_info("No new tracks to aggregate, grid is up to date")
     return(invisible(NULL))
   }
 
-  # --- Recall aggregated trips that could share pings with this batch ---
-  # Pings are only compared within a batch, so a track PDS has split across two
-  # trips would otherwise be counted twice: one half read now, the other
-  # already in the store and never set beside it.
-  recalled <- recall_overlapping_trips(new_files, trip_lookup, state$registry)
+  n_batches <- ceiling(length(pending) / batch_size)
 
-  if (nrow(recalled) > 0) {
-    withdrawn <- withdraw_trips(state, seed = recalled$trip)
-    state <- withdrawn$state
-    new_files <- union(new_files, withdrawn$files)
-
+  if (n_batches > 1L) {
     logger::log_info(
-      "Recalling {length(withdrawn$trips)} aggregated trip(s) that may share",
-      " pings with this batch, to judge them together"
+      "{length(pending)} new files to aggregate in {n_batches} batches of up to",
+      " {batch_size} (skipping {nrow(state$manifest)} already done)"
+    )
+  } else {
+    logger::log_info(
+      "{length(pending)} new files to aggregate (skipping {nrow(state$manifest)} already done)"
     )
   }
 
-  logger::log_info(
-    "{length(new_files)} new files to aggregate (skipping {nrow(state$manifest)} already done)"
-  )
+  batch_no <- 0L
 
-  # --- Download only new files ---
-  new_tracks <- tibble::tibble()
-  failed_files <- character(0)
+  while (length(pending) > 0) {
+    batch_no <- batch_no + 1L
+    new_files <- select_effort_batch(pending, trip_lookup, batch_size)
 
-  if (length(new_files) > 0) {
-    fetched <- download_predicted_files(
-      new_files,
-      provider = conf$pds_storage$google$key,
-      options = pds_opts
-    )
-    new_tracks <- fetched$tracks
-    failed_files <- fetched$failed
-  }
+    # The batch leaves the queue whether or not it could be read. A file that
+    # fails stays out of the *manifest*, so a later run retries it, but it must
+    # not be offered to this loop again: selection is deterministic, so a batch
+    # that failed in full would otherwise be chosen over and over for ever.
+    pending <- setdiff(pending, new_files)
 
-  # Attach gear/country; trips with no device metadata are kept as "unknown" so
-  # that aggregate totals are preserved when collapsing the grid back over them.
-  if (nrow(new_tracks) > 0) {
-    new_tracks <- new_tracks |>
-      dplyr::mutate(trip = as.character(.data$trip)) |>
-      dplyr::left_join(trip_lookup, by = "trip") |>
-      dplyr::mutate(
-        gear = dplyr::coalesce(.data$gear, "unknown"),
-        country = dplyr::coalesce(.data$country, "unknown")
-      )
-
-    n_trips <- dplyr::n_distinct(new_tracks$trip)
-    logger::log_info(
-      "Aggregating {nrow(new_tracks)} new fishing points from {n_trips} trips to H3 res {h3_res}"
-    )
-
-    # --- Prepare tracks: compute dt_hours, year and h3_index ---
-    prepared <- prepare_tracks_for_effort(
-      new_tracks,
-      h3_res,
-      max_gap_hours = max_gap_hours,
-      gap_policy = gap_policy
-    )
-
-    # Where each trip came from and when it fished, so a later batch can find
-    # the trips it might share pings with.
-    trip_meta <- prepared |>
-      dplyr::summarise(
-        .by = "trip",
-        file = dplyr::first(.data$source_file),
-        imei = dplyr::first(.data$imei),
-        first_timestamp = min(.data$timestamp),
-        last_timestamp = max(.data$timestamp)
-      )
-
-    # --- Drop tracks PDS has already delivered under another trip id ---
-    # Trips PDS still lists are preferred: they are the ones carrying device
-    # metadata, so the survivor keeps its gear/country instead of falling into
-    # the "unknown" bucket. Only trips that survived earlier runs are offered
-    # as prior art — a trip already dropped as a duplicate must never become
-    # the survivor of a later one.
-    trip_index <- index_trip_duplicates(
-      prepared,
-      prefer = trip_lookup$trip,
-      seen = dplyr::filter(state$registry, is.na(.data$duplicate_of))
-    )
-    n_duplicated <- sum(!trip_index$keep)
-
-    if (n_duplicated > 0) {
+    if (n_batches > 1L) {
       logger::log_info(
-        "Dropping {n_duplicated} of {nrow(trip_index)} trips whose track duplicates another trip"
-      )
-      prepared <- dplyr::filter(
-        prepared,
-        .data$trip %in% trip_index$trip[trip_index$keep]
+        "--- batch {batch_no}/{n_batches}: {length(new_files)} file(s),",
+        " {length(pending)} still queued after it"
       )
     }
 
-    n_pings <- nrow(prepared)
-    prepared <- drop_overlapping_pings(prepared, prefer = trip_lookup$trip)
+    # --- Recall aggregated trips that could share pings with this batch ---
+    # Pings are only compared within a batch, so a track PDS has split across
+    # two trips would otherwise be counted twice: one half read now, the other
+    # already in the store and never set beside it.
+    recalled <- recall_overlapping_trips(new_files, trip_lookup, state$registry)
 
-    if (nrow(prepared) < n_pings) {
+    if (nrow(recalled) > 0) {
+      withdrawn <- withdraw_trips(state, seed = recalled$trip)
+      state <- withdrawn$state
+      new_files <- union(new_files, withdrawn$files)
+
       logger::log_info(
-        "Dropping {n_pings - nrow(prepared)} pings shared by more than one trip"
+        "Recalling {length(withdrawn$trips)} aggregated trip(s) that may share",
+        " pings with this batch, to judge them together"
       )
     }
 
-    # A trip's rows are replaced rather than added to, so reading the same file
-    # twice — after an interrupted upload, say — changes nothing.
-    state$registry <- dplyr::bind_rows(
-      dplyr::filter(state$registry, !(.data$trip %in% trip_index$trip)),
-      trip_index |>
-        dplyr::left_join(trip_meta, by = "trip") |>
-        dplyr::select(
-          "trip",
-          "file",
-          "imei",
-          "first_timestamp",
-          "last_timestamp",
-          "fingerprint",
-          "n_points",
-          "duplicate_of"
+    # --- Download only new files ---
+    new_tracks <- tibble::tibble()
+    failed_files <- character(0)
+
+    if (length(new_files) > 0) {
+      fetched <- download_predicted_files(
+        new_files,
+        provider = conf$pds_storage$google$key,
+        options = pds_opts
+      )
+      new_tracks <- fetched$tracks
+      failed_files <- fetched$failed
+    }
+
+    # Attach gear/country; trips with no device metadata are kept as "unknown"
+    # so that aggregate totals are preserved when collapsing the grid back over
+    # them.
+    if (nrow(new_tracks) > 0) {
+      new_tracks <- new_tracks |>
+        dplyr::mutate(trip = as.character(.data$trip)) |>
+        dplyr::left_join(trip_lookup, by = "trip") |>
+        dplyr::mutate(
+          gear = dplyr::coalesce(.data$gear, "unknown"),
+          country = dplyr::coalesce(.data$country, "unknown")
         )
+
+      n_trips <- dplyr::n_distinct(new_tracks$trip)
+      logger::log_info(
+        "Aggregating {nrow(new_tracks)} new fishing points from {n_trips} trips to H3 res {h3_res}"
+      )
+
+      # --- Prepare tracks: compute dt_hours, year and h3_index ---
+      prepared <- prepare_tracks_for_effort(
+        new_tracks,
+        h3_res,
+        max_gap_hours = max_gap_hours,
+        gap_policy = gap_policy
+      )
+
+      # Where each trip came from and when it fished, so a later batch can find
+      # the trips it might share pings with.
+      trip_meta <- prepared |>
+        dplyr::summarise(
+          .by = "trip",
+          file = dplyr::first(.data$source_file),
+          imei = dplyr::first(.data$imei),
+          first_timestamp = min(.data$timestamp),
+          last_timestamp = max(.data$timestamp)
+        )
+
+      # --- Drop tracks PDS has already delivered under another trip id ---
+      # Trips PDS still lists are preferred: they are the ones carrying device
+      # metadata, so the survivor keeps its gear/country instead of falling into
+      # the "unknown" bucket. Only trips that survived earlier runs are offered
+      # as prior art — a trip already dropped as a duplicate must never become
+      # the survivor of a later one.
+      trip_index <- index_trip_duplicates(
+        prepared,
+        prefer = trip_lookup$trip,
+        seen = dplyr::filter(state$registry, is.na(.data$duplicate_of))
+      )
+      n_duplicated <- sum(!trip_index$keep)
+
+      if (n_duplicated > 0) {
+        logger::log_info(
+          "Dropping {n_duplicated} of {nrow(trip_index)} trips whose track duplicates another trip"
+        )
+        prepared <- dplyr::filter(
+          prepared,
+          .data$trip %in% trip_index$trip[trip_index$keep]
+        )
+      }
+
+      n_pings <- nrow(prepared)
+      prepared <- drop_overlapping_pings(prepared, prefer = trip_lookup$trip)
+
+      if (nrow(prepared) < n_pings) {
+        logger::log_info(
+          "Dropping {n_pings - nrow(prepared)} pings shared by more than one trip"
+        )
+      }
+
+      # A trip's rows are replaced rather than added to, so reading the same
+      # file twice — after an interrupted upload, say — changes nothing.
+      state$registry <- dplyr::bind_rows(
+        dplyr::filter(state$registry, !(.data$trip %in% trip_index$trip)),
+        trip_index |>
+          dplyr::left_join(trip_meta, by = "trip") |>
+          dplyr::select(
+            "trip",
+            "file",
+            "imei",
+            "first_timestamp",
+            "last_timestamp",
+            "fingerprint",
+            "n_points",
+            "duplicate_of"
+          )
+      )
+
+      state$effort <- dplyr::bind_rows(
+        dplyr::filter(state$effort, !(.data$trip %in% trip_index$trip)),
+        build_trip_effort(prepared)
+      )
+    }
+
+    # Every file read in this batch counts as aggregated, including the empty
+    # ones and the duplicates dropped above, so they are not fetched again.
+    # Files that could not be read are left out: recording them would retire
+    # their effort for good over a transient storage error.
+    read_files <- dplyr::filter(
+      predicted_files,
+      .data$name %in% setdiff(new_files, failed_files)
+    )
+    state$manifest <- dplyr::bind_rows(
+      dplyr::filter(state$manifest, !(.data$name %in% read_files$name)),
+      read_files
     )
 
-    state$effort <- dplyr::bind_rows(
-      dplyr::filter(state$effort, !(.data$trip %in% trip_index$trip)),
-      build_trip_effort(prepared)
-    )
+    # Checkpoint between batches so that an interrupted backlog resumes where
+    # it stopped. The grid is left until the end: it is derived from the whole
+    # store, so writing it once costs one derivation instead of one per batch,
+    # and a run that dies half way leaves a stale grid beside a good store —
+    # which the next run rebuilds from that store in full.
+    if (length(pending) > 0) {
+      logger::log_info(
+        "Checkpointing state after batch {batch_no}/{n_batches}..."
+      )
+      upload_aggregation_state(
+        state,
+        state_names,
+        provider = conf$storage$google$key,
+        options = country_opts
+      )
+
+      # Nothing below needs the batch, and the next one is about to allocate
+      # its own; holding these until then would double the peak for no reason.
+      rm(new_tracks)
+      suppressWarnings(rm(prepared, trip_index, trip_meta))
+      invisible(gc(FALSE))
+    }
   }
-
-  # Every file read in this batch counts as aggregated, including the empty ones
-  # and the duplicates dropped above, so they are not fetched again. Files that
-  # could not be read are left out: recording them would retire their effort
-  # for good over a transient storage error.
-  read_files <- dplyr::filter(
-    predicted_files,
-    .data$name %in% setdiff(new_files, failed_files)
-  )
-  state$manifest <- dplyr::bind_rows(
-    dplyr::filter(state$manifest, !(.data$name %in% read_files$name)),
-    read_files
-  )
 
   if (nrow(state$effort) == 0) {
     logger::log_info("No effort left to aggregate, grid not written")
@@ -1258,7 +1564,8 @@ aggregate_pds_effort <- function(
   )
 
   logger::log_success(
-    "H3 grid updated: {n_cells} cells ({length(new_files)} new files aggregated)"
+    "H3 grid updated: {n_cells} cells ({nrow(state$manifest)} files aggregated",
+    " over {batch_no} batch(es))"
   )
 
   invisible(h3_grid)
@@ -1376,9 +1683,11 @@ aggregate_daily_effort <- function(points_sf, reference_grid_sf) {
 #'
 #' @description
 #' Adds an `h3_index` column to a GPS data frame by mapping each coordinate to
-#' its containing H3 hexagon at the specified resolution. Rows with missing
-#' coordinates are dropped. The data frame is returned in its original
-#' unprojected (WGS84) form with the index appended.
+#' its containing H3 hexagon at the specified resolution. Rows whose coordinates
+#' are not usable positions are dropped --- missing, non-finite, or outside the
+#' latitude/longitude range, all of which [valid_coordinates()] describes. The
+#' data frame is returned in its original unprojected (WGS84) form with the
+#' index appended.
 #'
 #' @param df A data frame with GPS coordinates.
 #' @param lat_col Character. Name of the latitude column. Default is `"lat"`.
@@ -1399,8 +1708,19 @@ assign_h3_indices <- function(
   lon_col = "lon",
   h3_res = 9
 ) {
-  df_clean <- df |>
-    dplyr::filter(!is.na(.data[[lat_col]]) & !is.na(.data[[lon_col]]))
+  # Filtering on `is.na()` alone left two holes: a non-finite coordinate that is
+  # not NA still aborts the call, and an out-of-range one is wrapped into a
+  # plausible cell on the far side of the world without complaint. See
+  # [valid_coordinates()].
+  df_clean <- df[
+    valid_coordinates(df[[lon_col]], df[[lat_col]]), ,
+    drop = FALSE
+  ]
+
+  if (nrow(df_clean) == 0) {
+    df_clean$h3_index <- character(0)
+    return(df_clean)
+  }
 
   points_sf <- sf::st_as_sf(df_clean, coords = c(lon_col, lat_col), crs = 4326)
   df_clean$h3_index <- h3jsr::point_to_cell(points_sf, res = h3_res)

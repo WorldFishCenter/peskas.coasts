@@ -4,7 +4,11 @@
 \alias{resolve_storage_opts}
 \title{Resolve Storage Options for PDS Workflows}
 \usage{
-resolve_storage_opts(conf, type = c("coasts", "country", "pds"))
+resolve_storage_opts(
+  conf,
+  type = c("coasts", "country", "pds", "public"),
+  error_if_missing = FALSE
+)
 }
 \arguments{
 \item{conf}{A configuration list as returned by [read_config()].}
@@ -20,11 +24,21 @@ resolve_storage_opts(conf, type = c("coasts", "country", "pds"))
 - `"pds"`: the PDS-specific bucket where raw GPS tracks are stored.
   Always uses `conf$pds_storage$google$options`, which resolves to the
   correct bucket per package (`pds-peskas-coasts` in coasts,
-  `pds-mozambique-prod` in the Mozambique pipeline, etc.).}
+  `pds-mozambique-prod` in the Mozambique pipeline, etc.).
+- `"public"`: the publicly readable bucket serving portal JSON. Uses
+  `conf$public_storage$google$options`, falling back to
+  `conf$storage$google$options_public`. Optional — see `error_if_missing`.}
+
+\item{error_if_missing}{Logical. Controls what happens when the requested
+type is not configured. `FALSE` (the default) returns `NULL`, which is how
+this function has always behaved for an unconfigured key and what makes
+`"public"` safe to ask for from a package that has no public bucket. Pass
+`TRUE` to fail fast with a message naming the expected configuration key.}
 }
 \value{
 A named list of Google Cloud Storage options suitable for passing
-  to [cloud_object_name()], [download_cloud_file()], or [upload_cloud_file()].
+  to [cloud_object_name()], [download_cloud_file()], or [upload_cloud_file()];
+  or `NULL` when the type is unconfigured and `error_if_missing = FALSE`.
 }
 \description{
 Resolves the correct Google Cloud Storage options from a configuration object
@@ -33,13 +47,21 @@ package contexts (e.g. `peskas.mozambique.data.pipeline`) transparently,
 so workflow functions do not need to hardcode config paths.
 }
 \details{
-The three bucket types map to the following storage contexts:
+The bucket types map to the following storage contexts:
 
 | `type`     | coasts package        | downstream package         |
 |------------|-----------------------|----------------------------|
 | `"coasts"` | `peskas-coasts-dev`   | `peskas-coasts-dev`        |
 | `"country"`| `peskas-coasts-dev`   | `mozambique-dev`           |
 | `"pds"`    | `pds-peskas-coasts`   | `pds-mozambique-dev`       |
+| `"public"` | *(unconfigured)*      | `timor-public-dev`         |
+
+`"public"` is deliberately optional. `coasts` itself has no public bucket, so
+asking for it here returns `NULL`; a caller can then decide whether to skip
+the publishing step or fail. The Timor-Leste
+pipeline, which serves live portal JSON from a public bucket, previously had
+to reach into its config directly because this helper could not express the
+bucket at all.
 }
 \examples{
 \dontrun{
@@ -53,6 +75,13 @@ country_opts <- resolve_storage_opts(conf, "country")
 
 # Access raw GPS tracks from PDS bucket
 pds_opts <- resolve_storage_opts(conf, "pds")
+
+# Public portal bucket, tolerating its absence
+public_opts <- resolve_storage_opts(conf, "public")
+if (is.null(public_opts)) message("no public bucket configured")
+
+# Fail fast instead
+public_opts <- resolve_storage_opts(conf, "public", error_if_missing = TRUE)
 }
 
 }

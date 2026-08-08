@@ -55,7 +55,7 @@ ingest_pds_trips <- function(
   boats_trips <- get_trips(
     token = conf$pds$token,
     secret = conf$pds$secret,
-    dateFrom = "2023-01-01",
+    dateFrom = "2018-01-01",
     dateTo = Sys.Date(),
     deviceInfo = TRUE,
     withLastSeen = TRUE
@@ -147,8 +147,11 @@ ingest_pds_tracks <- function(
   logger::log_info("Setting up parallel processing with {workers} workers...")
   future::plan(future::multisession, workers = workers)
 
+  # utils::head(), not `[1:batch_size]`: the latter pads with NA once
+  # batch_size exceeds the number of trips left, sending trip id NA to the API
+  # for every slot in the overshoot.
   process_ids <- if (!is.null(batch_size)) {
-    new_trip_ids[1:batch_size]
+    utils::head(new_trip_ids, batch_size)
   } else {
     new_trip_ids
   }

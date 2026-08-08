@@ -212,9 +212,8 @@ download_cloud_file <- function(name, provider, options, file = name) {
 
 #' Generate Cloud Object Name
 #'
-#' Generates the full object name for a versioned file in cloud storage.
-#' When `version = "latest"`, returns the most recently updated object
-#' matching the prefix and extension.
+#' Resolves **one** versioned object in cloud storage. When `version = "latest"`,
+#' returns the most recently updated object matching the prefix and extension.
 #'
 #' @param prefix A character string specifying the file prefix.
 #' @param version A character string specifying the version. Default is "latest".
@@ -225,6 +224,23 @@ download_cloud_file <- function(name, provider, options, file = name) {
 #'
 #' @return A character string with the full object name, or `character(0)` if
 #'   no matching objects are found.
+#'
+#' @section Resolves one object, never enumerates a bucket:
+#' This function is **not** a listing helper. It always returns a single name —
+#' `selected_rows$name[1]` — even though it groups internally by `base_name` and
+#' `ext`. Point it at a prefix that matches many *distinct* base names (for
+#' example one object per GPS trip, where tens of thousands share a prefix) and
+#' it silently hands back an arbitrary one of them rather than erroring. It is
+#' built for the versioned-snapshot pattern `<prefix>__<version>__.<ext>`, where
+#' the prefix identifies exactly one logical dataset and the only question is
+#' which version of it to take.
+#'
+#' To enumerate objects, use [cloud_object_names()], which returns every match.
+#'
+#' The single-name return type is depended upon by downstream pipelines and will
+#' not change.
+#'
+#' @seealso [cloud_object_names()] for enumeration.
 #'
 #' @keywords storage internal
 #' @export
@@ -277,6 +293,206 @@ cloud_object_name <- function(
 
     return(selected_rows$name[1])
   }
+}
+
+#' List Cloud Object Names Matching a Prefix
+#'
+#' Enumerates **every** object matching a prefix and extension, unlike
+#' [cloud_object_name()] which resolves a single versioned object. Use this when
+#' a prefix legitimately covers many distinct objects — for example one Parquet
+#' file per GPS trip.
+#'
+#' @param prefix A character string specifying the object name prefix.
+#' @param provider A character string specifying the cloud storage provider.
+#' @param options A named list of cloud storage provider options.
+#' @param extension A character string the object name must end with. Default
+#'   `""`, i.e. no extension filter.
+#' @param latest_only Logical. If `TRUE`, keeps only the most recently updated
+#'   object per distinct `base_name`, applying [cloud_object_name()]'s
+#'   "latest" semantics to each base name independently rather than across the
+#'   whole match set. Default `FALSE`, which returns everything.
+#'
+#' @return A character vector of object names, sorted, possibly of length zero.
+#'   Never `NA`.
+#'
+#' @details
+#' Names that do not follow the `<base_name>__<version>__.<ext>` convention are
+#' still returned when `latest_only = FALSE`; they are skipped when
+#' `latest_only = TRUE`, because there is no version to compare.
+#'
+#' @seealso [cloud_object_name()] for resolving a single versioned object.
+#'
+#' @keywords storage
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Every stored track object
+#' all_tracks <- cloud_object_names(
+#'   prefix = "pds-track",
+#'   provider = conf$storage$google$key,
+#'   options = conf$pds_storage$google$options,
+#'   extension = "parquet"
+#' )
+#'
+#' # The latest version of each distinct base name under a prefix
+#' latest_each <- cloud_object_names(
+#'   prefix = "trips-",
+#'   provider = conf$storage$google$key,
+#'   options = conf$storage$google$options,
+#'   extension = "parquet",
+#'   latest_only = TRUE
+#' )
+#' }
+cloud_object_names <- function(
+  prefix,
+  provider,
+  options,
+  extension = "",
+  latest_only = FALSE
+) {
+  cloud_storage_authenticate(provider, options)
+
+  if (!("gcs" %in% provider)) {
+    stop("cloud_object_names() currently supports only the 'gcs' provider")
+  }
+
+  gcs_files <- googleCloudStorageR::gcs_list_objects(
+    bucket = options$bucket,
+    prefix = prefix
+  )
+
+  if (nrow(gcs_files) == 0) {
+    return(character(0))
+  }
+
+  matching <- gcs_files %>%
+    dplyr::filter(
+      stringr::str_detect(.data$name, paste0(extension, "$"))
+    )
+
+  if (nrow(matching) == 0) {
+    return(character(0))
+  }
+
+  if (isTRUE(latest_only)) {
+    matching <- matching %>%
+      tidyr::separate(
+        col = .data$name,
+        into = c("base_name", "version", "ext"),
+        sep = "__",
+        remove = FALSE,
+        fill = "right",
+        extra = "merge"
+      ) %>%
+      dplyr::filter(!is.na(.data$version), !is.na(.data$updated)) %>%
+      dplyr::group_by(.data$base_name, .data$ext) %>%
+      dplyr::filter(.data$updated == max(.data$updated)) %>%
+      dplyr::ungroup()
+  }
+
+  sort(unique(matching$name))
+}
+
+#' Retry a Cloud Storage Operation with Exponential Backoff
+#'
+#' Wraps a function so that transient failures — dropped connections, expired
+#' tokens, HTTP 5xx from the storage backend — are retried with a randomised
+#' exponential backoff instead of failing the whole pipeline run.
+#'
+#' @param f The function to wrap.
+#' @param max_times Maximum number of attempts. Default `10`.
+#' @param pause_cap Longest pause between attempts, in seconds. Default `300`.
+#' @param quiet Logical. If `FALSE` (default), each retry is logged at WARN
+#'   level.
+#'
+#' @return A function with the same formals as `f` that retries on error.
+#'
+#' @details
+#' A thin wrapper over [purrr::insistently()] with
+#' [purrr::rate_backoff()], centralising the retry policy that the country
+#' pipelines previously each maintained by hand.
+#'
+#' @seealso [insistent_upload_cloud_file()], [insistent_download_cloud_file()]
+#'
+#' @keywords storage
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' insistent_get <- with_storage_retry(get_trips, max_times = 5)
+#' }
+with_storage_retry <- function(
+  f,
+  max_times = 10,
+  pause_cap = 300,
+  quiet = FALSE
+) {
+  purrr::insistently(
+    f,
+    rate = purrr::rate_backoff(pause_cap = pause_cap, max_times = max_times),
+    quiet = quiet
+  )
+}
+
+#' Upload File to Cloud Storage, Retrying on Failure
+#'
+#' [upload_cloud_file()] wrapped in [with_storage_retry()]. Uploads are the most
+#' failure-prone step in the pipelines — large objects, hour-long service-account
+#' token windows, and peers that reset connections mid-stream.
+#'
+#' @inheritParams upload_cloud_file
+#' @param max_times Maximum number of attempts. Default `10`.
+#' @param pause_cap Longest pause between attempts, in seconds. Default `300`.
+#'
+#' @return A list of upload metadata, as [upload_cloud_file()].
+#'
+#' @seealso [upload_cloud_file()], [with_storage_retry()]
+#'
+#' @keywords storage
+#' @export
+insistent_upload_cloud_file <- function(
+  file,
+  provider,
+  options,
+  name = file,
+  max_times = 10,
+  pause_cap = 300
+) {
+  with_storage_retry(
+    upload_cloud_file,
+    max_times = max_times,
+    pause_cap = pause_cap
+  )(file = file, provider = provider, options = options, name = name)
+}
+
+#' Download File from Cloud Storage, Retrying on Failure
+#'
+#' [download_cloud_file()] wrapped in [with_storage_retry()].
+#'
+#' @inheritParams download_cloud_file
+#' @param max_times Maximum number of attempts. Default `10`.
+#' @param pause_cap Longest pause between attempts, in seconds. Default `300`.
+#'
+#' @return A character vector of local file paths, as [download_cloud_file()].
+#'
+#' @seealso [download_cloud_file()], [with_storage_retry()]
+#'
+#' @keywords storage
+#' @export
+insistent_download_cloud_file <- function(
+  name,
+  provider,
+  options,
+  file = name,
+  max_times = 10,
+  pause_cap = 300
+) {
+  with_storage_retry(
+    download_cloud_file,
+    max_times = max_times,
+    pause_cap = pause_cap
+  )(name = name, provider = provider, options = options, file = file)
 }
 
 #' Authenticate to a Cloud Storage Provider
@@ -461,8 +677,33 @@ mdb_collection_push <- function(
 #' @param deviceInfo Logical. If TRUE, include device IMEI and ID fields in the response. Default is FALSE.
 #' @param withLastSeen Logical. If TRUE, include device last seen date in the response. Default is FALSE.
 #' @param tags Character vector. Optional. Filter by trip tags.
+#' @param max_tries Integer. Maximum number of attempts before giving up.
+#'   Default is 5. Set to 1 to disable retrying.
+#' @param max_url_chars Integer. Longest request URL to build before splitting
+#'   an `imeis` filter across several requests. Default `7000`, comfortably
+#'   inside the 8192-byte limit that nginx, Apache and most CDNs impose.
 #'
 #' @return A data frame containing trip details.
+#'
+#' @details
+#' This request covers the entire trip history in a single streaming response,
+#' which makes it the largest and most failure-prone call in the pipeline. It is
+#' therefore wrapped in [httr2::req_retry()] with `retry_on_failure = TRUE`, so
+#' low-level transport failures — notably
+#' `Recv failure: Connection reset by peer`, which has failed production runs —
+#' are retried with exponential backoff rather than aborting the run. HTTP 429,
+#' 500 and 503 are also treated as transient.
+#'
+#' ## IMEI filters are chunked automatically
+#'
+#' `imeis` is sent as a comma-separated query parameter, so a long device list
+#' becomes a very long URL. At roughly 16 characters per IMEI, ~500 devices is
+#' all that fits inside the usual 8192-byte limit, past which the server answers
+#' **HTTP 400 Bad Request** — a failure that looks nothing like "your URL is too
+#' long". When the list would overflow `max_url_chars`, it is split into as many
+#' requests as needed and the results row-bound and deduplicated. Callers see one
+#' data frame either way.
+#'
 #' @keywords ingestion
 #' @examples
 #' \dontrun{
@@ -488,7 +729,9 @@ get_trips <- function(
   imeis = NULL,
   deviceInfo = FALSE,
   withLastSeen = FALSE,
-  tags = NULL
+  tags = NULL,
+  max_tries = 5,
+  max_url_chars = 7000
 ) {
   # Base URL
   base_url <- paste0(
@@ -499,6 +742,51 @@ get_trips <- function(
     "/",
     dateTo
   )
+
+  # A long `imeis` list overflows the server's URL limit and comes back as an
+  # opaque HTTP 400. Split it and recombine rather than letting that happen.
+  if (!is.null(imeis)) {
+    imeis <- unique(as.character(imeis))
+    budget <- max_url_chars - nchar(base_url) - 200L # headroom for other params
+    if (budget < 1L) {
+      stop(
+        "max_url_chars (",
+        max_url_chars,
+        ") leaves no room for an imeis filter after the ",
+        nchar(base_url),
+        "-character base URL."
+      )
+    }
+
+    if (nchar(paste(imeis, collapse = ",")) > budget) {
+      per_chunk <- max(1L, budget %/% (max(nchar(imeis)) + 1L))
+      chunks <- split(imeis, ceiling(seq_along(imeis) / per_chunk))
+      logger::log_info(
+        "imeis filter too long for one URL; splitting {length(imeis)} \\
+         devices across {length(chunks)} requests"
+      )
+
+      return(
+        chunks |>
+          purrr::map(
+            ~ get_trips(
+              token = token,
+              secret = secret,
+              dateFrom = dateFrom,
+              dateTo = dateTo,
+              imeis = .x,
+              deviceInfo = deviceInfo,
+              withLastSeen = withLastSeen,
+              tags = tags,
+              max_tries = max_tries,
+              max_url_chars = max_url_chars
+            )
+          ) |>
+          dplyr::bind_rows() |>
+          dplyr::distinct()
+      )
+    }
+  }
 
   # Build query parameters
   query_params <- list()
@@ -521,7 +809,16 @@ get_trips <- function(
       "X-API-SECRET" = secret,
       "Content-Type" = "application/json"
     ) %>%
-    httr2::req_url_query(!!!query_params)
+    httr2::req_url_query(!!!query_params) %>%
+    # This pulls the whole trip history in one streaming response; a peer reset
+    # part-way through must not fail the run.
+    httr2::req_retry(
+      max_tries = max_tries,
+      retry_on_failure = TRUE,
+      is_transient = function(resp) {
+        httr2::resp_status(resp) %in% c(429, 500, 502, 503, 504)
+      }
+    )
 
   # Perform the request
   resp <- req %>% httr2::req_perform()
@@ -570,6 +867,9 @@ get_trips <- function(
 #' @param tags Vector of character. Optional tags to filter the data.
 #' @param overwrite Logical. If TRUE, will overwrite existing file when path is provided.
 #'   Default is TRUE.
+#' @param max_tries Integer. Maximum number of attempts before giving up.
+#'   Default is 5. Set to 1 to disable retrying. Transport failures and HTTP
+#'   429/5xx are retried with exponential backoff via [httr2::req_retry()].
 #'
 #' @return If path is NULL, returns a tibble containing the trip points data.
 #'   If path is provided, returns the file path as a character string.
@@ -616,7 +916,8 @@ get_trip_points <- function(
   errant = FALSE,
   withLastSeen = FALSE,
   tags = NULL,
-  overwrite = TRUE
+  overwrite = TRUE,
+  max_tries = 5
 ) {
   # Build base URL based on whether ID is provided
   if (!is.null(id)) {
@@ -669,7 +970,14 @@ get_trip_points <- function(
       "X-API-SECRET" = secret,
       "Content-Type" = "application/json"
     ) %>%
-    httr2::req_url_query(!!!query_params)
+    httr2::req_url_query(!!!query_params) %>%
+    httr2::req_retry(
+      max_tries = max_tries,
+      retry_on_failure = TRUE,
+      is_transient = function(resp) {
+        httr2::resp_status(resp) %in% c(429, 500, 502, 503, 504)
+      }
+    )
 
   # Perform the request
   resp <- req %>% httr2::req_perform()
