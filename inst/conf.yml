@@ -61,12 +61,6 @@ default:
       - "WorldFish - Kenya"
       - "WorldFish - Tanzania AP"
       - "WorldFish - Zanzibar"
-      # Timor-Leste. 844 devices, timezone Asia/Dili, spanning every Timorese
-      # municipality (Atauro, Lautem, Covalima, Manufahi, Manatutu, Viqueque,
-      # Oe-Cusse, Liquica, Bobonaro, Baucau, Ainaro, Dili).
-      # The two other Dili-timezone customers, "Traders" (17 devices) and
-      # "FSSP2: Traders" (8), are trader rather than vessel devices and
-      # "Traders" also carries Asia/Kuala_Lumpur devices, so they are left out.
       - "MAF / WorldFish"
     token: !expr Sys.getenv('PDS_TOKEN')
     secret: !expr Sys.getenv('PDS_SECRET')
