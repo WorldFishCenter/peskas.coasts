@@ -96,7 +96,20 @@ read_config <- function(package = "coasts") {
   )
 
   logger::log_info("Using configutation: {attr(conf, 'config')}")
-  logger::log_debug("Running with parameters {conf}")
+
+  # Never log the resolved config: it carries the GCP service-account key,
+  # MongoDB connection strings, Kobo passwords and API tokens in plaintext.
+  # Log only the non-sensitive storage targets actually in use. `unlist()` drops
+  # buckets a downstream package's conf.yml does not define — glue blanks the
+  # whole line if any interpolated key is NULL.
+  buckets <- unlist(list(
+    main = conf$storage$google$options$bucket,
+    pds = conf$pds_storage$google$options$bucket,
+    api = conf$api$trips$bucket
+  ))
+  logger::log_debug(
+    "Buckets -> {paste(names(buckets), buckets, sep = ': ', collapse = ', ')}"
+  )
 
   conf
 }
