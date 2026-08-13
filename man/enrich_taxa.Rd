@@ -53,6 +53,18 @@ scattering per-country copies.
 
 This function emits traits and nutrients only. For length-weight and
 length-length coefficients see [get_taxa_morphometrics()].
+
+The nutrients are the seven `rfishbase::estimate()` models: calcium, iron,
+omega-3, protein, **selenium**, vitamin A and zinc, per 100 g of raw
+portion, in the units FishBase and SeaLifeBase publish them — calcium, iron
+and zinc in mg, selenium and vitamin A in μg, omega-3 and protein in g. They
+are passed through unconverted, and no substitute is supplied for species
+the models cannot estimate — most invertebrates, which is where a country
+publishing nutrition figures will need a food-composition table of its own.
+Timor-Leste carries both of those steps locally for exactly that reason:
+unit normalisation and an FAO food-composition override for six
+invertebrate codes. Neither is upstreamed here, because both would silently
+change published figures for every country already reading this table.
 }
 \examples{
 \dontrun{
