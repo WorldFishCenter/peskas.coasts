@@ -6,7 +6,7 @@
 \usage{
 resolve_storage_opts(
   conf,
-  type = c("coasts", "country", "pds", "public"),
+  type = c("coasts", "country", "pds", "public", "api"),
   error_if_missing = FALSE
 )
 }
@@ -27,7 +27,10 @@ resolve_storage_opts(
   `pds-mozambique-prod` in the Mozambique pipeline, etc.).
 - `"public"`: the publicly readable bucket serving portal JSON. Uses
   `conf$public_storage$google$options`, falling back to
-  `conf$storage$google$options_public`. Optional — see `error_if_missing`.}
+  `conf$storage$google$options_public`. Optional — see `error_if_missing`.
+- `"api"`: the cross-country API bucket holding the harmonized trips
+  parquet every country publishes. Uses `conf$storage$google$options_api`.
+  Optional — coasts itself does not configure one — see `error_if_missing`.}
 
 \item{error_if_missing}{Logical. Controls what happens when the requested
 type is not configured. `FALSE` (the default) returns `NULL`, which is how
@@ -55,6 +58,7 @@ The bucket types map to the following storage contexts:
 | `"country"`| `peskas-coasts-dev`   | `mozambique-dev`           |
 | `"pds"`    | `pds-peskas-coasts`   | `pds-mozambique-dev`       |
 | `"public"` | *(unconfigured)*      | `timor-public-dev`         |
+| `"api"`    | *(unconfigured)*      | `peskas-api-dev`           |
 
 `"public"` is deliberately optional. `coasts` itself has no public bucket, so
 asking for it here returns `NULL`; a caller can then decide whether to skip

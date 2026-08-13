@@ -92,10 +92,16 @@ summarize_data <- function(
     )
   }
 
+  country_opts <- resolve_storage_opts(conf, "country")
+
+  # The ASFIS species list is held per country, not in the hub: measured
+  # 2026-08-13, one `asfis` object each in mozambique-dev, mozambique-prod,
+  # kenya-dev and zanzibar-dev, and none in peskas-coasts or peskas-coasts-dev.
+  # A country adopting this function has to seed its own bucket.
   asfis <- coasts::download_parquet_from_cloud(
     prefix = "asfis",
     provider = conf$storage$google$key,
-    options = conf$storage$google$options
+    options = country_opts
   ) |>
     janitor::clean_names() |>
     dplyr::select("alpha3_code", "scientific_name", "english_name") |>
@@ -108,7 +114,7 @@ summarize_data <- function(
       conf$api$trips$validated$file_prefix
     ),
     provider = conf$storage$google$key,
-    options = conf$storage$google$options_api
+    options = resolve_storage_opts(conf, "api", error_if_missing = TRUE)
   ) |>
     dplyr::left_join(
       asfis,
@@ -273,12 +279,15 @@ summarize_data <- function(
       values_to = "value"
     )
 
-  # Grid summaries: pre-computed spatial grid from PDS tracks, passed through as-is.
+  # Grid summaries: pre-computed spatial grid from PDS tracks, passed through
+  # as-is. The country bucket is where preprocess_pds_tracks() writes them, so
+  # a country with no grid summaries here has not run that step, rather than
+  # having them somewhere else.
   grid_summaries <-
     download_parquet_from_cloud(
       prefix = paste0(conf$pds$pds_tracks$file_prefix, "-grid_summaries"),
       provider = conf$storage$google$key,
-      options = conf$storage$google$options
+      options = country_opts
     )
 
   # Upload all summaries to cloud storage (versioned parquet files)
@@ -307,7 +316,7 @@ summarize_data <- function(
     upload_cloud_file(
       file = filename,
       provider = conf$storage$google$key,
-      options = conf$storage$google$options
+      options = country_opts
     )
   }
 
@@ -315,7 +324,7 @@ summarize_data <- function(
     data = f_metrics,
     prefix = paste0(conf$country, "_fishery_metrics"),
     provider = conf$storage$google$key,
-    options = conf$storage$google$options_coasts
+    options = resolve_storage_opts(conf, "coasts")
   )
 }
 
