@@ -139,6 +139,9 @@ read_config <- function(package = "coasts") {
 #'   - `"public"`: the publicly readable bucket serving portal JSON. Uses
 #'     `conf$public_storage$google$options`, falling back to
 #'     `conf$storage$google$options_public`. Optional — see `error_if_missing`.
+#'   - `"api"`: the cross-country API bucket holding the harmonized trips
+#'     parquet every country publishes. Uses `conf$storage$google$options_api`.
+#'     Optional — coasts itself does not configure one — see `error_if_missing`.
 #'
 #' @param error_if_missing Logical. Controls what happens when the requested
 #'   type is not configured. `FALSE` (the default) returns `NULL`, which is how
@@ -159,6 +162,7 @@ read_config <- function(package = "coasts") {
 #' | `"country"`| `peskas-coasts-dev`   | `mozambique-dev`           |
 #' | `"pds"`    | `pds-peskas-coasts`   | `pds-mozambique-dev`       |
 #' | `"public"` | *(unconfigured)*      | `timor-public-dev`         |
+#' | `"api"`    | *(unconfigured)*      | `peskas-api-dev`           |
 #'
 #' `"public"` is deliberately optional. `coasts` itself has no public bucket, so
 #' asking for it here returns `NULL`; a caller can then decide whether to skip
@@ -195,7 +199,7 @@ read_config <- function(package = "coasts") {
 #' @keywords internal
 resolve_storage_opts <- function(
   conf,
-  type = c("coasts", "country", "pds", "public"),
+  type = c("coasts", "country", "pds", "public", "api"),
   error_if_missing = FALSE
 ) {
   type <- match.arg(type)
@@ -207,7 +211,8 @@ resolve_storage_opts <- function(
     country = conf$storage$google$options,
     pds = conf$pds_storage$google$options,
     public = conf$public_storage$google$options %||%
-      conf$storage$google$options_public
+      conf$storage$google$options_public,
+    api = conf$storage$google$options_api
   )
 
   if (is.null(opts) && isTRUE(error_if_missing)) {
@@ -223,7 +228,8 @@ resolve_storage_opts <- function(
         public = paste(
           "'public_storage.google.options' or",
           "'storage.google.options_public'"
-        )
+        ),
+        api = "'storage.google.options_api'"
       ),
       " in the active configuration. Pass error_if_missing = FALSE to get NULL ",
       "instead."
