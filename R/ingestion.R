@@ -257,7 +257,16 @@ get_kobo_data <- function(
 #' - **Forms**: Survey form metadata with form IDs and names
 #'
 #' All assets are deduplicated and stored together in a single RDS file with
-#' a versioned filename (includes timestamp and git SHA).
+#' a versioned filename (includes timestamp and git SHA), and uploaded to the
+#' **shared coasts bucket** — the one every reader of the snapshot resolves.
+#'
+#' The snapshot is cross-country: 1,609 taxa rows, 96 gears, 49 vessels and 736
+#' landing sites across four countries as of 2026-08-13. `taxa`, `gear` and
+#' `vessels` therefore carry `country`, so a downstream package can select its
+#' own rows without inferring them from form ids. Alpha-3 codes are *not*
+#' sufficient on their own: every one of Timor-Leste's 56 codes is also used by
+#' Kenya, Mozambique or Zanzibar, two of them against a different
+#' `scientific_name`.
 #'
 #' @return None (invisible). The function performs its operations for side effects:
 #'   - Creates a local RDS file containing a list of all asset data frames
@@ -306,6 +315,7 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
       taxa = fetch_asset(
         table_name = "taxa",
         select_cols = c(
+          "country",
           "form_id",
           "survey_label",
           "alpha3_code",
@@ -316,17 +326,28 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
       ),
       gear = fetch_asset(
         table_name = "gears",
-        select_cols = c("form_id", "survey_label", "standard_name"),
+        select_cols = c("country", "form_id", "survey_label", "standard_name"),
         conf = conf
       ),
       vessels = fetch_asset(
         table_name = "vessels",
-        select_cols = c("form_id", "survey_label", "standard_name"),
+        select_cols = c("country", "form_id", "survey_label", "standard_name"),
         conf = conf
       ),
+      # `landing_sites.Country` is a linked record, so it comes back as an
+      # Airtable record id rather than a name — useless as a filter key. Sites
+      # are separated by `form_id` instead. Latitude and Longitude are text
+      # fields in the frame and are carried as-is.
       sites = fetch_asset(
         table_name = "landing_sites",
-        select_cols = c("form_id", "site", "site_code", "gaul_2_code"),
+        select_cols = c(
+          "form_id",
+          "site",
+          "site_code",
+          "gaul_2_code",
+          "latitude",
+          "longitude"
+        ),
         conf = conf
       ),
       forms = fetch_asset(
@@ -370,6 +391,13 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
         conf = conf
       )
     ) |>
+    # `country` is a free-text field in the frame and some values carry a
+    # trailing newline — the taxa table's "Timor-Leste\n" is the live example.
+    # Trim before deduplicating, or a downstream `country == "Timor-Leste"`
+    # silently matches nothing.
+    purrr::map(
+      ~ dplyr::mutate(.x, dplyr::across(dplyr::any_of("country"), trimws))
+    ) |>
     purrr::map(~ dplyr::distinct(.x))
 
   # Enrich devices with geo district names
@@ -387,9 +415,14 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
 
   readr::write_rds(x = assets_list, file = asset_filename)
 
+  # The hub, not the country bucket. Every reader of this snapshot —
+  # ingest_pds_trips() and enrich_taxa() — resolves `coasts`, and inside this
+  # package the two are the same bucket, so the mismatch is invisible here and
+  # only bites a downstream package that defines `storage.google.options_coasts`:
+  # the snapshot lands where nothing looks for it.
   upload_cloud_file(
     file = asset_filename,
     provider = conf$storage$google$key,
-    options = conf$storage$google$options
+    options = resolve_storage_opts(conf, "coasts")
   )
 }

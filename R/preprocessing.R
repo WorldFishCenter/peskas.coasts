@@ -54,7 +54,10 @@ preprocess_pds_tracks <- function(
     prefix = conf$pds$pds_tracks$file_prefix
   )$name
 
-  raw_trip_ids <- extract_trip_ids_from_filenames(raw_tracks)
+  raw_trip_ids <- extract_trip_ids_from_filenames(
+    raw_tracks,
+    prefix = conf$pds$pds_tracks$file_prefix
+  )
   new_trip_ids <- setdiff(raw_trip_ids, preprocessed_trips)
 
   if (length(new_trip_ids) == 0) {

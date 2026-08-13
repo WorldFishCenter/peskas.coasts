@@ -19,7 +19,16 @@ The function retrieves the following asset types from Airtable:
 - **Forms**: Survey form metadata with form IDs and names
 
 All assets are deduplicated and stored together in a single RDS file with
-a versioned filename (includes timestamp and git SHA).}
+a versioned filename (includes timestamp and git SHA), and uploaded to the
+**shared coasts bucket** — the one every reader of the snapshot resolves.
+
+The snapshot is cross-country: 1,609 taxa rows, 96 gears, 49 vessels and 736
+landing sites across four countries as of 2026-08-13. `taxa`, `gear` and
+`vessels` therefore carry `country`, so a downstream package can select its
+own rows without inferring them from form ids. Alpha-3 codes are *not*
+sufficient on their own: every one of Timor-Leste's 56 codes is also used by
+Kenya, Mozambique or Zanzibar, two of them against a different
+`scientific_name`.}
 
 \item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
 to `"coasts"`. Pass your own package name when calling from a downstream
