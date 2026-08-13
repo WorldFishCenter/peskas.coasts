@@ -91,6 +91,10 @@ reference:
       - sync_device_users
       - get_trips
       - get_trip_points
+      - get_kobo_data
+      - list_validation_statuses
+      - get_validation_status
+      - update_validation_status
   - title: "Other Utilities and Internals"
     desc: "Additional exported helper functions."
     contents:
