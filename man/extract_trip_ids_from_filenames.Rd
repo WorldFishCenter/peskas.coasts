@@ -4,15 +4,30 @@
 \alias{extract_trip_ids_from_filenames}
 \title{Extract Trip IDs from Track Filenames}
 \usage{
-extract_trip_ids_from_filenames(filenames)
+extract_trip_ids_from_filenames(filenames, prefix)
 }
 \arguments{
-\item{filenames}{Character vector of track filenames}
+\item{filenames}{Character vector of track object names.}
+
+\item{prefix}{Character. The track filename prefix, i.e.
+`conf$pds$pds_tracks$file_prefix`.}
 }
 \value{
-Character vector of trip IDs
+Character vector of trip IDs.
 }
 \description{
-Extract Trip IDs from Track Filenames
+Track objects are named `<prefix>_<trip_id>.parquet`. The id is derived from
+the configured prefix rather than matched with a generic pattern, so a name
+in an unexpected layout yields the whole name — visibly not a trip id —
+instead of being silently returned as one.
+
+That distinction is what the error below is for. The previous
+implementation, `gsub(".*_([0-9]+)\\.parquet$", "\\1", filenames)`, returns a
+non-matching name **unchanged**, so a bucket written under any other naming
+convention reads as "none of these trips are stored" and
+[ingest_pds_tracks()] re-fetches the entire history from the PDS API. Timor
+hit exactly this: 0 of 99,219 stored tracks recognised, and a first run that
+would have re-downloaded 98,472 of them. The failure was silent, expensive,
+and indistinguishable from a fresh bucket.
 }
 \keyword{internal}
