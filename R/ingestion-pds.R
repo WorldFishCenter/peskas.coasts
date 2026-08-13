@@ -85,6 +85,16 @@ ingest_pds_trips <- function(
 #' Downloads and stores only new tracks not previously uploaded to cloud storage.
 #' Uses parallel processing for improved performance.
 #'
+#' @details
+#' Track objects are written as `<prefix>_<trip_id>.parquet` and are **not**
+#' versioned — they are the one exception to the
+#' `<prefix>__<timestamp>_<sha>__.<ext>` convention every other Peskas artefact
+#' follows. Re-ingesting a trip overwrites it in place and leaves no history,
+#' which is defensible for a finished GPS trip but has two consequences worth
+#' knowing: [cloud_object_name()] with `version = "latest"` cannot be used on
+#' the tracks bucket at all, and which tracks already exist is determined
+#' entirely by object name — see [extract_trip_ids_from_filenames()].
+#'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #' @param batch_size Optional number of tracks to process. If NULL, processes all new tracks.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
@@ -135,7 +145,10 @@ ingest_pds_tracks <- function(
       prefix = conf$pds$pds_tracks$file_prefix
     )$name
 
-  existing_trip_ids <- extract_trip_ids_from_filenames(existing_tracks)
+  existing_trip_ids <- extract_trip_ids_from_filenames(
+    existing_tracks,
+    prefix = conf$pds$pds_tracks$file_prefix
+  )
   new_trip_ids <- setdiff(trips_data, existing_trip_ids)
 
   if (length(new_trip_ids) == 0) {
@@ -229,15 +242,49 @@ ingest_pds_tracks <- function(
 }
 #' Extract Trip IDs from Track Filenames
 #'
-#' @param filenames Character vector of track filenames
-#' @return Character vector of trip IDs
+#' @description
+#' Track objects are named `<prefix>_<trip_id>.parquet`. The id is derived from
+#' the configured prefix rather than matched with a generic pattern, so a name
+#' in an unexpected layout yields the whole name — visibly not a trip id —
+#' instead of being silently returned as one.
+#'
+#' That distinction is what the error below is for. The previous
+#' implementation, `gsub(".*_([0-9]+)\\.parquet$", "\\1", filenames)`, returns a
+#' non-matching name **unchanged**, so a bucket written under any other naming
+#' convention reads as "none of these trips are stored" and
+#' [ingest_pds_tracks()] re-fetches the entire history from the PDS API. Timor
+#' hit exactly this: 0 of 99,219 stored tracks recognised, and a first run that
+#' would have re-downloaded 98,472 of them. The failure was silent, expensive,
+#' and indistinguishable from a fresh bucket.
+#'
+#' @param filenames Character vector of track object names.
+#' @param prefix Character. The track filename prefix, i.e.
+#'   `conf$pds$pds_tracks$file_prefix`.
+#'
+#' @return Character vector of trip IDs.
 #' @keywords internal
-extract_trip_ids_from_filenames <- function(filenames) {
+extract_trip_ids_from_filenames <- function(filenames, prefix) {
   if (length(filenames) == 0) {
     return(character(0))
   }
-  # Assuming filenames are in format: pds-tracks_TRIPID.parquet
-  gsub(".*_([0-9]+)\\.parquet$", "\\1", filenames)
+
+  names <- basename(filenames)
+  ids <- sub("\\.parquet$", "", sub(paste0("^", prefix, "_"), "", names))
+
+  if (all(ids == names)) {
+    stop(
+      "None of the ",
+      length(filenames),
+      " objects in the tracks bucket is named '",
+      prefix,
+      "_<trip_id>.parquet' (first: '",
+      names[1],
+      "'). Every stored track would be treated as missing and re-fetched from ",
+      "the PDS API."
+    )
+  }
+
+  ids
 }
 
 #' Process Single PDS Track
@@ -371,9 +418,9 @@ backup_tracks <- function(package = "coasts") {
     ) |>
     arrow::read_parquet()
 
-  # Get new trip IDs
-  existing_trip_ids <- extract_trip_ids_from_filenames(unique(latest_df$Trip))
-  new_trip_ids <- setdiff(boats_trips$Trip, existing_trip_ids)
+  # `latest_df$Trip` holds trip ids already — this bound parquet has no
+  # per-track objects and no filenames — so there is nothing to extract.
+  new_trip_ids <- setdiff(boats_trips$Trip, unique(latest_df$Trip))
 
   if (length(new_trip_ids) == 0) {
     logger::log_info("No new tracks to download")

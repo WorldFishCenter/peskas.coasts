@@ -25,5 +25,15 @@ None (invisible).
 Downloads and stores only new tracks not previously uploaded to cloud storage.
 Uses parallel processing for improved performance.
 }
+\details{
+Track objects are written as `<prefix>_<trip_id>.parquet` and are **not**
+versioned — they are the one exception to the
+`<prefix>__<timestamp>_<sha>__.<ext>` convention every other Peskas artefact
+follows. Re-ingesting a trip overwrites it in place and leaves no history,
+which is defensible for a finished GPS trip but has two consequences worth
+knowing: [cloud_object_name()] with `version = "latest"` cannot be used on
+the tracks bucket at all, and which tracks already exist is determined
+entirely by object name — see [extract_trip_ids_from_filenames()].
+}
 \keyword{ingestion}
 \keyword{workflow}
