@@ -1,3 +1,23 @@
+# coasts 4.8.0
+
+## `exclude_dashboard_ids` was silently emptying the multi-country portal
+
+The option exists to keep legacy forms off a *country's own* dashboard. It was applied once, to the frame every summary descends from, so it also stripped the two artifacts written to the coasts bucket — `<country>_fishery_metrics` and, via `export_portal()`, `<country>_monthly_summaries_map`. Those are what `export_geos()` binds across Kenya, Zanzibar and Mozambique for coasts.peskas.org, so a country hiding its legacy sources from its own dashboard was also deleting them from the regional portal.
+
+Kenya paid for it: of 340,008 rows in the validated export, the exclusion dropped **295,678 (87%)** — every WCS legacy/v1/v2 row — leaving KEFS from 2024-01 onward. `kenya_monthly_summaries_map` had fallen from 765 rows across 17 districts to 512 across 16, and its history from 2022-12 to 2024-01.
+
+* **CHANGED** `summarize_data()` now derives two frames from the same input. `all_data` keeps every form; `dash_data` is `all_data` minus `exclude_dashboard_ids`. `calculate_fishery_metrics()` reads the unfiltered one; the taxa, districts, gear and monthly dashboard summaries read the filtered one. The filter expression itself is unchanged, only moved.
+* **NEW** `all_monthly_summaries`, a fifth uploaded table built by the same recipe as `monthly_summaries` but from `all_data`. Both come from one shared local function, so the two cannot drift apart in schema.
+* **CHANGED** `export_portal()` reads `all_monthly_summaries` to build `<country>_monthly_summaries_map`, and keeps pushing the filtered `monthly_summaries` to the MongoDB `dashboard` database. The map artifact's columns are untouched — `country, gaul1_name, gaul_2_name, date, mean_cpue, mean_rpue, mean_price_kg` — because `export_geos()` groups three countries on that key and a different one drops a country from the portal without erroring.
+
+**Named `all_monthly_summaries`, not `monthly_summaries_all`.** `cloud_object_name()` matches by string prefix and then takes `max(updated)`, so the suffixed form would also match the `<prefix>_monthly_summaries` read in `model_fishery_metrics()` and could hand it the wrong file.
+
+**Nothing changes for a pipeline that does not set the option.** Neither `peskas.mozambique.data.pipeline` nor `peskas.zanzibar.data.pipeline` sets `exclude_dashboard_ids`, so `dash_data` and `all_data` are the same frame and every output they already produce is unchanged; the only difference is one additional table in their bucket. The four dashboard summaries and the MongoDB push are unchanged for *every* country, exclusions or not — they were already reading the filtered frame. Covered by `tests/testthat/test-summarize-data.R`, which runs `summarize_data()` with the cloud boundary mocked and asserts both the split and the no-exclusions equivalence.
+
+**Ordering on upgrade.** `export_portal()` now requires `<prefix>_all_monthly_summaries` in the bucket, which `summarize_data()` writes. The country pipelines run them in that order, but the first `export_portal()` run against a bucket predating this release will fail to resolve the object. Nothing in this package's own pipeline runs either function — only `export_geos()` — so coasts.peskas.org keeps serving the truncated Kenya series until Kenya's pipeline rebuilds against 4.8.0 and rewrites `kenya_monthly_summaries_map`.
+
+Commit-level detail is in the commit behind this section.
+
 # coasts 4.7.0
 
 Brings into the hub what Timor-Leste's pipeline had that every country needs — reading KoBoToolbox validation status, and telling the cross-country assets snapshot apart by country — and fixes three upstream defects found while getting there, one of which silently re-downloads a country's entire GPS history.
