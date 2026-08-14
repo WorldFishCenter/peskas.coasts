@@ -1,3 +1,67 @@
+# coasts 4.7.0
+
+Brings into the hub what Timor-Leste's pipeline had that every country needs — reading KoBoToolbox validation status, and telling the cross-country assets snapshot apart by country — and fixes three upstream defects found while getting there, one of which silently re-downloads a country's entire GPS history.
+
+**Nothing in this release changes what an existing pipeline computes.** Every item is additive or verified byte-identical against live data, and each was measured before it was written. Two things to know before upgrading are at the bottom.
+
+## KoBoToolbox validation status was in one country's repo, with two live bugs
+
+Any pipeline writing validation flags to the shared database has to read KoBoToolbox's current status first, or it overwrites approvals enumerators entered by hand. The functions existed only in `peskas.mozambique.data.pipeline`, so Timor-Leste had to port them — and fixed three things doing so.
+
+* **NEW** `list_validation_statuses()` — the bulk read. The data endpoint returns `_validation_status` alongside `_id` for 1,000 submissions per request, so an asset costs `ceiling(n / 1000)` requests instead of `n`. Measured on Timor's v2 form: **65 requests and ~70 seconds**, against more than twenty minutes for a per-submission loop spread over ten `furrr` workers. It also covers *every* submission rather than only those a previous run flagged, so an approval entered by hand on a never-flagged submission is seen.
+* **NEW** `get_validation_status()` / `update_validation_status()` — the single-submission read and the write-back. The latter **mutates the live form**; there is no development KoBoToolbox instance, so `R_CONFIG_ACTIVE` does not isolate it.
+* **404 is the normal case, and it must not throw.** KoBoToolbox answers 404 for a submission that has never been validated. With `httr2`'s default the `"not_validated"` branch is unreachable and every unvalidated submission is recorded as `fetch_error = TRUE`. `kobo_request()` sets `req_error(is_error = ~ FALSE)` so the branch works and `fetch_error` keeps meaning a real transport failure.
+* **Either credential.** A token or a username and password. Timor's `KOBO_TOKEN` belongs to a user with no data access to its own assets — 200 on `/assets/<id>/`, 404 on `/assets/<id>/data/` — while the pair ingestion already uses works on both. A country should not need a second credential for this.
+
+Verified live against Timor's v3 asset: 22,250 rows in 22.3 s over 23 requests, `all.equal()` TRUE against the implementation it was ported from, and the never-validated path returning `not_validated` with `fetch_error = FALSE`.
+
+## The assets snapshot could not tell you which rows were yours
+
+`ingest_assets()` writes a **cross-country** snapshot — 1,609 taxa rows, 96 gears, 49 vessels, 736 landing sites over four countries — and dropped the `country` column the frame carries. Alpha-3 codes cannot substitute for it: every one of Timor-Leste's 56 codes is also used by Kenya, Mozambique or Zanzibar, two of them (`MZZ`, `PWT`) against a *different* `scientific_name`, so filtering by code alone mixes another country's taxonomy into a coefficient fetch. The workaround was hardcoded Airtable record ids in a config file.
+
+* **NEW** `country` on `taxa`, `gear` and `vessels`. Measured against the live frame, adding it changes **no** row counts — taxa 1,609 → 1,609, gear 96 → 96, vessels 49 → 49, sites 736 → 736 — so `distinct()` does not fan out.
+* Values are **trimmed**. `country` is free text in the frame and the taxa table's Timor rows carry a trailing newline (`"Timor-Leste\n"`). Untrimmed, the whole point of the column fails silently: `country == "Timor-Leste"` matches nothing.
+* **NEW** `latitude` / `longitude` on `sites`, populated for 343 of 736. `landing_sites.Country` is deliberately *not* added — it is a linked record, so it arrives as an Airtable record id (`rec8G5G9FZCFZBFyc`), useless as a filter key. Sites stay keyed by `form_id`.
+* **FIXED** the snapshot is now uploaded through `resolve_storage_opts(conf, "coasts")`. 4.6.0 fixed `enrich_taxa()` to read and write the hub; `ingest_assets()` was missed and still wrote the country bucket, while both readers — `ingest_pds_trips()` and `enrich_taxa()` — resolve the hub. Invisible inside this package, where the two are the same bucket; from a downstream package that defines `storage.google.options_coasts` it meant the snapshot landed where nothing read it.
+
+Verified end to end with `ingest_assets(package = "peskas.timor.data.pipeline")`: the row counts above, `country` values `Kenya | Mozambique | Timor-Leste | Zanzibar` with no stray whitespace, 60 taxa / 9 gears / 2 vessels selectable for Timor-Leste — identical to what the record-id workaround returns.
+
+## "No tracks stored" was indistinguishable from a bucket in another layout
+
+`extract_trip_ids_from_filenames()` was `gsub(".*_([0-9]+)\\.parquet$", "\\1", filenames)`, and `gsub()` returns a **non-matching name unchanged**. A tracks bucket written under any other convention therefore yielded full object names where trip ids were expected, the `setdiff()` above reported every trip as new, and `ingest_pds_tracks()` re-fetched the entire history from the PDS API. Measured against a real bucket: **0 of 99,219 stored tracks recognised**, and a first run that would have re-downloaded 98,472 of them. Silent, expensive, and it looks exactly like a fresh bucket in the log.
+
+* The id is derived from the configured prefix, so an unexpected layout yields the whole name — visibly not an id — instead of passing for one. `prefix` is a required argument: a default would be a guess, and a wrong guess is the failure this removes.
+* A non-empty bucket in which **no** object yields an id now stops, naming the prefix and the first object.
+* `backup_tracks()` was calling the same helper on `unique(latest_df$Trip)` — trip ids from a bound parquet, not filenames, where the regex was a no-op. That call is dropped, so the helper has one meaning.
+* `?ingest_pds_tracks` now records that track objects are the **one unversioned Peskas artefact**: re-ingesting overwrites in place, `cloud_object_name(version = "latest")` cannot be used on that bucket, and existence is therefore decided entirely by object name.
+
+No behaviour change for anyone running today, checked rather than assumed: `pds-peskas-coasts`, `pds-peskas-coasts-dev`, `pds-mozambique-dev`, `pds-mozambique-prod`, `pds-kenya-dev`, `pds-kenya-prod`, `pds-zanzibar-dev` and `pds-timor-dev` all store `pds-tracks_<id>.parquet`, and the new derivation returns the ids the regex did for every one.
+
+**Known limit:** the guard covers "objects exist but none parse", not "the prefix matches nothing". An empty listing is still treated as an empty bucket, because after the prefix filter it is one.
+
+## `resolve_storage_opts()` knows the API bucket
+
+* **NEW** `type = "api"`, resolving `storage.google.options_api`. Optional, like `"public"` — `coasts` itself configures no API bucket. `summarize_data()` was reaching into the config by hand, the one thing every downstream call site is told not to do.
+* `summarize_data()` now resolves all five of its storage targets through the helper. **No bucket moves for anyone**, verified by resolving every type against `coasts`', Mozambique's and Timor's configuration in both environments. Its API read now fails with `No storage options configured for type 'api'` instead of an obscure authentication error inside the download, and its fishery-metrics upload gained the `options_coasts` → `options` fallback it lacked, which was `NULL` for `coasts` itself.
+* The `asfis` and grid-summary reads deliberately **keep** the country bucket, and now say why. Worth checking rather than assuming: `asfis` is held per country — one object each in `mozambique-dev`, `mozambique-prod`, `kenya-dev` and `zanzibar-dev`, **none** in `peskas-coasts` or `peskas-coasts-dev` — and the grid summaries are written to the country bucket by `preprocess_pds_tracks()`. Both reads already agreed with their writers; moving either to the hub would have broken all three countries on their next run.
+
+## Selenium
+
+`rfishbase::estimate()` models seven nutrients and `enrich_taxa()` selected six. A country publishing nutrition figures against this table could not source all of them from it.
+
+* **NEW** `selenium` in `taxa-fishbase-enriched`. Both servers carry it with data — 5,696 non-NA rows in FishBase's `estimate` table, 359 in SeaLifeBase's.
+
+Verified by regenerating the table against the live production assets snapshot: **5,318 rows before and after, 21 → 22 columns, none lost, all 21 pre-existing columns `all.equal()` TRUE**, 2,540 rows carrying a selenium value.
+
+Two things are deliberately **not** upstreamed, now recorded in `?enrich_taxa` with the units the table is actually in: unit normalisation (the seven nutrients arrive in mg, μg and g per 100 g) and a food-composition override for the invertebrates the models cannot estimate. Either applied here would silently rescale or substitute figures three countries already publish. Both belong to the country that wants them.
+
+## Before you upgrade
+
+* **The assets snapshot changes independently of this release.** Kenya, Mozambique and Zanzibar read `assets__*` at `version = "latest"` from the hub *at runtime*, so the three new columns reach them on their next scheduled run whether or not they have rebuilt against 4.7.0. Each feeds `taxa`, `gear`, `vessels`, `sites` and `geo` into a chained join, where a second mapping table carrying `country` collides with the first and dplyr suffixes it to `country.x` / `country.y`. The effect is cosmetic — no error, no row-count change, and an explicit positive `select()` keeps it out of the cross-country API parquet — but the clean fix is to drop the columns where the snapshot is read: `dplyr::select(-dplyr::any_of(c("country", "latitude", "longitude")))`. All three country pipelines landed this on 2026-08-13, before the hub wrote its first snapshot carrying the columns.
+* **First tests in the package.** `tests/testthat/` arrives with three assertions over the track-id parser, including the retired `pds-track-<id>__*__.csv.gz` family as the negative case. Note that `R CMD check` could not have caught the one defect found during this work — `codetools` does not report a call that omits a required argument, so adding one is a source-wide change with no static verification.
+
+Commit-level detail, with the measurement behind every claim above, is in the five commits of #17.
+
 # coasts 4.6.0
 
 Opens the taxa pipeline to countries outside the Indian Ocean, gives it the length-weight and length-length coefficients that country pipelines were each fetching themselves, and corrects the FAO area the Western Indian Ocean countries were being filtered against.
