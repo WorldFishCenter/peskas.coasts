@@ -15,6 +15,8 @@
 #' - Filters for approved validation status
 #' - Creates multiple summary datasets:
 #'   - Monthly summaries: Average catch, price, CPUE, and RPUE by district and month
+#'   - All monthly summaries: the same recipe over every survey form, ignoring
+#'     `exclude_dashboard_ids`; consumed by the multi-country coasts portal
 #'   - Taxa summaries: Catch metrics by species, district, and month
 #'   - District summaries: Submission counts and effort metrics by district
 #'   - Gear summaries: Performance metrics by gear type
@@ -30,9 +32,12 @@
 #' - Trip duration
 #'
 #' @param exclude_dashboard_ids Optional character vector of `survey_id` values
-#'   to keep out of the dashboard summaries (e.g. legacy sources or forms that
-#'   should not surface in the portal). Rows matching these ids are dropped from
-#'   the input before summarising. Defaults to `NULL`, in which case the list is
+#'   to keep out of the **country dashboard** summaries (e.g. legacy sources or
+#'   forms that should not surface there). Rows matching these ids are dropped
+#'   from `monthly_summaries`, `taxa_summaries`, `districts_summaries` and
+#'   `gear_summaries`. They are **kept** in `all_monthly_summaries` and in
+#'   `<country>_fishery_metrics`, which feed the multi-country coasts portal.
+#'   Defaults to `NULL`, in which case the list is
 #'   read from the package config at `surveys$summaries$exclude_dashboard_ids`
 #'   (each downstream package manages its own list). If neither is set, all
 #'   surveys are kept.
@@ -108,7 +113,7 @@ summarize_data <- function(
     dplyr::distinct()
 
   # Input: validated trip data (catch-level rows, one row per catch item per trip)
-  clean_data <- coasts::download_parquet_from_cloud(
+  all_data <- coasts::download_parquet_from_cloud(
     prefix = file.path(
       conf$api$trips$validated$cloud_path,
       conf$api$trips$validated$file_prefix
@@ -123,33 +128,42 @@ summarize_data <- function(
     dplyr::mutate(catch_taxon = .data$scientific_name) |>
     dplyr::select(
       -c("scientific_name", "english_name")
-    ) |>
-    # Drop forms excluded from the dashboard; with NULL this keeps all rows
+    )
+
+  # The exclusion is dashboard-only. `all_data` keeps every form and feeds the
+  # multi-country coasts portal (`<country>_fishery_metrics` and, via
+  # export_portal(), `<country>_monthly_summaries_map`); `dash_data` is the
+  # filtered frame behind the country dashboard summaries. With no exclusions
+  # the two frames are identical.
+  dash_data <- all_data |>
     dplyr::filter(!.data$survey_id %in% exclude_dashboard_ids)
 
-  f_metrics <- calculate_fishery_metrics(data = clean_data)
+  f_metrics <- calculate_fishery_metrics(data = all_data)
 
   # Trip-level intermediate: collapse to one row per trip, add effort metrics.
-  # clean_data has multiple rows per trip (one per catch item); trip-level columns
+  # The input has multiple rows per trip (one per catch item); trip-level columns
   # (tot_catch_kg, tot_catch_price, n_fishers, etc.) are identical within a trip,
   # so slice(1) is safe and explicit.
-  indicators_df <-
-    clean_data |>
-    dplyr::group_by(.data$trip_id) |>
-    dplyr::slice(1) |>
-    dplyr::ungroup() |>
-    dplyr::mutate(
-      price_kg = .data$tot_catch_price / .data$tot_catch_kg,
-      cpue = .data$tot_catch_kg / .data$n_fishers / .data$trip_duration_hrs,
-      rpue = .data$tot_catch_price / .data$n_fishers / .data$trip_duration_hrs,
-      cpue_day = .data$tot_catch_kg / .data$n_fishers,
-      rpue_day = .data$tot_catch_price / .data$n_fishers
-    )
+  trip_indicators <- function(data) {
+    data |>
+      dplyr::group_by(.data$trip_id) |>
+      dplyr::slice(1) |>
+      dplyr::ungroup() |>
+      dplyr::mutate(
+        price_kg = .data$tot_catch_price / .data$tot_catch_kg,
+        cpue = .data$tot_catch_kg / .data$n_fishers / .data$trip_duration_hrs,
+        rpue = .data$tot_catch_price / .data$n_fishers / .data$trip_duration_hrs,
+        cpue_day = .data$tot_catch_kg / .data$n_fishers,
+        rpue_day = .data$tot_catch_price / .data$n_fishers
+      )
+  }
+
+  indicators_df <- trip_indicators(dash_data)
 
   # Taxon-level intermediate: collapse to one row per trip x taxon,
   # computing per-taxon catch weight and mean length.
   taxa_df <-
-    clean_data |>
+    dash_data |>
     dplyr::group_by(.data$trip_id, .data$catch_taxon) |>
     dplyr::summarise(
       dplyr::across(dplyr::everything(), ~ dplyr::first(.x)),
@@ -161,50 +175,63 @@ summarize_data <- function(
 
   # --- Summaries (all stored wide until export_wf_data pivots for MongoDB) ---
 
-  monthly_summaries <-
-    indicators_df |>
-    dplyr::mutate(
-      date = lubridate::floor_date(.data$landing_date, "month"),
-      date = lubridate::as_datetime(.data$date)
-    ) |>
-    dplyr::group_by(.data$gaul_2_name, .data$date) |>
-    dplyr::summarise(
-      dplyr::across(
-        .cols = c(
-          "tot_catch_kg",
-          "tot_catch_price",
-          "cpue",
-          "cpue_day",
-          "rpue",
-          "rpue_day",
-          "price_kg"
+  # One recipe, two frames: `monthly_summaries` (dashboard, filtered) and
+  # `all_monthly_summaries` (coasts portal, unfiltered). Sharing the function
+  # keeps their schema identical, which export_geos() depends on.
+  monthly_from <- function(indicators) {
+    indicators |>
+      dplyr::mutate(
+        date = lubridate::floor_date(.data$landing_date, "month"),
+        date = lubridate::as_datetime(.data$date)
+      ) |>
+      dplyr::group_by(.data$gaul_2_name, .data$date) |>
+      dplyr::summarise(
+        dplyr::across(
+          .cols = c(
+            "tot_catch_kg",
+            "tot_catch_price",
+            "cpue",
+            "cpue_day",
+            "rpue",
+            "rpue_day",
+            "price_kg"
+          ),
+          ~ mean(.x, na.rm = TRUE)
         ),
-        ~ mean(.x, na.rm = TRUE)
-      ),
-      .groups = "drop"
-    ) |>
-    dplyr::rename(
-      mean_catch_kg = "tot_catch_kg",
-      mean_catch_price = "tot_catch_price",
-      mean_cpue = "cpue",
-      mean_cpue_day = "cpue_day",
-      mean_rpue = "rpue",
-      mean_rpue_day = "rpue_day",
-      mean_price_kg = "price_kg"
-    ) |>
-    tidyr::complete(
-      .data$gaul_2_name,
-      date = seq(min(.data$date), max(.data$date), by = "month"),
-      fill = list(
-        mean_catch_kg = NA,
-        mean_catch_price = NA,
-        mean_cpue = NA,
-        mean_cpue_day = NA,
-        mean_rpue = NA,
-        mean_rpue_day = NA,
-        mean_price_kg = NA
+        .groups = "drop"
+      ) |>
+      dplyr::rename(
+        mean_catch_kg = "tot_catch_kg",
+        mean_catch_price = "tot_catch_price",
+        mean_cpue = "cpue",
+        mean_cpue_day = "cpue_day",
+        mean_rpue = "rpue",
+        mean_rpue_day = "rpue_day",
+        mean_price_kg = "price_kg"
+      ) |>
+      tidyr::complete(
+        .data$gaul_2_name,
+        date = seq(min(.data$date), max(.data$date), by = "month"),
+        fill = list(
+          mean_catch_kg = NA,
+          mean_catch_price = NA,
+          mean_cpue = NA,
+          mean_cpue_day = NA,
+          mean_rpue = NA,
+          mean_rpue_day = NA,
+          mean_price_kg = NA
+        )
       )
-    )
+  }
+
+  monthly_summaries <- monthly_from(indicators_df)
+
+  # Unfiltered twin, consumed by export_portal() for the coasts portal only.
+  # Named `all_monthly_summaries`, NOT `monthly_summaries_all`:
+  # cloud_object_name() matches by string prefix and then takes max(updated),
+  # so a `<prefix>_monthly_summaries` read (see model_fishery_metrics()) would
+  # also match a `_monthly_summaries_all` object and could return the wrong file.
+  all_monthly_summaries <- monthly_from(trip_indicators(all_data))
 
   # Taxa summaries: total catch and mean length per species x district x month.
   # Stored in long format (metric/value) for portal consumption.
@@ -293,6 +320,7 @@ summarize_data <- function(
   # Upload all summaries to cloud storage (versioned parquet files)
   dataframes_to_upload <- list(
     monthly_summaries = monthly_summaries,
+    all_monthly_summaries = all_monthly_summaries,
     taxa_summaries = taxa_summaries,
     districts_summaries = districts_summaries,
     gear_summaries = gear_summaries,

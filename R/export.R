@@ -499,21 +499,25 @@ export_fishers_stats <- function(package = "coasts") {
 #'
 #' @details
 #' The function performs the following operations:
-#' - Downloads five summary datasets from cloud storage:
+#' - Downloads six summary datasets from cloud storage:
 #'   - Monthly summaries: Aggregated catch metrics by district and month
+#'   - All monthly summaries: as above but without the dashboard exclusions
 #'   - Taxa summaries: Species-specific metrics in long format
 #'   - Districts summaries: District-level indicators over time
 #'   - Gear summaries: Performance metrics by gear type
 #'   - Grid summaries: Spatial grid data from vessel tracking
 #' - Downloads aggregated catch estimates from the modeling step
-#' - Creates geographic regional summaries using the monthly data
+#' - Creates geographic regional summaries from the unfiltered monthly data
+#'   (`all_monthly_summaries`), so the coasts portal keeps every survey form
+#'   while the MongoDB `dashboard` collections keep the filtered ones
 #' - Joins aggregated estimates (fishing trips, catch tonnage, revenue) to monthly summaries
 #' - Transforms monthly summaries to long format for portal consumption
 #' - Uploads all datasets to specified MongoDB collections
 #'
 #' The function expects the summary files to be named with the pattern:
 #' `{file_prefix}_{table_name}.parquet` where table_name is one of:
-#' monthly_summaries, taxa_summaries, districts_summaries, gear_summaries, grid_summaries
+#' monthly_summaries, all_monthly_summaries, taxa_summaries, districts_summaries,
+#' gear_summaries, grid_summaries
 #'
 #' @param log_threshold The logging level threshold for the logger package (e.g., DEBUG, INFO)
 #'   See `logger::log_levels` for available options.
@@ -564,6 +568,7 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 
   table_names <- c(
     "monthly_summaries",
+    "all_monthly_summaries",
     "taxa_summaries",
     "districts_summaries",
     "gear_summaries",
@@ -581,9 +586,12 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
     )
   }
 
-  # Create geographic summaries
+  # Create geographic summaries. These feed the multi-country coasts portal via
+  # export_geos(), so they are built from the unfiltered `all_monthly_summaries`
+  # -- `exclude_dashboard_ids` is a country-dashboard concern only. The Mongo
+  # push below stays on the filtered `monthly_summaries`.
   region_monthly_summaries <-
-    data_summaries$monthly_summaries |>
+    data_summaries$all_monthly_summaries |>
     dplyr::left_join(map, by = c("gaul_2_name" = "gaul2_name")) |>
     dplyr::group_by(.data$gaul_2_name, .data$date) |>
     dplyr::summarise(

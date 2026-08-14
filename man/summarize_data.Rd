@@ -12,9 +12,12 @@ summarize_data(
 }
 \arguments{
 \item{exclude_dashboard_ids}{Optional character vector of `survey_id` values
-to keep out of the dashboard summaries (e.g. legacy sources or forms that
-should not surface in the portal). Rows matching these ids are dropped from
-the input before summarising. Defaults to `NULL`, in which case the list is
+to keep out of the **country dashboard** summaries (e.g. legacy sources or
+forms that should not surface there). Rows matching these ids are dropped
+from `monthly_summaries`, `taxa_summaries`, `districts_summaries` and
+`gear_summaries`. They are **kept** in `all_monthly_summaries` and in
+`<country>_fishery_metrics`, which feed the multi-country coasts portal.
+Defaults to `NULL`, in which case the list is
 read from the package config at `surveys$summaries$exclude_dashboard_ids`
 (each downstream package manages its own list). If neither is set, all
 surveys are kept.}
@@ -44,6 +47,8 @@ The function performs the following operations:
 - Filters for approved validation status
 - Creates multiple summary datasets:
   - Monthly summaries: Average catch, price, CPUE, and RPUE by district and month
+  - All monthly summaries: the same recipe over every survey form, ignoring
+    `exclude_dashboard_ids`; consumed by the multi-country coasts portal
   - Taxa summaries: Catch metrics by species, district, and month
   - District summaries: Submission counts and effort metrics by district
   - Gear summaries: Performance metrics by gear type
