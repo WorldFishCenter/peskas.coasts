@@ -1,3 +1,13 @@
+# coasts 4.9.0
+
+## `get_assets()`: one place that knows how to read the assets snapshot
+
+The snapshot stores every country's assets in one object, with `form_id` as a comma-separated list of the forms each record belongs to — a shape created here, by `airtable_to_df(list_handler = "collapse")`. Until now every country pipeline decoded that shape itself, in hand-copied blocks. One bad edit to two of those copies took down the Zanzibar and Mozambique pipelines; a third copy carried the same latent faults.
+
+`get_assets()` is the read-side counterpart to `ingest_assets()`: download, filter to the requested form(s), drop the columns that are useful for partitioning but harmful to join on, de-duplicate. `form_id_pattern()` is exported alongside it for callers that need the regex directly.
+
+Both reject the two inputs that previously failed *silently*: an empty form id, which recycled into a pattern matching only empty strings so every asset table came back empty and every join yielded `NA`; and a multi-element id, which made `str_detect()` recycle element-wise against the data rather than test alternatives. An asset table that filters to zero rows now warns, since that means the form id is valid but wrong.
+
 # coasts 4.8.0
 
 ## `exclude_dashboard_ids` was silently emptying the multi-country portal
