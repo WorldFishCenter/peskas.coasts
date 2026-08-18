@@ -134,6 +134,7 @@ ingest_pds_tracks <- function(
   logger::log_info("Reading trip IDs...")
   trips_data <- arrow::read_parquet(file = pds_trips_parquet) %>%
     dplyr::pull("Trip") %>%
+    as.character() %>%
     unique()
 
   unlink(pds_trips_parquet)
