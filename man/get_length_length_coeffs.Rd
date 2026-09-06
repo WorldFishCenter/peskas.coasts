@@ -4,7 +4,11 @@
 \alias{get_length_length_coeffs}
 \title{Length-Length Conversion Coefficients for Expanded Taxa}
 \usage{
-get_length_length_coeffs(expanded, length_types = c("TL", "FL"))
+get_length_length_coeffs(
+  expanded,
+  length_types = c("TL", "FL"),
+  version = "latest"
+)
 }
 \arguments{
 \item{expanded}{A table as returned by [expand_taxonomic_info()], optionally
@@ -13,6 +17,9 @@ already restricted to an FAO area.}
 \item{length_types}{Character vector of length measurement codes to keep.
 Both `Length1` and `Length2` must be in this set. Defaults to
 `c("TL", "FL")` — total and fork length. Pass `NULL` to apply no filter.}
+
+\item{version}{FishBase / SeaLifeBase release to read. See
+[resolve_db_version()].}
 }
 \value{
 A tibble with:
@@ -25,15 +32,25 @@ A tibble with:
 \description{
 Attaches length-length conversion coefficients from the FishBase /
 SeaLifeBase `popll` table to an expanded taxa table. These convert one length
-measurement into another via `Length2 = aL + bL * Length1`, which is required
-whenever a survey records a different length type from the one the
-length-weight coefficients are expressed in.
+measurement into another via `Length1 = aL + bL * Length2` — note the
+direction: **`Length2` is the predictor** — which is required whenever a
+survey records a different length type from the one the length-weight
+coefficients are expressed in.
 }
 \details{
 Note the naming: the `popll` table calls the conversion coefficients `a` and
 `b`, the same names the length-*weight* table uses for entirely different
 quantities. They are renamed to `aL` / `bL` here so that the two tables can
 be joined without collision.
+
+**The direction is `Length1 = aL + bL * Length2`, not the reverse.**
+Releases up to 4.9.0 documented it backwards. Reading it the wrong way round
+inverts every ratio, which is worse than not converting at all. The data
+settles it: over FishBase 25.04, rows with `Length1 = "TL"`,
+`Length2 = "FL"` have a median `bL` of 1.052 (n = 6,641) and
+`Length1 = "TL"`, `Length2 = "SL"` a median of 1.204 (n = 8,848). Total
+length exceeds both fork and standard length, and standard length by more,
+so `bL` can only be the multiplier *onto* `Length2`.
 
 This is load-bearing wherever a survey's recorded length type differs from
 the coefficient type. Timor-Leste's v1 survey form records fork length while

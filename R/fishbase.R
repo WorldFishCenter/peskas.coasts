@@ -6,18 +6,89 @@
 #' @param tbl_name A character string naming the rfishbase table to retrieve
 #'   (e.g. `"species"`, `"families"`, `"ecology"`, `"estimate"`,
 #'   `"faoareas"`).
+#' @param version The FishBase / SeaLifeBase data release to read, e.g.
+#'   `"25.04"`. Defaults to `"latest"`, which follows whatever release the
+#'   installed `rfishbase` points at and therefore changes underneath a
+#'   pipeline without warning. See [resolve_db_version()].
 #'
 #' @return A tibble combining rows from both servers with an additional
 #'   `server` column (`"fishbase"` or `"sealifebase"`).
 #'
 #' @keywords internal
-get_combined_tbl <- function(tbl_name) {
+get_combined_tbl <- function(tbl_name, version = "latest") {
   dplyr::bind_rows(
-    rfishbase::fb_tbl(tbl_name, server = "fishbase") |>
+    rfishbase::fb_tbl(tbl_name, server = "fishbase", version = version) |>
       dplyr::mutate(server = "fishbase"),
-    rfishbase::fb_tbl(tbl_name, server = "sealifebase") |>
+    rfishbase::fb_tbl(tbl_name, server = "sealifebase", version = version) |>
       dplyr::mutate(server = "sealifebase")
   )
+}
+
+#' Resolve the FishBase / SeaLifeBase Data Release
+#'
+#' Determines which FishBase / SeaLifeBase data release the taxa functions
+#' read. Resolution order is: the explicit `version` argument, then the
+#' `metadata.fishbase.db_version` configuration key, then `"latest"`.
+#'
+#' @param conf A configuration list as returned by [read_config()].
+#' @param version Optional release string, e.g. `"25.04"`. If `NULL` (default)
+#'   the value is taken from configuration.
+#'
+#' @return A length-one character vector: either `"latest"` or a release
+#'   string that exists on **both** servers.
+#'
+#' @details
+#' `rfishbase::fb_tbl()` defaults to `"latest"`, which is not a fixed dataset:
+#' it follows whatever release the installed `rfishbase` points at, so a
+#' container rebuild silently moves the reference data underneath a pipeline.
+#' That is not hypothetical. Releases 26.06 / 26.07 still carry `Caesionidae`
+#' and `Scaridae` as family names but with no species attached, so any taxon
+#' whose reference name is one of those expands to nothing, receives no
+#' coefficients, and weighs `NA` — which sums to zero without raising an
+#' error. That is what removed `CJX` and `PWT` from Timor-Leste's portal.
+#'
+#' The release is validated against [rfishbase::available_releases()] for each
+#' server separately, because the two do not publish in lockstep: FishBase has
+#' `21.06` and SeaLifeBase does not. A single release is passed to both
+#' servers, so a release only one of them publishes is rejected here rather
+#' than failing halfway through a run.
+#'
+#' The default is `"latest"` so that nothing changes for a country that has
+#' not opted in. Pin the release in configuration — `"latest"` is the drift.
+#'
+#' @keywords internal
+resolve_db_version <- function(conf, version = NULL) {
+  version <- version %||% conf$metadata$fishbase$db_version %||% "latest"
+
+  version <- as.character(version)
+  if (length(version) != 1 || is.na(version) || !nzchar(version)) {
+    stop(
+      "`db_version` must be a single release string, e.g. \"25.04\", or ",
+      "\"latest\"."
+    )
+  }
+
+  if (identical(version, "latest")) {
+    return(version)
+  }
+
+  for (server in c("fishbase", "sealifebase")) {
+    releases <- suppressMessages(rfishbase::available_releases(server))
+    if (!version %in% releases) {
+      stop(
+        "FishBase release \"",
+        version,
+        "\" is not published by ",
+        server,
+        ". Available: ",
+        paste(releases, collapse = ", "),
+        ". Both servers are read at the same release, so it must exist on ",
+        "both."
+      )
+    }
+  }
+
+  version
 }
 
 #' Build a Unified Taxonomy Backbone from FishBase and SeaLifeBase
@@ -26,13 +97,16 @@ get_combined_tbl <- function(tbl_name) {
 #' SeaLifeBase into a single reference table with scientific names and
 #' higher-level taxonomy.
 #'
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
+#'
 #' @return A tibble with columns: `SpecCode`, `sci_name`, `Genus`, `Species`,
 #'   `Family`, `Order`, `Class`, `server`.
 #'
 #' @keywords internal
-get_taxa_backbone <- function() {
-  spp <- get_combined_tbl("species")
-  fam <- get_combined_tbl("families")
+get_taxa_backbone <- function(version = "latest") {
+  spp <- get_combined_tbl("species", version = version)
+  fam <- get_combined_tbl("families", version = version)
 
   spp |>
     dplyr::select("SpecCode", "Genus", "Species", "FamCode", "server") |>
@@ -104,12 +178,14 @@ resolve_fao_areas <- function(conf, fao_areas = NULL) {
 #'
 #' @param expanded A table as returned by [expand_taxonomic_info()].
 #' @param fao_areas An integer vector of FAO major fishing area codes.
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
 #'
 #' @return `expanded`, filtered, with the `AreaCode` column dropped.
 #'
 #' @keywords internal
-filter_by_fao_area <- function(expanded, fao_areas) {
-  faoareas <- get_combined_tbl("faoareas") |>
+filter_by_fao_area <- function(expanded, fao_areas, version = "latest") {
+  faoareas <- get_combined_tbl("faoareas", version = version) |>
     dplyr::filter(.data$SpecCode %in% expanded$SpecCode) |>
     dplyr::select("SpecCode", "AreaCode", "server")
 
@@ -136,6 +212,8 @@ filter_by_fao_area <- function(expanded, fao_areas) {
 #'   `"Haemulidae (=Pomadasyidae)"` matches the family `Haemulidae`. Defaults to
 #'   `FALSE`, which preserves the historical behaviour of leaving such names
 #'   unmatched. See Details.
+#' @param version FishBase / SeaLifeBase release to read. Defaults to
+#'   `"latest"`, which is not a fixed dataset — see [resolve_db_version()].
 #'
 #' @return A tibble with columns:
 #'   - `alpha3_code`: Passed through from input.
@@ -147,7 +225,12 @@ filter_by_fao_area <- function(expanded, fao_areas) {
 #' @details
 #' The function builds a lookup dictionary by pivoting the taxonomy backbone
 #' wide-to-long across ranks, so a single join resolves names at any level.
-#' Records that do not match any rank are silently dropped (inner join).
+#' Records that do not match any rank are dropped (inner join) and the names
+#' that were dropped are logged at WARN. A name can go from matching to
+#' unmatched purely because the underlying release changed: 26.06 / 26.07 keep
+#' `Caesionidae` and `Scaridae` as family names but attach no species to
+#' either, so both silently expand to nothing. Pin `version` and read the
+#' warning.
 #'
 #' Matching is against the FishBase / SeaLifeBase backbone only. It therefore
 #' resolves nothing for names that are not ranks those databases carry —
@@ -181,8 +264,12 @@ filter_by_fao_area <- function(expanded, fao_areas) {
 #'   strip_parentheticals = TRUE
 #' )
 #' }
-expand_taxonomic_info <- function(data, strip_parentheticals = FALSE) {
-  master_taxa <- get_taxa_backbone()
+expand_taxonomic_info <- function(
+  data,
+  strip_parentheticals = FALSE,
+  version = "latest"
+) {
+  master_taxa <- get_taxa_backbone(version = version)
 
   taxa_dictionary <- master_taxa |>
     dplyr::mutate(species_found = .data$sci_name) |>
@@ -195,7 +282,7 @@ expand_taxonomic_info <- function(data, strip_parentheticals = FALSE) {
     dplyr::filter(!is.na(.data$search_name)) |>
     dplyr::distinct()
 
-  data |>
+  matched <- data |>
     dplyr::mutate(
       search_name = stringr::str_replace(.data$scientific_name, " spp$", ""),
       search_name = if (isTRUE(strip_parentheticals)) {
@@ -216,6 +303,17 @@ expand_taxonomic_info <- function(data, strip_parentheticals = FALSE) {
     ) |>
     dplyr::distinct() |>
     dplyr::as_tibble()
+
+  dropped <- setdiff(unique(data$scientific_name), matched$original_name)
+  if (length(dropped) > 0) {
+    logger::log_warn(glue::glue(
+      "{length(dropped)} of {dplyr::n_distinct(data$scientific_name)} taxa \\
+       names matched no FishBase/SeaLifeBase species and were dropped: \\
+       {paste(dropped, collapse = ', ')}"
+    ))
+  }
+
+  matched
 }
 
 #' Length-Weight Coefficients for Expanded Taxa
@@ -227,6 +325,8 @@ expand_taxonomic_info <- function(data, strip_parentheticals = FALSE) {
 #' @param expanded A table as returned by [expand_taxonomic_info()], optionally
 #'   already restricted to an FAO area. Must contain `alpha3_code`,
 #'   `original_name`, `SpecCode`, `species_found` and `server`.
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
 #'
 #' @return A tibble with one row per taxon code and published coefficient
 #'   record:
@@ -269,10 +369,10 @@ expand_taxonomic_info <- function(data, strip_parentheticals = FALSE) {
 #'   expand_taxonomic_info() |>
 #'   get_length_weight_coeffs()
 #' }
-get_length_weight_coeffs <- function(expanded) {
+get_length_weight_coeffs <- function(expanded, version = "latest") {
   target_codes <- unique(expanded$SpecCode)
 
-  get_combined_tbl("poplw") |>
+  get_combined_tbl("poplw", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes) |>
     dplyr::select(
       "SpecCode",
@@ -328,15 +428,18 @@ get_length_weight_coeffs <- function(expanded) {
 #'
 #' Attaches length-length conversion coefficients from the FishBase /
 #' SeaLifeBase `popll` table to an expanded taxa table. These convert one length
-#' measurement into another via `Length2 = aL + bL * Length1`, which is required
-#' whenever a survey records a different length type from the one the
-#' length-weight coefficients are expressed in.
+#' measurement into another via `Length1 = aL + bL * Length2` — note the
+#' direction: **`Length2` is the predictor** — which is required whenever a
+#' survey records a different length type from the one the length-weight
+#' coefficients are expressed in.
 #'
 #' @param expanded A table as returned by [expand_taxonomic_info()], optionally
 #'   already restricted to an FAO area.
 #' @param length_types Character vector of length measurement codes to keep.
 #'   Both `Length1` and `Length2` must be in this set. Defaults to
 #'   `c("TL", "FL")` — total and fork length. Pass `NULL` to apply no filter.
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
 #'
 #' @return A tibble with:
 #'   - `alpha3_code`, `original_name`, `SpecCode`, `species_found`, `server`:
@@ -350,6 +453,15 @@ get_length_weight_coeffs <- function(expanded) {
 #' `b`, the same names the length-*weight* table uses for entirely different
 #' quantities. They are renamed to `aL` / `bL` here so that the two tables can
 #' be joined without collision.
+#'
+#' **The direction is `Length1 = aL + bL * Length2`, not the reverse.**
+#' Releases up to 4.9.0 documented it backwards. Reading it the wrong way round
+#' inverts every ratio, which is worse than not converting at all. The data
+#' settles it: over FishBase 25.04, rows with `Length1 = "TL"`,
+#' `Length2 = "FL"` have a median `bL` of 1.052 (n = 6,641) and
+#' `Length1 = "TL"`, `Length2 = "SL"` a median of 1.204 (n = 8,848). Total
+#' length exceeds both fork and standard length, and standard length by more,
+#' so `bL` can only be the multiplier *onto* `Length2`.
 #'
 #' This is load-bearing wherever a survey's recorded length type differs from
 #' the coefficient type. Timor-Leste's v1 survey form records fork length while
@@ -371,10 +483,14 @@ get_length_weight_coeffs <- function(expanded) {
 #'   expand_taxonomic_info() |>
 #'   get_length_length_coeffs()
 #' }
-get_length_length_coeffs <- function(expanded, length_types = c("TL", "FL")) {
+get_length_length_coeffs <- function(
+  expanded,
+  length_types = c("TL", "FL"),
+  version = "latest"
+) {
   target_codes <- unique(expanded$SpecCode)
 
-  ll <- get_combined_tbl("popll") |>
+  ll <- get_combined_tbl("popll", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes)
 
   if (!is.null(length_types)) {
@@ -452,8 +568,13 @@ get_length_length_coeffs <- function(expanded, length_types = c("TL", "FL")) {
 #'   length-length table. See [get_length_length_coeffs()].
 #' @param strip_parentheticals Logical, passed to [expand_taxonomic_info()].
 #'   Default `FALSE`.
-#' @param conf Optional configuration list. If `NULL` (default) and the area is
-#'   being resolved from configuration, [read_config()] is called.
+#' @param version FishBase / SeaLifeBase release to read. If `NULL` (default)
+#'   it is resolved once, from the `metadata.fishbase.db_version` configuration
+#'   key, and the same release is used for every read this call makes. Falls
+#'   back to `"latest"`. See [resolve_db_version()].
+#' @param conf Optional configuration list. If `NULL` (default) and the area or
+#'   the release is being resolved from configuration, [read_config()] is
+#'   called.
 #'
 #' @return A named list of three tibbles:
 #'   - `expanded`: the species expansion actually used.
@@ -467,6 +588,9 @@ get_length_length_coeffs <- function(expanded, length_types = c("TL", "FL")) {
 #'
 #' No `Type` or `EsQ` filtering is applied to `length_weight` — see
 #' [get_length_weight_coeffs()] for why.
+#'
+#' The release is resolved once, at the top, and threaded through all five
+#' table reads, so a single call cannot mix two snapshots of FishBase.
 #'
 #' ## Whether to filter by FAO area
 #'
@@ -508,6 +632,9 @@ get_length_length_coeffs <- function(expanded, length_types = c("TL", "FL")) {
 #'
 #' # Maximum coefficient coverage, no area restriction
 #' m <- get_taxa_morphometrics(taxa, filter_by_area = FALSE)
+#'
+#' # Pinned to a fixed FishBase release
+#' m <- get_taxa_morphometrics(taxa, version = "25.04")
 #' }
 get_taxa_morphometrics <- function(
   data,
@@ -515,6 +642,7 @@ get_taxa_morphometrics <- function(
   filter_by_area = TRUE,
   length_types = c("TL", "FL"),
   strip_parentheticals = FALSE,
+  version = NULL,
   conf = NULL
 ) {
   if (isTRUE(filter_by_area) && is.null(fao_areas)) {
@@ -522,12 +650,18 @@ get_taxa_morphometrics <- function(
     fao_areas <- resolve_fao_areas(conf, fao_areas)
   }
 
+  if (is.null(version)) {
+    conf <- conf %||% read_config()
+  }
+  version <- resolve_db_version(conf, version)
+
   logger::log_info(
-    "Expanding {nrow(data)} taxa against FishBase and SeaLifeBase"
+    "Expanding {nrow(data)} taxa against FishBase / SeaLifeBase {version}"
   )
   expanded <- expand_taxonomic_info(
     data,
-    strip_parentheticals = strip_parentheticals
+    strip_parentheticals = strip_parentheticals,
+    version = version
   ) |>
     dplyr::distinct()
 
@@ -535,24 +669,26 @@ get_taxa_morphometrics <- function(
     logger::log_info(
       "Filtering to FAO area(s) {paste(fao_areas, collapse = ', ')}"
     )
-    expanded <- filter_by_fao_area(expanded, fao_areas) |>
+    expanded <- filter_by_fao_area(expanded, fao_areas, version = version) |>
       dplyr::distinct()
   } else {
     logger::log_info("No FAO area restriction applied")
   }
 
   logger::log_info("Fetching length-weight coefficients")
-  length_weight <- get_length_weight_coeffs(expanded)
+  length_weight <- get_length_weight_coeffs(expanded, version = version)
 
   logger::log_info("Fetching length-length conversion coefficients")
   length_length <- get_length_length_coeffs(
     expanded,
-    length_types = length_types
+    length_types = length_types,
+    version = version
   )
 
   logger::log_info(
     "Built {nrow(length_weight)} length-weight and {nrow(length_length)} \\
-     length-length rows for {dplyr::n_distinct(expanded$species_found)} species"
+     length-length rows for {dplyr::n_distinct(expanded$species_found)} \\
+     species from FishBase / SeaLifeBase {version}"
   )
 
   list(
@@ -580,6 +716,10 @@ get_taxa_morphometrics <- function(
 #'   `c(51, 57)` (Western and Eastern Indian Ocean). Timor-Leste is Area 71.
 #'   Pass `57` to reproduce pre-4.6.0 output — see [resolve_fao_areas()] for
 #'   why 57 alone was never right for the Western Indian Ocean.
+#' @param version FishBase / SeaLifeBase release to read. If `NULL` (default)
+#'   it is resolved from the `metadata.fishbase.db_version` configuration key,
+#'   falling back to `"latest"`. Resolved once and used for every read, so one
+#'   run cannot mix snapshots. See [resolve_db_version()].
 #'
 #' @return Invisible NULL. Called for its side effect of uploading the enriched
 #'   taxa Parquet file to cloud storage.
@@ -633,12 +773,20 @@ get_taxa_morphometrics <- function(
 #'
 #' # Western Central Pacific
 #' coasts::enrich_taxa(fao_areas = 71)
+#'
+#' # Pinned to a fixed FishBase release
+#' coasts::enrich_taxa(version = "25.04")
 #' }
-enrich_taxa <- function(log_threshold = logger::DEBUG, fao_areas = NULL) {
+enrich_taxa <- function(
+  log_threshold = logger::DEBUG,
+  fao_areas = NULL,
+  version = NULL
+) {
   logger::log_threshold(log_threshold)
   conf <- read_config()
 
   fao_areas <- resolve_fao_areas(conf, fao_areas)
+  version <- resolve_db_version(conf, version)
   coasts_opts <- resolve_storage_opts(conf, "coasts")
 
   # ── 1. Load taxa from cloud ───────────────────────────────────────────────────
@@ -661,21 +809,27 @@ enrich_taxa <- function(log_threshold = logger::DEBUG, fao_areas = NULL) {
     dplyr::distinct()
 
   # ── 2. Expand to FishBase / SeaLifeBase species ───────────────────────────────
-  logger::log_info("Expanding taxa against FishBase and SeaLifeBase")
+  logger::log_info(
+    "Expanding {nrow(taxa)} taxa against FishBase / SeaLifeBase {version}"
+  )
   expanded_assets <- taxa |>
-    expand_taxonomic_info()
+    expand_taxonomic_info(version = version)
 
   # ── 3. Restrict to the configured FAO major fishing area(s) ──────────────────
   logger::log_info(
     "Filtering to FAO area(s) {paste(fao_areas, collapse = ', ')}"
   )
-  expanded_assets_filtered <- filter_by_fao_area(expanded_assets, fao_areas)
+  expanded_assets_filtered <- filter_by_fao_area(
+    expanded_assets,
+    fao_areas,
+    version = version
+  )
 
   # ── 4. Pull biological tables ─────────────────────────────────────────────────
   logger::log_info("Fetching biological data from FishBase / SeaLifeBase")
   target_codes <- expanded_assets_filtered$SpecCode
 
-  species_tab <- get_combined_tbl("species") |>
+  species_tab <- get_combined_tbl("species", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes) |>
     dplyr::select(
       "SpecCode",
@@ -689,7 +843,7 @@ enrich_taxa <- function(log_threshold = logger::DEBUG, fao_areas = NULL) {
     ) |>
     dplyr::distinct()
 
-  trophic_tab <- get_combined_tbl("ecology") |>
+  trophic_tab <- get_combined_tbl("ecology", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes) |>
     dplyr::select(
       "SpecCode",
@@ -725,7 +879,7 @@ enrich_taxa <- function(log_threshold = logger::DEBUG, fao_areas = NULL) {
       )
     )
 
-  nutrients_tab <- get_combined_tbl("estimate") |>
+  nutrients_tab <- get_combined_tbl("estimate", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes) |>
     dplyr::select(
       "SpecCode",
@@ -772,7 +926,9 @@ enrich_taxa <- function(log_threshold = logger::DEBUG, fao_areas = NULL) {
 
   # ── 6. Upload to cloud ────────────────────────────────────────────────────────
   logger::log_info(
-    "Uploading enriched taxa data ({nrow(all_dat)} rows) to cloud storage"
+    "Uploading enriched taxa data ({nrow(all_dat)} rows, \\
+     {dplyr::n_distinct(all_dat$species_found)} species, \\
+     FishBase / SeaLifeBase {version}) to cloud storage"
   )
   upload_parquet_to_cloud(
     data = all_dat,

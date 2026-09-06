@@ -4,7 +4,7 @@
 \alias{enrich_taxa}
 \title{Enrich Taxa with FishBase and SeaLifeBase Biological Data}
 \usage{
-enrich_taxa(log_threshold = logger::DEBUG, fao_areas = NULL)
+enrich_taxa(log_threshold = logger::DEBUG, fao_areas = NULL, version = NULL)
 }
 \arguments{
 \item{log_threshold}{Logging threshold passed to [logger::log_threshold()].
@@ -16,6 +16,11 @@ restrict species to. If `NULL` (default) the value is resolved from the
 `c(51, 57)` (Western and Eastern Indian Ocean). Timor-Leste is Area 71.
 Pass `57` to reproduce pre-4.6.0 output — see [resolve_fao_areas()] for
 why 57 alone was never right for the Western Indian Ocean.}
+
+\item{version}{FishBase / SeaLifeBase release to read. If `NULL` (default)
+it is resolved from the `metadata.fishbase.db_version` configuration key,
+falling back to `"latest"`. Resolved once and used for every read, so one
+run cannot mix snapshots. See [resolve_db_version()].}
 }
 \value{
 Invisible NULL. Called for its side effect of uploading the enriched
@@ -73,6 +78,9 @@ coasts::enrich_taxa()
 
 # Western Central Pacific
 coasts::enrich_taxa(fao_areas = 71)
+
+# Pinned to a fixed FishBase release
+coasts::enrich_taxa(version = "25.04")
 }
 }
 \seealso{

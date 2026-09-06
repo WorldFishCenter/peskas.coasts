@@ -10,6 +10,7 @@ get_taxa_morphometrics(
   filter_by_area = TRUE,
   length_types = c("TL", "FL"),
   strip_parentheticals = FALSE,
+  version = NULL,
   conf = NULL
 )
 }
@@ -32,8 +33,14 @@ length-length table. See [get_length_length_coeffs()].}
 \item{strip_parentheticals}{Logical, passed to [expand_taxonomic_info()].
 Default `FALSE`.}
 
-\item{conf}{Optional configuration list. If `NULL` (default) and the area is
-being resolved from configuration, [read_config()] is called.}
+\item{version}{FishBase / SeaLifeBase release to read. If `NULL` (default)
+it is resolved once, from the `metadata.fishbase.db_version` configuration
+key, and the same release is used for every read this call makes. Falls
+back to `"latest"`. See [resolve_db_version()].}
+
+\item{conf}{Optional configuration list. If `NULL` (default) and the area or
+the release is being resolved from configuration, [read_config()] is
+called.}
 }
 \value{
 A named list of three tibbles:
@@ -54,6 +61,9 @@ and `server` without re-resolving names.
 
 No `Type` or `EsQ` filtering is applied to `length_weight` — see
 [get_length_weight_coeffs()] for why.
+
+The release is resolved once, at the top, and threaded through all five
+table reads, so a single call cannot mix two snapshots of FishBase.
 
 ## Whether to filter by FAO area
 
@@ -90,6 +100,9 @@ m <- get_taxa_morphometrics(taxa, fao_areas = 71)
 
 # Maximum coefficient coverage, no area restriction
 m <- get_taxa_morphometrics(taxa, filter_by_area = FALSE)
+
+# Pinned to a fixed FishBase release
+m <- get_taxa_morphometrics(taxa, version = "25.04")
 }
 }
 \seealso{

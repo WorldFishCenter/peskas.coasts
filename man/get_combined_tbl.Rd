@@ -4,12 +4,17 @@
 \alias{get_combined_tbl}
 \title{Pull a Table from Both FishBase and SeaLifeBase}
 \usage{
-get_combined_tbl(tbl_name)
+get_combined_tbl(tbl_name, version = "latest")
 }
 \arguments{
 \item{tbl_name}{A character string naming the rfishbase table to retrieve
 (e.g. `"species"`, `"families"`, `"ecology"`, `"estimate"`,
 `"faoareas"`).}
+
+\item{version}{The FishBase / SeaLifeBase data release to read, e.g.
+`"25.04"`. Defaults to `"latest"`, which follows whatever release the
+installed `rfishbase` points at and therefore changes underneath a
+pipeline without warning. See [resolve_db_version()].}
 }
 \value{
 A tibble combining rows from both servers with an additional

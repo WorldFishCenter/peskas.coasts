@@ -1,3 +1,26 @@
+# coasts 4.10.0
+
+## `"latest"` was letting FishBase move underneath the pipeline
+
+`get_combined_tbl()` called `rfishbase::fb_tbl()` with no `version`, so every taxa read followed whatever release the container's `rfishbase` happened to point at. That is not a fixed dataset, and it has already drifted: in releases 26.06 / 26.07 `Caesionidae` and `Scaridae` still exist as family names but carry **zero species**. A taxon whose reference name is one of them expands to nothing, receives no length-weight coefficients, and weighs `NA` — which sums to zero without raising anything. That is what removed `CJX` and `PWT` from Timor-Leste's portal.
+
+* **NEW** `resolve_db_version()`, shaped like the existing `resolve_fao_areas()`: explicit argument, then `metadata.fishbase.db_version`, then `"latest"`. The release is validated against `rfishbase::available_releases()` **per server**, because the two do not publish in lockstep — FishBase has `21.06`, SeaLifeBase does not. One release is passed to both servers, so a release only one of them publishes is rejected up front instead of failing partway through a run.
+* **CHANGED** `get_combined_tbl()` takes `version` and passes it to `fb_tbl()`. Every function above it takes it too — `get_taxa_backbone()`, `filter_by_fao_area()`, `expand_taxonomic_info()`, `get_length_weight_coeffs()`, `get_length_length_coeffs()`.
+* **CHANGED** `get_taxa_morphometrics()` and `enrich_taxa()` resolve the release **once**, at the top, and thread that one value through all their reads. A single run therefore cannot mix two snapshots of FishBase — which is the failure a per-call default would still allow.
+* **CHANGED** `expand_taxonomic_info()` inner-joins the backbone, so a name that matches nothing simply disappears. It now logs the dropped names at WARN, with a count. This is the signal that was missing when `Caesionidae` went empty.
+* **CHANGED** The resolved release is logged next to the row counts already emitted by `get_taxa_morphometrics()` and `enrich_taxa()`, so a run's output says which snapshot produced it.
+* **NEW** `metadata.fishbase.db_version` in `inst/conf.yml`, set to `"latest"`.
+
+**Nothing changes for a pipeline that does not set the key.** The default stays `"latest"`, so output is byte-identical until a country opts in — verified live: `get_combined_tbl("popll")` returns 28,062 rows at `25.04` and 28,016 at `24.07`, and the unpinned path is unchanged. Pinning is the point, though: `"latest"` *is* the drift.
+
+**This unblocks Timor-Leste.** It reads FishBase only through this package, and `rfishbase` has no global version option, so the release had to become a function argument here before Timor could pin anything at all. `peskas.zanzibar.data.pipeline` and `peskas.mozambique.data.pipeline` still carry their own copies of this logic (`getLWCoeffs()`, with separate `fishbase_version` / `sealifebase_version` keys); those are temporary and fold into this package later, so do not treat them as the target shape.
+
+Covered by `tests/testthat/test-fishbase-version.R`, which mocks `available_releases()` for the per-server validation and the backbone for the dropped-name log.
+
+## `get_length_length_coeffs()` documented the conversion backwards
+
+* **FIXED (docs only)** The POPLL fit is `Length1 = aL + bL * Length2` — the *second* column is the predictor. Releases up to 4.9.0 documented it as `Length2 = aL + bL * Length1`. Nothing in the returned columns changes; the risk was to callers following the doc, since reading it backwards inverts every ratio, which is worse than not converting. The data settles it: over FishBase 25.04, `TL ~ FL` rows have a median `bL` of 1.052 (n = 6,641) and `TL ~ SL` a median of 1.204 (n = 8,848). Total length exceeds fork length, and standard length by more, so `bL` is the multiplier onto `Length2`.
+
 # coasts 4.9.0
 
 ## `get_assets()`: one place that knows how to read the assets snapshot

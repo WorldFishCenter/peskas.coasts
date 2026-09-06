@@ -153,6 +153,19 @@ default:
     airtable:
       name: assets
     fishbase:
+      # FishBase / SeaLifeBase data release read by enrich_taxa() and
+      # get_taxa_morphometrics(). "latest" is NOT a fixed dataset: it follows
+      # whatever release the installed rfishbase points at, so a container
+      # rebuild moves the reference data underneath the pipeline. 26.06/26.07
+      # keep Caesionidae and Scaridae as family names but attach no species to
+      # either, so both expand to nothing, get no coefficients, and weigh NA —
+      # which sums to zero without erroring. That removed CJX and PWT from
+      # Timor-Leste's portal.
+      # One release is passed to both servers and must exist on both:
+      # FishBase publishes 21.06, SeaLifeBase does not.
+      # Left at "latest" here so nothing changes until a country opts in; pin
+      # it to a release, e.g. "25.04", and re-baseline when you move it.
+      db_version: "latest"
       # FAO major fishing area(s) that enrich_taxa() and
       # get_taxa_morphometrics() restrict species to. Species with no area
       # assignment in FishBase/SeaLifeBase are always kept.
