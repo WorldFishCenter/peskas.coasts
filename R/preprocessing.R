@@ -210,7 +210,7 @@ preprocess_track_data <- function(data, grid_size = 500) {
     stop("grid_size must be one of: 100, 250, 500, 1000")
   )
 
-  data %>%
+  data <- data %>%
     dplyr::select(
       "Trip",
       "Time",
@@ -219,7 +219,35 @@ preprocess_track_data <- function(data, grid_size = 500) {
       "Speed (M/S)",
       "Range (Meters)",
       "Heading"
-    ) %>%
+    )
+
+  # A trip PDS holds no points for arrives as a header-only CSV, which readr
+  # types as all-character, so the coordinate arithmetic below would abort the
+  # whole parallel batch over one empty trip. Retyping it and sending it through
+  # the same pipeline keeps its columns identical to a real track's, which is
+  # what the caller's bind_rows() needs.
+  if (nrow(data) == 0) {
+    data <- data %>%
+      dplyr::mutate(
+        dplyr::across(!"Time", as.numeric),
+        Time = as.POSIXct(character(0))
+      )
+    # dplyr type-probes the summarise() expressions against the zero-row frame,
+    # so min(Time) warns on its way to returning nothing.
+    return(suppressWarnings(grid_track_points(data, grid_degrees)))
+  }
+
+  grid_track_points(data, grid_degrees)
+}
+
+#' Grid a track's points into per-cell summaries
+#'
+#' @param data Track points, already reduced to the columns used here and typed.
+#' @param grid_degrees Grid cell size in degrees.
+#'
+#' @noRd
+grid_track_points <- function(data, grid_degrees) {
+  data %>%
     dplyr::group_by(.data$Trip) %>%
     dplyr::arrange(.data$Time) %>%
     dplyr::mutate(

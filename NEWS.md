@@ -1,3 +1,15 @@
+# coasts 4.12.2
+
+## One empty trip took down the whole track preprocessing run
+
+A trip PDS holds no GPS points for is served as a header-only CSV, which `readr` types as all-character. `preprocess_track_data()` then divided a character `Lat` by the grid size and died with `non-numeric argument to binary operator`. Because `preprocess_pds_tracks()` maps it over every new track in a single `furrr::future_map_dfr()` pass, that one trip aborted the entire batch: no preprocessed parquet, no grid summaries, nothing uploaded, however many thousands of good tracks were in the same run.
+
+* **FIXED** An empty track is retyped and sent through the same gridding pipeline, returning zero rows with exactly the columns and types a real track returns. The batch keeps going and the empty trip contributes nothing, which is the correct answer for a track with no points.
+* **CHANGED** The gridding pipeline moved to an internal `grid_track_points()`, so the empty and normal paths cannot drift apart. Matching output types matter here beyond tidiness: `future_map_dfr()` binds the per-track results, and a character column meeting a double one is its own error.
+* **NEW** `tests/testthat/test-preprocess-track-data.R`, 3 cases, 7 assertions. It pins the empty-track behaviour, the column-type match between an empty and a real track, and that a normal track still grids.
+
+Nothing else changes. Non-empty tracks take the identical code path and produce identical output.
+
 # coasts 4.12.1
 
 ## `get_pelagic_boats()` answered an opaque HTTP 400
