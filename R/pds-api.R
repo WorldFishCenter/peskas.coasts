@@ -92,8 +92,15 @@ pelagic_refresh_token <- function(
 #' Retrieves boat information from the Pelagic Analytics API for a specified customer.
 #' Supports server-side filtering to reduce data transfer and processing time.
 #'
+#' @section Two API limitations:
+#' There is no way to query without a customer filter, so `customers` and
+#' `customer_id` cannot both be `NULL`. Supplying `imeis` also appears to
+#' override `customers` server-side, so a request scoped to one customer can
+#' return another's boats — do not trust the two together.
+#'
 #' @param token Character. Access token obtained from pelagic_auth()
-#' @param customers Character vector. Customer IDs to filter by. If NULL, uses default customer.
+#' @param customers Character vector. Customer IDs to filter by. Falls back to
+#'   `customer_id`; one of the two is required.
 #' @param boats Character/Numeric vector. Boat IDs to filter by. If NULL, returns all boats.
 #' @param imeis Character/Numeric vector. IMEI numbers to filter by. If NULL, returns all devices.
 #' @param columns Character vector. Specific columns to extract. If NULL, returns all columns.
@@ -107,25 +114,16 @@ pelagic_refresh_token <- function(
 #'
 #' @examples
 #' \dontrun{
-#' # Get all boats (default)
-#' boats_all <- get_pelagic_boats(auth_response$token)
-#'
-#' # Get boats with specific IMEIs (server-side filtering)
-#' boats_filtered <- get_pelagic_boats(
+#' # One customer's boats
+#' boats <- get_pelagic_boats(
 #'   token = auth_response$token,
-#'   imeis = c("864352046XXXX", "1234567890XXXX")
+#'   customers = "customer1-id"
 #' )
 #'
-#' # Get boats for multiple customers
-#' boats_multi_customer <- get_pelagic_boats(
-#'   token = auth_response$token,
-#'   customers = c("customer1-id", "customer2-id")
-#' )
-#'
-#' # Combine server-side filtering with column selection
+#' # Several customers, with only the columns needed
 #' boats_minimal <- get_pelagic_boats(
 #'   token = auth_response$token,
-#'   imeis = "864352046XXXXX",
+#'   customers = c("customer1-id", "customer2-id"),
 #'   columns = c("id", "name", "devices.imei")
 #' )
 #' }
@@ -143,6 +141,16 @@ get_pelagic_boats <- function(
   customer_id = NULL,
   base_url = "https://analytics.pelagicdata.com"
 ) {
+  # The server rejects a request with no customer filter as an opaque HTTP
+  # 400, so say what is actually wrong.
+  if (is.null(customers) && is.null(customer_id)) {
+    stop(
+      "`customers` or `customer_id` is required: the API has no way to query ",
+      "without a customer filter.",
+      call. = FALSE
+    )
+  }
+
   # Helper function to make the actual API request
   make_boats_request <- function(access_token) {
     # Build request body with server-side filters
@@ -304,7 +312,8 @@ get_pelagic_boats <- function(
 #' Supports server-side filtering to reduce data transfer and processing time.
 #'
 #' @param token Character. Access token obtained from pelagic_auth()
-#' @param customers Character vector. Customer IDs to filter by. If NULL, uses default customer.
+#' @param customers Character vector. Customer IDs to filter by. Falls back to
+#'   `customer_id`; one of the two is required.
 #' @param boats Character/Numeric vector. Boat IDs to filter by. If NULL, returns all boats.
 #' @param imeis Character/Numeric vector. IMEI numbers to filter by. If NULL, returns all devices.
 #' @param columns Character vector. Specific columns to extract. If NULL, returns all columns.

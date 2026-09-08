@@ -1,3 +1,15 @@
+# coasts 4.12.1
+
+## `get_pelagic_boats()` answered an opaque HTTP 400
+
+Called with neither `customers` nor `customer_id`, the function still built a customer filter with a `NULL` id and the server rejected it as a bare HTTP 400. Three of the four documented examples used exactly that form, including one labelled "get all boats" — so the documentation invited the failure.
+
+* **FIXED** A missing customer filter now errors up front, saying a customer filter is required. There is no way to query the endpoint without one.
+* **CHANGED** The examples now show only forms that work. The broken three are gone.
+* **CHANGED** The second fault is documented on the function itself rather than only in a changelog: supplying `imeis` appears to override `customers` server-side, so a request scoped to one customer can return another's boats. That is the server's behaviour and cannot be fixed here.
+
+Nothing changes for the pipeline. `ingest_pelagic_boats()` is the only caller and always passes `customer_id`, so it never took either path.
+
 # coasts 4.12.0
 
 ## Selecting trips by where they happened, not by who owns the tracker today
