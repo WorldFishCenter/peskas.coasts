@@ -1,3 +1,168 @@
+#' Select the trips that belong to a country
+#'
+#' Decides which of the trips a PDS token returns are this country's. It does
+#' no network or cloud work, so you can run it on a downloaded trip table to
+#' see what a config change would do before making it.
+#'
+#' @section The three rules:
+#' * `select_by = "device"` with `customers` — keep trips whose device is
+#'   under those customers *now*. The default, and lossy: a tracker sold on or
+#'   shipped abroad takes its whole trip history with it.
+#' * `exclude_customers` — keep everything except devices under those
+#'   customers. Redeployed hardware keeps its history, but nothing here can
+#'   reject another country's trips, so use it only on a country-scoped token.
+#' * `select_by = "community"` with `customers` — keep trips that *happened*
+#'   at one of those customers' communities. Recommended: a trip's community
+#'   does not change when the hardware is reassigned.
+#'
+#' @section Measure before switching a country to "community":
+#' Communities come from *current* device records, so a landing site with no
+#' device left on it drops out and takes its trips with it. Run both rules
+#' over one trip table and compare the counts before changing a config.
+#'
+#' @param trips Trip table from [get_trips()], fetched with `deviceInfo =
+#'   TRUE`. Without that there is no `IMEI` or `Community` column.
+#' @param devices The `devices` table from the assets snapshot. Needs `imei`,
+#'   `customer_name`, and `community` for the community rule.
+#' @param customers Allowlist of `customer_name` values.
+#' @param exclude_customers Denylist of `customer_name` values. `character(0)`
+#'   means "exclude nothing", which is different from leaving it unset.
+#' @param select_by `"device"` (who owns it now) or `"community"` (where the
+#'   trip happened). Applies to `customers` only.
+#'
+#' @return `trips`, filtered. Keeping nothing is an error, because an empty
+#'   parquet becomes the latest version and empties the portal.
+#'
+#' @seealso [ingest_pds_trips()], [get_trips()]
+#' @keywords ingestion
+#' @export
+select_country_trips <- function(
+  trips,
+  devices,
+  customers = NULL,
+  exclude_customers = NULL,
+  select_by = c("device", "community")
+) {
+  select_by <- match.arg(select_by)
+
+  if (!is.null(customers) && !is.null(exclude_customers)) {
+    stop(
+      "Set either `pds.customers` or `pds.exclude_customers`, not both.",
+      call. = FALSE
+    )
+  }
+  if (is.null(customers) && is.null(exclude_customers)) {
+    stop(
+      "Neither `pds.customers` nor `pds.exclude_customers` is set, so there ",
+      "is no rule for which trips belong to this country.",
+      call. = FALSE
+    )
+  }
+  if (!is.null(exclude_customers) && select_by == "community") {
+    stop(
+      "`select_by = \"community\"` needs `pds.customers` to say whose ",
+      "communities they are; a denylist cannot say.",
+      call. = FALSE
+    )
+  }
+
+  needed <- if (select_by == "community") c("IMEI", "Community") else "IMEI"
+  absent <- setdiff(needed, names(trips))
+  if (length(absent) > 0) {
+    stop(
+      "`trips` has no ",
+      paste(absent, collapse = " or "),
+      " column, so the filter would match nothing. Fetch with ",
+      "get_trips(deviceInfo = TRUE).",
+      call. = FALSE
+    )
+  }
+
+  # The two sides arrive as text or as numbers depending on the source. A
+  # 15-digit IMEI is exact as a double, so numeric is a safe common ground.
+  imei <- suppressWarnings(as.numeric(trips$IMEI))
+  imeis_of <- function(who) {
+    suppressWarnings(as.numeric(unique(devices$imei[
+      devices$customer_name %in% who
+    ])))
+  }
+  n <- nrow(trips)
+
+  if (!is.null(exclude_customers)) {
+    drop <- imeis_of(exclude_customers)
+    keep <- !imei %in% drop
+    logger::log_info(
+      "Kept {sum(keep)} of {n} trips, excluding {length(drop)} device(s) ",
+      "under: {paste(exclude_customers, collapse = ', ')}"
+    )
+  } else if (select_by == "device") {
+    keep <- imei %in% imeis_of(customers)
+    logger::log_info(
+      "Kept {sum(keep)} of {n} trips from devices currently under: ",
+      "{paste(customers, collapse = ', ')}"
+    )
+  } else {
+    ours <- imeis_of(customers)
+    comms <- unique(devices$community[devices$customer_name %in% customers])
+    comms <- comms[!is.na(comms) & nzchar(comms)]
+
+    by_community <- trips$Community %in% comms
+    by_device <- is.na(trips$Community) & imei %in% ours
+    keep <- by_community | by_device
+
+    logger::log_info(
+      "Kept {sum(keep)} of {n} trips: {sum(by_community)} at one of ",
+      "{length(comms)} communities under ",
+      "{paste(customers, collapse = ', ')}, {sum(by_device)} with no ",
+      "community from a device still ours. Dropped ",
+      "{sum(!keep & !is.na(trips$Community))} at other communities and ",
+      "{sum(!keep & is.na(trips$Community))} with no community from devices ",
+      "that are not ours."
+    )
+
+    # A device we still own, landing somewhere not listed under `customers`.
+    # Fix by adding the customer that holds that community.
+    lost <- unique(trips$Community[!keep & imei %in% ours])
+    if (length(lost) > 0) {
+      logger::log_warn(
+        "{sum(!keep & imei %in% ours)} trip(s) from devices this country ",
+        "still owns were dropped because their community is not listed ",
+        "under {paste(customers, collapse = ', ')}: ",
+        "{paste(lost, collapse = ', ')}"
+      )
+    }
+
+    # A community no device row claims, usually a landing site whose devices
+    # were all retired before the device table existed. Might be ours.
+    orphan <- setdiff(
+      unique(trips$Community[!keep & !is.na(trips$Community)]),
+      unique(devices$community)
+    )
+    if (length(orphan) > 0) {
+      logger::log_warn(
+        "{length(orphan)} community/communities on dropped trips belong to ",
+        "no device at all. If any are this country's, its trips are being ",
+        "discarded: ",
+        "{paste(orphan[seq_len(min(20L, length(orphan)))], collapse = ', ')}",
+        if (length(orphan) > 20) " ..." else ""
+      )
+    }
+  }
+
+  if (!any(keep)) {
+    stop(
+      "The trip filter kept 0 of ",
+      n,
+      " trips, which would publish an empty parquet and empty the portal. ",
+      "Check `pds.customers` / `pds.exclude_customers` against the customer ",
+      "names the token returns.",
+      call. = FALSE
+    )
+  }
+
+  trips[keep, , drop = FALSE]
+}
+
 #' Ingest Pelagic Data Systems (PDS) Trip Data
 #'
 #' @description
@@ -10,23 +175,8 @@
 #' 5. Uploads the processed file to configured cloud storage
 #'
 #' @section Selecting the country's trips:
-#' Two mutually exclusive settings, and the choice matters for historical data.
-#'
-#' * `pds.customers` — an **allowlist** of `pds_devices.customer_name` values.
-#'   Only trips from devices currently listed under those customers are kept.
-#'   A device that leaves the country loses its whole trip history, because the
-#'   frame records who owns it *now*, not who owned it when the trip happened.
-#' * `pds.exclude_customers` — a **denylist**. Every trip the token returns is
-#'   kept except those from devices under the named customers. Use this where
-#'   the PDS token is scoped to one country's trips, so the only thing to
-#'   exclude is a non-fishing project sharing the account. Redeployed hardware
-#'   keeps its history.
-#'
-#' Set one or the other, never both. `exclude_customers: []` is valid and means
-#' "exclude nothing", for a token that returns only this country's fishing
-#' trips. `exclude_customers` is safe **only** on a country-scoped token:
-#' verify that every trip the token returns belongs to the country before using
-#' it, or trips from elsewhere will be ingested.
+#' Set by `pds.customers` / `pds.exclude_customers` and `pds.select_by`, and
+#' applied by [select_country_trips()], which explains the three rules.
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
@@ -70,27 +220,6 @@ ingest_pds_trips <- function(
       ))
     )
 
-  # `exclude_customers: []` is a valid denylist meaning "exclude nothing", so
-  # the two settings are told apart by presence, not by length.
-  allow <- conf$pds$customers
-  deny <- conf$pds$exclude_customers
-
-  if (!is.null(allow) && !is.null(deny)) {
-    stop(
-      "Set either `pds.customers` or `pds.exclude_customers`, not both. ",
-      "The first keeps only devices currently under those customers; the ",
-      "second keeps every trip the token returns except those devices.",
-      call. = FALSE
-    )
-  }
-  if (is.null(allow) && is.null(deny)) {
-    stop(
-      "Neither `pds.customers` nor `pds.exclude_customers` is set, so there ",
-      "is no rule for which trips belong to this country.",
-      call. = FALSE
-    )
-  }
-
   boats_trips <- get_trips(
     token = conf$pds$token,
     secret = conf$pds$secret,
@@ -100,22 +229,13 @@ ingest_pds_trips <- function(
     withLastSeen = TRUE
   )
 
-  if (!is.null(allow)) {
-    keep <- as.numeric(unique(devices$imei[devices$customer_name %in% allow]))
-    boats_trips <- dplyr::filter(boats_trips, .data$IMEI %in% .env$keep)
-    logger::log_info(
-      "Kept {nrow(boats_trips)} trips from devices under: ",
-      "{paste(allow, collapse = ', ')}"
-    )
-  } else {
-    drop <- as.numeric(unique(devices$imei[devices$customer_name %in% deny]))
-    n_before <- nrow(boats_trips)
-    boats_trips <- dplyr::filter(boats_trips, !.data$IMEI %in% .env$drop)
-    logger::log_info(
-      "Kept {nrow(boats_trips)} of {n_before} trips, excluding ",
-      "{length(drop)} device(s) under: {paste(deny, collapse = ', ')}"
-    )
-  }
+  boats_trips <- select_country_trips(
+    trips = boats_trips,
+    devices = devices,
+    customers = conf$pds$customers,
+    exclude_customers = conf$pds$exclude_customers,
+    select_by = conf$pds$select_by %||% "device"
+  )
 
   filename <- conf$pds$pds_trips$file_prefix %>%
     add_version(extension = "parquet")

@@ -49,10 +49,13 @@ default:
       lurio:
         validated: wf-lurio-surveys-validated
   pds:
+    # How ingest_pds_trips() picks this country's trips: `device` keeps trips
+    # whose device is under `customers` now, `community` keeps trips that
+    # happened at those customers' communities. See `?select_country_trips`.
+    select_by: device
     # PDS `device.directCustomer.name` values, verified against the live API.
-    # Used to filter the device set in ingest_pds_trips(); a name added here
-    # widens the device filter for every country, so only add names whose
-    # devices belong unambiguously to one country.
+    # A name added here widens the filter for every country, so only add names
+    # whose devices belong unambiguously to one country.
     customers:
       - "WorldFish - Mozambique"
       - "Syberintel - distributor"

@@ -27,23 +27,8 @@ It performs the following operations:
 }
 \section{Selecting the country's trips}{
 
-Two mutually exclusive settings, and the choice matters for historical data.
-
-* `pds.customers` — an **allowlist** of `pds_devices.customer_name` values.
-  Only trips from devices currently listed under those customers are kept.
-  A device that leaves the country loses its whole trip history, because the
-  frame records who owns it *now*, not who owned it when the trip happened.
-* `pds.exclude_customers` — a **denylist**. Every trip the token returns is
-  kept except those from devices under the named customers. Use this where
-  the PDS token is scoped to one country's trips, so the only thing to
-  exclude is a non-fishing project sharing the account. Redeployed hardware
-  keeps its history.
-
-Set one or the other, never both. `exclude_customers: []` is valid and means
-"exclude nothing", for a token that returns only this country's fishing
-trips. `exclude_customers` is safe **only** on a country-scoped token:
-verify that every trip the token returns belongs to the country before using
-it, or trips from elsewhere will be ingested.
+Set by `pds.customers` / `pds.exclude_customers` and `pds.select_by`, and
+applied by [select_country_trips()], which explains the three rules.
 }
 
 \seealso{

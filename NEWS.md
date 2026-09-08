@@ -1,3 +1,42 @@
+# coasts 4.12.0
+
+## Selecting trips by where they happened, not by who owns the tracker today
+
+4.11.0 shipped `exclude_customers`, which fixes the redeployment defect only on a token scoped to one country. Timor-Leste has such a token. Kenya, Mozambique and Zanzibar hold the *same* token, returning 138,235 trips across **182 communities in six countries**, so for them the customer allowlist is the only thing separating the countries and the denylist is not an option. That left the four repos aligned on code but split on configuration.
+
+* **NEW** `pds.select_by: community`. Keeps a trip if it *happened* at one of the country's communities, falling back to current device ownership only where the trip carries no community. A trip's community does not change when hardware is reassigned, so this keeps redeployed devices' history **and** works on a shared token. `pds_devices.community` is unambiguous: 174 communities, **0** under more than one customer.
+* **NEW** `select_country_trips()`, exported. The rule lifted out of `ingest_pds_trips()` and made pure, which is what lets you compare rules before switching a config — and what finally made this filter testable.
+* **NEW** `tests/testthat/test-select-country-trips.R`, 11 cases, 19 assertions. There was no test for any branch of this filter, and its failure mode is a silently empty parquet.
+* **CHANGED** Keeping zero trips is now an error, as is a `trips` table missing `IMEI` or `Community`. Both previously produced an empty parquet, which becomes `version: latest` and empties the portal without anything failing.
+
+Coverage on Timor-Leste's 98,477 trips: **94,554** match a Timor community, **3,923** carry none (5.6%, the fallback), **0** belong to another country.
+
+### Nothing changes until a country sets the key
+
+`select_by` defaults to `device`, so a pipeline that does not set it keeps today's behaviour through a container rebuild. That is deliberate: **the community rule is not a strict superset of the allowlist.** A landing site whose devices have all been redeployed is missing from the community list and its trips drop out — 0 trips for Timor-Leste, unmeasured elsewhere.
+
+**Retiring a device is not one of the ways this loses data.** The boats request has no status filter, `device_sync()` never deletes, and the snapshot ignores `active`, so a retired tracker keeps its row, its `imei` and its community. The narrower risk is a device retired *before* the `pds_devices` table was first populated: it was never written, and if it was the only device at a site, that site is invisible. Zanzibar retired much of its fleet, so that is the case to measure there.
+
+The rule reports both losses itself — it warns when it drops a trip from a device the country still owns, and warns separately when a dropped trip's community belongs to no device at all. Before switching a config, run both rules over one trip table and compare:
+
+```r
+trips <- coasts::get_trips(token = conf$pds$token, secret = conf$pds$secret,
+                           dateFrom = "2018-01-01", dateTo = Sys.Date(),
+                           deviceInfo = TRUE)
+now <- coasts::select_country_trips(trips, devices, conf$pds$customers)
+new <- coasts::select_country_trips(trips, devices, conf$pds$customers,
+                                    select_by = "community")
+```
+
+Expect the count to **rise** wherever a device was redeployed. That is real effort that was being discarded, and it will raise catch estimates.
+
+### Still open
+
+* `exclude_customers` is correct only on a country-scoped token. Timor-Leste has one and uses it; Kenya, Mozambique and Zanzibar share a single token covering six countries, so `select_by: community` is the only rule available to them.
+* The 5.6% of trips with no community still fall back to device ownership, so they keep the original exposure.
+* A community claimed by no device row is dropped, since it cannot be attributed to a customer. On a country-scoped token such a community is in fact the country's own, so dropping it is a pure loss there.
+* `get_pelagic_boats()`'s two filter faults, reported in 4.11.0, are unfixed.
+
 # coasts 4.11.0
 
 ## A device leaving the country deleted its whole trip history
