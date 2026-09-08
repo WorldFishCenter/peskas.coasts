@@ -1,3 +1,30 @@
+# coasts 4.11.0
+
+## A device leaving the country deleted its whole trip history
+
+`ingest_pds_trips()` kept the trips whose `IMEI` appears in `pds_devices`, narrowed to `pds.customers`. That list records who owns a device **now**; the trips it selects are **historical**. So when a tracker is transferred to another customer — sold on, or physically shipped abroad — every trip it ever made for the original country stops being ingested, and the parquet silently shrinks.
+
+Measured in Timor-Leste, the oldest fleet: **27 devices, 2,791 trips, 2018-2022**. Their trip records name Timorese fishers and Timorese landing sites (Com, Beacou, Beto Tasi); their *current* `pds_devices` rows put them under individual boat owners in Barbados, with communities Oistins, Six Men's Bay and Pile Bay. Real effort, dropped because the hardware moved on years later. Nothing warned.
+
+This is not specific to Timor-Leste. It is the same code for every country, and the exposure is simply fleet age: Timor's devices go back to **2018-03**, Mozambique's to 2025-06, Kenya's to 2025-04, Zanzibar's to 2024-09. As that kit ages the same loss begins.
+
+* **NEW** `pds.exclude_customers`, a **denylist**: keep every trip the token returns except those from devices under the named customers. Redeployed hardware keeps its history, because the rule no longer asks who owns the device today.
+* **CHANGED** `ingest_pds_trips()` accepts either `pds.customers` (the existing allowlist) or `pds.exclude_customers`, never both, and errors if neither is set. Setting neither previously matched zero devices and wrote an empty parquet without complaint.
+* **CHANGED** The device table is no longer filtered before the trips are fetched, so the denylist branch can see every device. Both branches log how many trips survived and why.
+
+`exclude_customers: []` is valid and means *exclude nothing*. An empty list and an absent key are told apart by `is.null()`, not by length, so a country with no non-fishing project to exclude can still adopt the denylist.
+
+**The denylist is only correct on a country-scoped token.** It relies on the API returning that country's trips and no others. Verified for Timor-Leste against all 98,476 trips its token returns: every `Community` is a Timorese landing site, including on the 27 redeployed devices, which return their Timor-era trips and nothing from Barbados. **This has not been verified for Kenya, Mozambique or Zanzibar.** Check before switching, or trips from elsewhere will be ingested.
+
+**Nothing changes for a pipeline that does not set the new key.** All four countries currently set `pds.customers` and take the identical path with identical output. Timor-Leste's own switch is worth +2,791 trips (95,685 -> 97,064 after also dropping 1,412 bicycle-tracking trips that were being counted as fishing).
+
+## Known, unfixed: `get_pelagic_boats()` filters
+
+Two faults found while diagnosing the above, both still present:
+
+* Called with `customers = NULL` it still builds one entry from `customer_id`, which may also be `NULL`, and the server answers **HTTP 400**. There is no way to query without a customer filter.
+* Supplying `imeis` appears to **override** `customers` server-side: a request scoped to one customer id returned boats belonging to entirely different customers. Any diagnosis that trusts the customer filter alongside `imeis` will be wrong.
+
 # coasts 4.10.0
 
 ## `"latest"` was letting FishBase move underneath the pipeline

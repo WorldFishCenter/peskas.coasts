@@ -20,11 +20,32 @@ None (invisible).
 This function handles the automated ingestion of GPS boat trip data from Pelagic Data Systems (PDS).
 It performs the following operations:
 1. Retrieves device metadata from configured cloud storage
-2. Downloads all trip data from PDS API (2023-01-01 to present)
-3. Filters trips to match active device IMEIs
+2. Downloads all trip data from PDS API (2018-01-01 to present)
+3. Selects the trips belonging to the country's fleet
 4. Converts the data to parquet format
 5. Uploads the processed file to configured cloud storage
 }
+\section{Selecting the country's trips}{
+
+Two mutually exclusive settings, and the choice matters for historical data.
+
+* `pds.customers` — an **allowlist** of `pds_devices.customer_name` values.
+  Only trips from devices currently listed under those customers are kept.
+  A device that leaves the country loses its whole trip history, because the
+  frame records who owns it *now*, not who owned it when the trip happened.
+* `pds.exclude_customers` — a **denylist**. Every trip the token returns is
+  kept except those from devices under the named customers. Use this where
+  the PDS token is scoped to one country's trips, so the only thing to
+  exclude is a non-fishing project sharing the account. Redeployed hardware
+  keeps its history.
+
+Set one or the other, never both. `exclude_customers: []` is valid and means
+"exclude nothing", for a token that returns only this country's fishing
+trips. `exclude_customers` is safe **only** on a country-scoped token:
+verify that every trip the token returns belongs to the country before using
+it, or trips from elsewhere will be ingested.
+}
+
 \seealso{
 [get_trips()], [cloud_object_name()], [download_cloud_file()],
   [upload_cloud_file()], [resolve_storage_opts()]

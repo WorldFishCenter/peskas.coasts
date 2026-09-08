@@ -4,10 +4,29 @@
 #' This function handles the automated ingestion of GPS boat trip data from Pelagic Data Systems (PDS).
 #' It performs the following operations:
 #' 1. Retrieves device metadata from configured cloud storage
-#' 2. Downloads all trip data from PDS API (2023-01-01 to present)
-#' 3. Filters trips to match active device IMEIs
+#' 2. Downloads all trip data from PDS API (2018-01-01 to present)
+#' 3. Selects the trips belonging to the country's fleet
 #' 4. Converts the data to parquet format
 #' 5. Uploads the processed file to configured cloud storage
+#'
+#' @section Selecting the country's trips:
+#' Two mutually exclusive settings, and the choice matters for historical data.
+#'
+#' * `pds.customers` — an **allowlist** of `pds_devices.customer_name` values.
+#'   Only trips from devices currently listed under those customers are kept.
+#'   A device that leaves the country loses its whole trip history, because the
+#'   frame records who owns it *now*, not who owned it when the trip happened.
+#' * `pds.exclude_customers` — a **denylist**. Every trip the token returns is
+#'   kept except those from devices under the named customers. Use this where
+#'   the PDS token is scoped to one country's trips, so the only thing to
+#'   exclude is a non-fishing project sharing the account. Redeployed hardware
+#'   keeps its history.
+#'
+#' Set one or the other, never both. `exclude_customers: []` is valid and means
+#' "exclude nothing", for a token that returns only this country's fishing
+#' trips. `exclude_customers` is safe **only** on a country-scoped token:
+#' verify that every trip the token returns belongs to the country before using
+#' it, or trips from elsewhere will be ingested.
 #'
 #' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
@@ -49,8 +68,28 @@ ingest_pds_trips <- function(
         .data$last_seen / 1000,
         origin = "1970-01-01"
       ))
-    ) |>
-    dplyr::filter(.data$customer_name %in% conf$pds$customers)
+    )
+
+  # `exclude_customers: []` is a valid denylist meaning "exclude nothing", so
+  # the two settings are told apart by presence, not by length.
+  allow <- conf$pds$customers
+  deny <- conf$pds$exclude_customers
+
+  if (!is.null(allow) && !is.null(deny)) {
+    stop(
+      "Set either `pds.customers` or `pds.exclude_customers`, not both. ",
+      "The first keeps only devices currently under those customers; the ",
+      "second keeps every trip the token returns except those devices.",
+      call. = FALSE
+    )
+  }
+  if (is.null(allow) && is.null(deny)) {
+    stop(
+      "Neither `pds.customers` nor `pds.exclude_customers` is set, so there ",
+      "is no rule for which trips belong to this country.",
+      call. = FALSE
+    )
+  }
 
   boats_trips <- get_trips(
     token = conf$pds$token,
@@ -59,8 +98,24 @@ ingest_pds_trips <- function(
     dateTo = Sys.Date(),
     deviceInfo = TRUE,
     withLastSeen = TRUE
-  ) |>
-    dplyr::filter(.data$IMEI %in% as.numeric(unique(devices$imei)))
+  )
+
+  if (!is.null(allow)) {
+    keep <- as.numeric(unique(devices$imei[devices$customer_name %in% allow]))
+    boats_trips <- dplyr::filter(boats_trips, .data$IMEI %in% .env$keep)
+    logger::log_info(
+      "Kept {nrow(boats_trips)} trips from devices under: ",
+      "{paste(allow, collapse = ', ')}"
+    )
+  } else {
+    drop <- as.numeric(unique(devices$imei[devices$customer_name %in% deny]))
+    n_before <- nrow(boats_trips)
+    boats_trips <- dplyr::filter(boats_trips, !.data$IMEI %in% .env$drop)
+    logger::log_info(
+      "Kept {nrow(boats_trips)} of {n_before} trips, excluding ",
+      "{length(drop)} device(s) under: {paste(deny, collapse = ', ')}"
+    )
+  }
 
   filename <- conf$pds$pds_trips$file_prefix %>%
     add_version(extension = "parquet")
