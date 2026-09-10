@@ -1,3 +1,32 @@
+# coasts 4.12.3
+
+## Two guards Timor's data trips over
+
+Timor-Leste is being wired into the coasts portal and is the first country whose
+survey data hits either of these. Both are in `summarize_data()`, and neither
+changes anything for Kenya, Zanzibar or Mozambique.
+
+* **FIXED** One landing with no date aborted every summary. `tidyr::complete()`
+  builds its month sequence with `seq(min(date), max(date))`, so a single `NA`
+  makes `min()` non-finite and `summarize_data()` dies with
+  `'from' must be a finite number` before writing anything. Undated rows are
+  dropped once, up front, with a warning — a landing with no date belongs to no
+  month. Timor's frozen v1 form carries exactly one such trip; the others have
+  none.
+* **FIXED** A trip recorded with zero fishers put `Inf` in the published
+  metrics. `cpue_day` is `tot_catch_kg / n_fishers`, and `Inf` survives both
+  `mean()` and `median()` into the portal, where no axis can plot it. The five
+  derived indicators now map non-finite to `NA`, which is what an undefined
+  catch-per-fisher is. Timor has 343 such trips in production; the other three
+  have none, so their parquets are unchanged.
+
+`export_geos()` is deliberately **not** changed here. Adding
+`timor_monthly_summaries_map` to its list is a separate release, and it must not
+ship until Timor has actually published that parquet to the coasts bucket:
+`cloud_object_name()` returns `character(0)` for a missing prefix, so the read
+fails and takes all four countries' portal update down with it. This release is
+what lets Timor's pipeline produce it in the first place.
+
 # coasts 4.12.2
 
 ## One empty trip took down the whole track preprocessing run
