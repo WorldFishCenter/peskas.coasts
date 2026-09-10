@@ -1,3 +1,14 @@
+# coasts 4.12.4
+
+## Timor-Leste on the portal
+
+* **CHANGED** `export_geos()` reads `timor_monthly_summaries_map` alongside the
+  other three. Its map list already carried the TLS boundaries, so Timor drew as
+  polygons with no data behind them.
+
+Must not ship before Timor has published that parquet: a missing prefix returns
+`character(0)` and fails the read for all four countries.
+
 # coasts 4.12.3
 
 ## Two guards Timor's data trips over

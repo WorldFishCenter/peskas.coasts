@@ -116,7 +116,8 @@ export_geos <- function(package = "coasts") {
     c(
       "kenya_monthly_summaries_map",
       "zanzibar_monthly_summaries_map",
-      "mozambique_monthly_summaries_map"
+      "mozambique_monthly_summaries_map",
+      "timor_monthly_summaries_map"
     ) |>
     purrr::set_names() |>
     purrr::map(
