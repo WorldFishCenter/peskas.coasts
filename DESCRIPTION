@@ -1,7 +1,7 @@
 Package: coasts
 Type: Package
 Title: Coastal Fisheries Data Pipeline for Western Indian Ocean
-Version: 4.12.4
+Version: 4.13.0
 Authors@R: person("Lorenzo", "Longobardi", email = "l.longobardi@cgiar.org",
     role = c("aut", "cre"))
 Description: Provides a comprehensive data pipeline for processing and analyzing
@@ -46,6 +46,7 @@ Imports:
     rlang,
     sf,
     ssfaitk,
+    stats,
     stringr (>= 1.5.0),
     tibble,
     tidyr,

@@ -1,3 +1,14 @@
+# coasts 4.13.0
+
+## Restating length-weight coefficients on a total-length basis
+
+FishBase publishes `a` and `b` against whatever length the study measured — fork, standard, mantle, carapace. Keeping only the total-length pairs discards more than half the matched species for several taxon codes; keeping them all and pooling them mixes measurement bases, which inflates `a` by a median 15% and up to 2.8x. The answer is to restate rather than filter, and every pipeline that needed it had written its own: Zanzibar `R/model-taxa.R:876`/`:935`, Mozambique `:990`/`:1049`, Timor inline in `get_morphometric_tables()`. Three copies, three sets of semantics, and nothing comparing them.
+
+* **NEW** `convert_lw_to_tl()`, exported. Rescales `a` by `ratio^b` using the POPLL conversions from the same expansion, leaves `b` untouched, and sets `Type` to `"TL"`. Rows with no usable conversion pass through **unchanged** rather than being dropped — a caller wanting only restated pairs filters for them, and a caller wanting everything does not silently lose data. Which rows to feed in stays the caller's decision, which is the one place the three implementations genuinely disagreed.
+* Verified against Zanzibar's live pipeline at FishBase 25.04 / SeaLifeBase 24.07, area 51: the same 7 taxa with no native total-length pair (`BET`, `BLM`, `BUM`, `MLS`, `NXT`, `QJR`, `SWO` — bigeye tuna, the marlins, swordfish), the same 16 rows restated, coefficients identical. Rebuilding Zanzibar's whole coefficient table out of coasts functions alone lands within **1.19%** at worst across all 42 comparable codes, and at the median exactly on it.
+* The POPLL direction — `Length1 = aL + bL * Length2`, where the **second** column is the predictor — is now asserted in the tests rather than only described in prose. Reading that fit backwards inverts every ratio and moves weight by roughly 1.1x for fork length and 1.8x for standard length.
+* **CHANGED** `stats` is declared in `Imports`. `stats::median()` was already used by `export.R` and had never been listed.
+
 # coasts 4.12.4
 
 ## Timor-Leste on the portal

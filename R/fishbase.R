@@ -548,6 +548,116 @@ get_length_length_coeffs <- function(
     dplyr::as_tibble()
 }
 
+#' Restate Length-Weight Coefficients on a Total-Length Basis
+#'
+#' Rescales `a` so that a length-weight pair published against fork, standard or
+#' another length type reads as a pair against total length, using the
+#' length-length conversions from the same expansion.
+#'
+#' @param length_weight Length-weight rows as returned by
+#'   [get_length_weight_coeffs()]. Must carry `species_found`, `server`, `Type`,
+#'   `a` and `b`.
+#' @param length_length Length-length rows as returned by
+#'   [get_length_length_coeffs()], from the **same** expansion so that
+#'   `species_found` and `server` are keyed consistently. Build them with
+#'   `length_types = NULL`: the default `c("TL", "FL")` keeps no standard-length
+#'   pair, and `SL` is where the correction is largest.
+#' @param max_intercept Numeric. Conversions whose intercept `aL` exceeds this
+#'   in absolute value are discarded before the median is taken. Defaults to
+#'   `1` (cm); a large intercept means the fit is not well approximated by the
+#'   pure ratio applied here.
+#'
+#' @return `length_weight` with `a` restated and `Type` set to `"TL"` for every
+#'   row that had a usable conversion. Rows with no conversion are returned
+#'   **unchanged**, still carrying their original `Type`, so nothing is silently
+#'   dropped. Filter on `Type == "TL"` afterwards if only restated pairs are
+#'   wanted.
+#'
+#' @details
+#' Given `W = a * L_type^b` and `L_type ~= ratio * TL`, substitution gives
+#' `W = a * ratio^b * TL^b`. So `b` is unchanged and only `a` moves.
+#'
+#' The ratio comes from the POPLL table, which fits
+#' `Length1 = aL + bL * Length2` — the **second** column is the predictor. A row
+#' with `Length2 == "TL"` therefore gives `ratio = bL` for `Length1`, and a row
+#' with `Length1 == "TL"` gives `ratio = 1 / bL` for `Length2`. Reading that fit
+#' backwards inverts every ratio and moves weight by roughly `(1/r)^b / r^b` —
+#' about 1.1x for fork length and 1.8x for standard length — so the direction is
+#' asserted in the tests rather than left to the reader. Where several published
+#' conversions exist for a species and type, the median is taken.
+#'
+#' Restating rather than filtering matters for coverage: keeping only
+#' `Type == "TL"` was measured to discard more than half the matched species for
+#' several taxon codes. Which rows to feed in is the caller's decision — pass
+#' everything to restate every convertible pair, or pass only the taxa that have
+#' no native total-length pair to leave the rest untouched.
+#'
+#' @seealso [get_length_weight_coeffs()], [get_length_length_coeffs()],
+#'   [get_taxa_morphometrics()]
+#'
+#' @keywords taxa
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' m <- get_taxa_morphometrics(taxa, length_types = NULL)
+#' lw_tl <- convert_lw_to_tl(m$length_weight, m$length_length)
+#'
+#' # Restate only the taxa that have no native total-length pair
+#' covered <- unique(m$length_weight$alpha3_code[m$length_weight$Type == "TL"])
+#' lw_tl <- convert_lw_to_tl(
+#'   dplyr::filter(m$length_weight, !alpha3_code %in% covered),
+#'   m$length_length
+#' )
+#' }
+convert_lw_to_tl <- function(length_weight, length_length, max_intercept = 1) {
+  ratios <- length_length |>
+    dplyr::filter(
+      !is.na(.data$bL),
+      .data$bL > 0,
+      !is.na(.data$aL),
+      abs(.data$aL) <= max_intercept
+    ) |>
+    dplyr::mutate(
+      Type = dplyr::case_when(
+        .data$Length2 == "TL" ~ .data$Length1,
+        .data$Length1 == "TL" ~ .data$Length2,
+        TRUE ~ NA_character_
+      ),
+      ratio = dplyr::case_when(
+        .data$Length2 == "TL" ~ .data$bL,
+        .data$Length1 == "TL" ~ 1 / .data$bL,
+        TRUE ~ NA_real_
+      )
+    ) |>
+    dplyr::filter(
+      !is.na(.data$Type),
+      .data$Type != "TL",
+      !is.na(.data$ratio)
+    ) |>
+    dplyr::group_by(.data$species_found, .data$server, .data$Type) |>
+    dplyr::summarise(ratio = stats::median(.data$ratio), .groups = "drop")
+
+  restated <- length_weight |>
+    dplyr::left_join(ratios, by = c("species_found", "server", "Type")) |>
+    dplyr::mutate(
+      a = dplyr::if_else(
+        is.na(.data$ratio),
+        .data$a,
+        .data$a * .data$ratio^.data$b
+      ),
+      Type = dplyr::if_else(is.na(.data$ratio), .data$Type, "TL")
+    )
+
+  n_restated <- sum(!is.na(restated$ratio))
+  logger::log_info(
+    "Restated {n_restated} of {nrow(length_weight)} length-weight pairs on a \\
+     total-length basis"
+  )
+
+  dplyr::select(restated, -"ratio")
+}
+
 #' Build Length-Weight and Length-Length Tables for a Set of Taxa
 #'
 #' Single entry point for the morphometric half of the taxa pipeline: expands a
