@@ -20,11 +20,17 @@ None (invisible).
 This function handles the automated ingestion of GPS boat trip data from Pelagic Data Systems (PDS).
 It performs the following operations:
 1. Retrieves device metadata from configured cloud storage
-2. Downloads all trip data from PDS API (2023-01-01 to present)
-3. Filters trips to match active device IMEIs
+2. Downloads all trip data from PDS API (2018-01-01 to present)
+3. Selects the trips belonging to the country's fleet
 4. Converts the data to parquet format
 5. Uploads the processed file to configured cloud storage
 }
+\section{Selecting the country's trips}{
+
+Set by `pds.customers` / `pds.exclude_customers` and `pds.select_by`, and
+applied by [select_country_trips()], which explains the three rules.
+}
+
 \seealso{
 [get_trips()], [cloud_object_name()], [download_cloud_file()],
   [upload_cloud_file()], [resolve_storage_opts()]

@@ -4,12 +4,15 @@
 \alias{filter_by_fao_area}
 \title{Restrict Expanded Taxa to One or More FAO Major Fishing Areas}
 \usage{
-filter_by_fao_area(expanded, fao_areas)
+filter_by_fao_area(expanded, fao_areas, version = "latest")
 }
 \arguments{
 \item{expanded}{A table as returned by [expand_taxonomic_info()].}
 
 \item{fao_areas}{An integer vector of FAO major fishing area codes.}
+
+\item{version}{FishBase / SeaLifeBase release to read. See
+[resolve_db_version()].}
 }
 \value{
 `expanded`, filtered, with the `AreaCode` column dropped.

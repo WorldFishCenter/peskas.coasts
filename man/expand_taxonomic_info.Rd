@@ -4,7 +4,7 @@
 \alias{expand_taxonomic_info}
 \title{Expand Taxa to FishBase / SeaLifeBase Species Matches}
 \usage{
-expand_taxonomic_info(data, strip_parentheticals = FALSE)
+expand_taxonomic_info(data, strip_parentheticals = FALSE, version = "latest")
 }
 \arguments{
 \item{data}{A data frame with at minimum the following columns:
@@ -18,6 +18,9 @@ removed from `scientific_name` before matching, so that
 `"Haemulidae (=Pomadasyidae)"` matches the family `Haemulidae`. Defaults to
 `FALSE`, which preserves the historical behaviour of leaving such names
 unmatched. See Details.}
+
+\item{version}{FishBase / SeaLifeBase release to read. Defaults to
+`"latest"`, which is not a fixed dataset — see [resolve_db_version()].}
 }
 \value{
 A tibble with columns:
@@ -36,7 +39,12 @@ matching species. Matching is attempted at multiple taxonomic ranks: species
 \details{
 The function builds a lookup dictionary by pivoting the taxonomy backbone
 wide-to-long across ranks, so a single join resolves names at any level.
-Records that do not match any rank are silently dropped (inner join).
+Records that do not match any rank are dropped (inner join) and the names
+that were dropped are logged at WARN. A name can go from matching to
+unmatched purely because the underlying release changed: 26.06 / 26.07 keep
+`Caesionidae` and `Scaridae` as family names but attach no species to
+either, so both silently expand to nothing. Pin `version` and read the
+warning.
 
 Matching is against the FishBase / SeaLifeBase backbone only. It therefore
 resolves nothing for names that are not ranks those databases carry —

@@ -130,6 +130,17 @@ summarize_data <- function(
       -c("scientific_name", "english_name")
     )
 
+  # A landing with no date belongs to no month, so it can take no part in any
+  # summary below -- and a single undated row is enough to make `min(date)`
+  # non-finite and abort every `tidyr::complete()` with
+  # `'from' must be a finite number`. Timor's frozen v1 form carries one such
+  # trip (2026-09-10); the other three countries have none.
+  undated <- sum(is.na(all_data$landing_date))
+  if (undated > 0) {
+    logger::log_warn("Dropping {undated} row(s) with no landing_date")
+    all_data <- dplyr::filter(all_data, !is.na(.data$landing_date))
+  }
+
   # The exclusion is dashboard-only. `all_data` keeps every form and feeds the
   # multi-country coasts portal (`<country>_fishery_metrics` and, via
   # export_portal(), `<country>_monthly_summaries_map`); `dash_data` is the
@@ -155,7 +166,15 @@ summarize_data <- function(
         rpue = .data$tot_catch_price / .data$n_fishers / .data$trip_duration_hrs,
         cpue_day = .data$tot_catch_kg / .data$n_fishers,
         rpue_day = .data$tot_catch_price / .data$n_fishers
-      )
+      ) |>
+      # A trip recorded with zero fishers makes catch-per-fisher undefined, not
+      # infinite, and `Inf` survives `mean()` and `median()` into the portal as
+      # a metric no axis can plot. Timor has 273 such trips (2026-09-10); the
+      # other three countries have none, so their output is unchanged.
+      dplyr::mutate(dplyr::across(
+        c("price_kg", "cpue", "rpue", "cpue_day", "rpue_day"),
+        ~ dplyr::if_else(is.finite(.x), .x, NA_real_)
+      ))
   }
 
   indicators_df <- trip_indicators(dash_data)

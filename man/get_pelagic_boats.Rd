@@ -20,7 +20,8 @@ get_pelagic_boats(
 \arguments{
 \item{token}{Character. Access token obtained from pelagic_auth()}
 
-\item{customers}{Character vector. Customer IDs to filter by. If NULL, uses default customer.}
+\item{customers}{Character vector. Customer IDs to filter by. Falls back to
+`customer_id`; one of the two is required.}
 
 \item{boats}{Character/Numeric vector. Boat IDs to filter by. If NULL, returns all boats.}
 
@@ -45,27 +46,26 @@ Data frame containing boat information
 Retrieves boat information from the Pelagic Analytics API for a specified customer.
 Supports server-side filtering to reduce data transfer and processing time.
 }
+\section{Two API limitations}{
+
+There is no way to query without a customer filter, so `customers` and
+`customer_id` cannot both be `NULL`. Supplying `imeis` also appears to
+override `customers` server-side, so a request scoped to one customer can
+return another's boats — do not trust the two together.
+}
+
 \examples{
 \dontrun{
-# Get all boats (default)
-boats_all <- get_pelagic_boats(auth_response$token)
-
-# Get boats with specific IMEIs (server-side filtering)
-boats_filtered <- get_pelagic_boats(
+# One customer's boats
+boats <- get_pelagic_boats(
   token = auth_response$token,
-  imeis = c("864352046XXXX", "1234567890XXXX")
+  customers = "customer1-id"
 )
 
-# Get boats for multiple customers
-boats_multi_customer <- get_pelagic_boats(
-  token = auth_response$token,
-  customers = c("customer1-id", "customer2-id")
-)
-
-# Combine server-side filtering with column selection
+# Several customers, with only the columns needed
 boats_minimal <- get_pelagic_boats(
   token = auth_response$token,
-  imeis = "864352046XXXXX",
+  customers = c("customer1-id", "customer2-id"),
   columns = c("id", "name", "devices.imei")
 )
 }

@@ -668,3 +668,165 @@ fetch_asset <- function(
     janitor::clean_names() |>
     dplyr::select(dplyr::all_of(select_cols))
 }
+
+#' Build a Form-ID Match Pattern for Airtable Asset Tables
+#'
+#' @description
+#' Builds the regular expression used to select the rows of an Airtable asset
+#' table (`taxa`, `gear`, `vessels`, `sites`, `geo`) that belong to one or more
+#' forms.
+#'
+#' @details
+#' `form_id` in the assets snapshot is a *linked-record* field. [airtable_to_df()]
+#' collapses it with `paste(collapse = ", ")`, so a record shared by three forms
+#' arrives as a single string `"recA, recB, recC"`. Selecting a form's records
+#' therefore needs a whole-element match rather than a substring test.
+#'
+#' Both degenerate inputs are rejected rather than tolerated, because both fail
+#' silently downstream: a zero-length id makes `paste0()` recycle into a pattern
+#' that matches only empty strings — every asset table comes back empty and
+#' every join yields `NA`, with no error anywhere — and a multi-element pattern
+#' makes [stringr::str_detect()] recycle element-wise against the data instead
+#' of testing alternatives.
+#'
+#' @param form_ids Character vector of Airtable form record IDs.
+#'
+#' @return A length-1 character string: a regex matching any of `form_ids` as a
+#'   whole element of a comma-separated list.
+#'
+#' @examples
+#' form_id_pattern("recAAAAAAAAAAAAAA")
+#' form_id_pattern(c("recAAAAAAAAAAAAAA", "recBBBBBBBBBBBBBB"))
+#'
+#' @keywords preprocessing helper
+#' @export
+form_id_pattern <- function(form_ids) {
+  form_ids <- unique(form_ids[!is.na(form_ids) & nzchar(form_ids)])
+
+  if (length(form_ids) == 0) {
+    stop(
+      "No Airtable form record id to filter assets on. Filtering on an empty ",
+      "id silently returns zero asset rows, so this is an error rather than a ",
+      "warning.",
+      call. = FALSE
+    )
+  }
+
+  paste0(
+    "(^|,\\s*)(",
+    paste(stringr::str_escape(form_ids), collapse = "|"),
+    ")(\\s*,|$)"
+  )
+}
+
+#' Read the Airtable Asset Snapshot for One or More Forms
+#'
+#' @description
+#' Downloads the versioned assets snapshot written by [ingest_assets()] and
+#' returns the mapping tables for the requested form(s), ready to join against
+#' survey data.
+#'
+#' @details
+#' This is the read-side counterpart to [ingest_assets()]. The snapshot stores
+#' every country's assets in one object, with `form_id` as a comma-separated
+#' list of the forms each record belongs to — a shape created here, by
+#' [airtable_to_df()]. Decoding it correctly (whole-element match, not
+#' substring) is knowledge that belongs next to the code that encodes it, not
+#' copied into each country pipeline.
+#'
+#' `drop_cols` exists because the snapshot carries columns that are useful for
+#' partitioning but harmful to join on. `country` rides on `taxa`, `gear`,
+#' `vessels` and `geo` alike, so leaving it in place makes it collide across the
+#' successive joins downstream; `latitude`/`longitude` are free-text fields on
+#' `sites`. Dropping them can make previously distinct rows identical, so
+#' `distinct()` is applied *after* the drop, not before.
+#'
+#' A table that filters down to zero rows is warned about rather than returned
+#' silently: it almost always means the form id is valid but wrong, which would
+#' otherwise surface only as an all-`NA` column far downstream.
+#'
+#' @param form_ids Character vector of Airtable form record IDs, e.g. from
+#'   one or more `get_airtable_form_id()` calls.
+#' @param prefix Character. Storage prefix of the assets snapshot.
+#' @param provider Character. Storage provider key.
+#' @param options List. Storage options for the bucket holding the snapshot.
+#' @param tables Character vector of asset tables to return.
+#' @param drop_cols Columns removed from every table before de-duplication.
+#' @param version Snapshot version to read; defaults to the most recent.
+#'
+#' @return A named list of tibbles, one per entry in `tables`.
+#'
+#' @examples
+#' \dontrun{
+#' assets <- get_assets(
+#'   form_ids = get_airtable_form_id(conf$ingestion$wcs$asset_id, conf),
+#'   prefix   = conf$metadata$airtable$assets,
+#'   provider = conf$storage$google$key,
+#'   options  = conf$storage$google$options_coasts
+#' )
+#' assets$taxa
+#' }
+#'
+#' @seealso [ingest_assets()], [form_id_pattern()]
+#' @keywords preprocessing helper
+#' @export
+get_assets <- function(
+  form_ids,
+  prefix,
+  provider,
+  options,
+  tables = c("taxa", "gear", "vessels", "sites", "geo"),
+  drop_cols = c("country", "latitude", "longitude"),
+  version = "latest"
+) {
+  pattern <- form_id_pattern(form_ids)
+
+  snapshot <-
+    cloud_object_name(
+      prefix = prefix,
+      provider = provider,
+      version = version,
+      extension = "rds",
+      options = options
+    ) |>
+    download_cloud_file(provider = provider, options = options) |>
+    readr::read_rds()
+
+  missing_tables <- setdiff(tables, names(snapshot))
+  if (length(missing_tables) > 0) {
+    stop(
+      "Assets snapshot has no table(s): ",
+      paste(missing_tables, collapse = ", "),
+      ". Available: ",
+      paste(names(snapshot), collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  purrr::map(
+    purrr::keep_at(snapshot, tables),
+    function(tbl) {
+      if (!"form_id" %in% names(tbl)) {
+        stop(
+          "Asset table has no `form_id` column, so it cannot be filtered by ",
+          "form. Columns: ",
+          paste(names(tbl), collapse = ", "),
+          call. = FALSE
+        )
+      }
+      dplyr::filter(tbl, stringr::str_detect(.data$form_id, .env$pattern)) |>
+        dplyr::select(-dplyr::any_of(drop_cols)) |>
+        dplyr::distinct()
+    }
+  ) |>
+    purrr::imap(function(tbl, nm) {
+      if (nrow(tbl) == 0) {
+        warning(
+          "Asset table '", nm, "' matched no rows for the given form id(s). ",
+          "Downstream joins on it will yield NA.",
+          call. = FALSE
+        )
+      }
+      tbl
+    })
+}

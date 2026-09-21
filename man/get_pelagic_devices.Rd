@@ -17,7 +17,8 @@ get_pelagic_devices(
 \arguments{
 \item{token}{Character. Access token obtained from pelagic_auth()}
 
-\item{customers}{Character vector. Customer IDs to filter by. If NULL, uses default customer.}
+\item{customers}{Character vector. Customer IDs to filter by. Falls back to
+`customer_id`; one of the two is required.}
 
 \item{boats}{Character/Numeric vector. Boat IDs to filter by. If NULL, returns all boats.}
 

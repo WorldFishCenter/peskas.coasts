@@ -4,7 +4,11 @@
 \alias{get_taxa_backbone}
 \title{Build a Unified Taxonomy Backbone from FishBase and SeaLifeBase}
 \usage{
-get_taxa_backbone()
+get_taxa_backbone(version = "latest")
+}
+\arguments{
+\item{version}{FishBase / SeaLifeBase release to read. See
+[resolve_db_version()].}
 }
 \value{
 A tibble with columns: `SpecCode`, `sci_name`, `Genus`, `Species`,

@@ -4,12 +4,15 @@
 \alias{get_length_weight_coeffs}
 \title{Length-Weight Coefficients for Expanded Taxa}
 \usage{
-get_length_weight_coeffs(expanded)
+get_length_weight_coeffs(expanded, version = "latest")
 }
 \arguments{
 \item{expanded}{A table as returned by [expand_taxonomic_info()], optionally
 already restricted to an FAO area. Must contain `alpha3_code`,
 `original_name`, `SpecCode`, `species_found` and `server`.}
+
+\item{version}{FishBase / SeaLifeBase release to read. See
+[resolve_db_version()].}
 }
 \value{
 A tibble with one row per taxon code and published coefficient

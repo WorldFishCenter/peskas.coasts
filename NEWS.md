@@ -1,3 +1,177 @@
+# coasts 4.13.0
+
+## Restating length-weight coefficients on a total-length basis
+
+FishBase publishes `a` and `b` against whatever length the study measured — fork, standard, mantle, carapace. Keeping only the total-length pairs discards more than half the matched species for several taxon codes; keeping them all and pooling them mixes measurement bases, which inflates `a` by a median 15% and up to 2.8x. The answer is to restate rather than filter, and every pipeline that needed it had written its own: Zanzibar `R/model-taxa.R:876`/`:935`, Mozambique `:990`/`:1049`, Timor inline in `get_morphometric_tables()`. Three copies, three sets of semantics, and nothing comparing them.
+
+* **NEW** `convert_lw_to_tl()`, exported. Rescales `a` by `ratio^b` using the POPLL conversions from the same expansion, leaves `b` untouched, and sets `Type` to `"TL"`. Rows with no usable conversion pass through **unchanged** rather than being dropped — a caller wanting only restated pairs filters for them, and a caller wanting everything does not silently lose data. Which rows to feed in stays the caller's decision, which is the one place the three implementations genuinely disagreed.
+* Verified against Zanzibar's live pipeline at FishBase 25.04 / SeaLifeBase 24.07, area 51: the same 7 taxa with no native total-length pair (`BET`, `BLM`, `BUM`, `MLS`, `NXT`, `QJR`, `SWO` — bigeye tuna, the marlins, swordfish), the same 16 rows restated, coefficients identical. Rebuilding Zanzibar's whole coefficient table out of coasts functions alone lands within **1.19%** at worst across all 42 comparable codes, and at the median exactly on it.
+* The POPLL direction — `Length1 = aL + bL * Length2`, where the **second** column is the predictor — is now asserted in the tests rather than only described in prose. Reading that fit backwards inverts every ratio and moves weight by roughly 1.1x for fork length and 1.8x for standard length.
+* **CHANGED** `stats` is declared in `Imports`. `stats::median()` was already used by `export.R` and had never been listed.
+
+# coasts 4.12.4
+
+## Timor-Leste on the portal
+
+* **CHANGED** `export_geos()` reads `timor_monthly_summaries_map` alongside the
+  other three. Its map list already carried the TLS boundaries, so Timor drew as
+  polygons with no data behind them.
+
+Must not ship before Timor has published that parquet: a missing prefix returns
+`character(0)` and fails the read for all four countries.
+
+# coasts 4.12.3
+
+## Two guards Timor's data trips over
+
+Timor-Leste is being wired into the coasts portal and is the first country whose
+survey data hits either of these. Both are in `summarize_data()`, and neither
+changes anything for Kenya, Zanzibar or Mozambique.
+
+* **FIXED** One landing with no date aborted every summary. `tidyr::complete()`
+  builds its month sequence with `seq(min(date), max(date))`, so a single `NA`
+  makes `min()` non-finite and `summarize_data()` dies with
+  `'from' must be a finite number` before writing anything. Undated rows are
+  dropped once, up front, with a warning — a landing with no date belongs to no
+  month. Timor's frozen v1 form carries exactly one such trip; the others have
+  none.
+* **FIXED** A trip recorded with zero fishers put `Inf` in the published
+  metrics. `cpue_day` is `tot_catch_kg / n_fishers`, and `Inf` survives both
+  `mean()` and `median()` into the portal, where no axis can plot it. The five
+  derived indicators now map non-finite to `NA`, which is what an undefined
+  catch-per-fisher is. Timor has 343 such trips in production; the other three
+  have none, so their parquets are unchanged.
+
+`export_geos()` is deliberately **not** changed here. Adding
+`timor_monthly_summaries_map` to its list is a separate release, and it must not
+ship until Timor has actually published that parquet to the coasts bucket:
+`cloud_object_name()` returns `character(0)` for a missing prefix, so the read
+fails and takes all four countries' portal update down with it. This release is
+what lets Timor's pipeline produce it in the first place.
+
+# coasts 4.12.2
+
+## One empty trip took down the whole track preprocessing run
+
+A trip PDS holds no GPS points for is served as a header-only CSV, which `readr` types as all-character. `preprocess_track_data()` then divided a character `Lat` by the grid size and died with `non-numeric argument to binary operator`. Because `preprocess_pds_tracks()` maps it over every new track in a single `furrr::future_map_dfr()` pass, that one trip aborted the entire batch: no preprocessed parquet, no grid summaries, nothing uploaded, however many thousands of good tracks were in the same run.
+
+* **FIXED** An empty track is retyped and sent through the same gridding pipeline, returning zero rows with exactly the columns and types a real track returns. The batch keeps going and the empty trip contributes nothing, which is the correct answer for a track with no points.
+* **CHANGED** The gridding pipeline moved to an internal `grid_track_points()`, so the empty and normal paths cannot drift apart. Matching output types matter here beyond tidiness: `future_map_dfr()` binds the per-track results, and a character column meeting a double one is its own error.
+* **NEW** `tests/testthat/test-preprocess-track-data.R`, 3 cases, 7 assertions. It pins the empty-track behaviour, the column-type match between an empty and a real track, and that a normal track still grids.
+
+Nothing else changes. Non-empty tracks take the identical code path and produce identical output.
+
+# coasts 4.12.1
+
+## `get_pelagic_boats()` answered an opaque HTTP 400
+
+Called with neither `customers` nor `customer_id`, the function still built a customer filter with a `NULL` id and the server rejected it as a bare HTTP 400. Three of the four documented examples used exactly that form, including one labelled "get all boats" — so the documentation invited the failure.
+
+* **FIXED** A missing customer filter now errors up front, saying a customer filter is required. There is no way to query the endpoint without one.
+* **CHANGED** The examples now show only forms that work. The broken three are gone.
+* **CHANGED** The second fault is documented on the function itself rather than only in a changelog: supplying `imeis` appears to override `customers` server-side, so a request scoped to one customer can return another's boats. That is the server's behaviour and cannot be fixed here.
+
+Nothing changes for the pipeline. `ingest_pelagic_boats()` is the only caller and always passes `customer_id`, so it never took either path.
+
+# coasts 4.12.0
+
+## Selecting trips by where they happened, not by who owns the tracker today
+
+4.11.0 shipped `exclude_customers`, which fixes the redeployment defect only on a token scoped to one country. Timor-Leste has such a token. Kenya, Mozambique and Zanzibar hold the *same* token, returning 138,235 trips across **182 communities in six countries**, so for them the customer allowlist is the only thing separating the countries and the denylist is not an option. That left the four repos aligned on code but split on configuration.
+
+* **NEW** `pds.select_by: community`. Keeps a trip if it *happened* at one of the country's communities, falling back to current device ownership only where the trip carries no community. A trip's community does not change when hardware is reassigned, so this keeps redeployed devices' history **and** works on a shared token. `pds_devices.community` is unambiguous: 174 communities, **0** under more than one customer.
+* **NEW** `select_country_trips()`, exported. The rule lifted out of `ingest_pds_trips()` and made pure, which is what lets you compare rules before switching a config — and what finally made this filter testable.
+* **NEW** `tests/testthat/test-select-country-trips.R`, 11 cases, 19 assertions. There was no test for any branch of this filter, and its failure mode is a silently empty parquet.
+* **CHANGED** Keeping zero trips is now an error, as is a `trips` table missing `IMEI` or `Community`. Both previously produced an empty parquet, which becomes `version: latest` and empties the portal without anything failing.
+
+Coverage on Timor-Leste's 98,477 trips: **94,554** match a Timor community, **3,923** carry none (5.6%, the fallback), **0** belong to another country.
+
+### Nothing changes until a country sets the key
+
+`select_by` defaults to `device`, so a pipeline that does not set it keeps today's behaviour through a container rebuild. That is deliberate: **the community rule is not a strict superset of the allowlist.** A landing site whose devices have all been redeployed is missing from the community list and its trips drop out — 0 trips for Timor-Leste, unmeasured elsewhere.
+
+**Retiring a device is not one of the ways this loses data.** The boats request has no status filter, `device_sync()` never deletes, and the snapshot ignores `active`, so a retired tracker keeps its row, its `imei` and its community. The narrower risk is a device retired *before* the `pds_devices` table was first populated: it was never written, and if it was the only device at a site, that site is invisible. Zanzibar retired much of its fleet, so that is the case to measure there.
+
+The rule reports both losses itself — it warns when it drops a trip from a device the country still owns, and warns separately when a dropped trip's community belongs to no device at all. Before switching a config, run both rules over one trip table and compare:
+
+```r
+trips <- coasts::get_trips(token = conf$pds$token, secret = conf$pds$secret,
+                           dateFrom = "2018-01-01", dateTo = Sys.Date(),
+                           deviceInfo = TRUE)
+now <- coasts::select_country_trips(trips, devices, conf$pds$customers)
+new <- coasts::select_country_trips(trips, devices, conf$pds$customers,
+                                    select_by = "community")
+```
+
+Expect the count to **rise** wherever a device was redeployed. That is real effort that was being discarded, and it will raise catch estimates.
+
+### Still open
+
+* `exclude_customers` is correct only on a country-scoped token. Timor-Leste has one and uses it; Kenya, Mozambique and Zanzibar share a single token covering six countries, so `select_by: community` is the only rule available to them.
+* The 5.6% of trips with no community still fall back to device ownership, so they keep the original exposure.
+* A community claimed by no device row is dropped, since it cannot be attributed to a customer. On a country-scoped token such a community is in fact the country's own, so dropping it is a pure loss there.
+* `get_pelagic_boats()`'s two filter faults, reported in 4.11.0, are unfixed.
+
+# coasts 4.11.0
+
+## A device leaving the country deleted its whole trip history
+
+`ingest_pds_trips()` kept the trips whose `IMEI` appears in `pds_devices`, narrowed to `pds.customers`. That list records who owns a device **now**; the trips it selects are **historical**. So when a tracker is transferred to another customer — sold on, or physically shipped abroad — every trip it ever made for the original country stops being ingested, and the parquet silently shrinks.
+
+Measured in Timor-Leste, the oldest fleet: **27 devices, 2,791 trips, 2018-2022**. Their trip records name Timorese fishers and Timorese landing sites (Com, Beacou, Beto Tasi); their *current* `pds_devices` rows put them under individual boat owners in Barbados, with communities Oistins, Six Men's Bay and Pile Bay. Real effort, dropped because the hardware moved on years later. Nothing warned.
+
+This is not specific to Timor-Leste. It is the same code for every country, and the exposure is simply fleet age: Timor's devices go back to **2018-03**, Mozambique's to 2025-06, Kenya's to 2025-04, Zanzibar's to 2024-09. As that kit ages the same loss begins.
+
+* **NEW** `pds.exclude_customers`, a **denylist**: keep every trip the token returns except those from devices under the named customers. Redeployed hardware keeps its history, because the rule no longer asks who owns the device today.
+* **CHANGED** `ingest_pds_trips()` accepts either `pds.customers` (the existing allowlist) or `pds.exclude_customers`, never both, and errors if neither is set. Setting neither previously matched zero devices and wrote an empty parquet without complaint.
+* **CHANGED** The device table is no longer filtered before the trips are fetched, so the denylist branch can see every device. Both branches log how many trips survived and why.
+
+`exclude_customers: []` is valid and means *exclude nothing*. An empty list and an absent key are told apart by `is.null()`, not by length, so a country with no non-fishing project to exclude can still adopt the denylist.
+
+**The denylist is only correct on a country-scoped token.** It relies on the API returning that country's trips and no others. Verified for Timor-Leste against all 98,476 trips its token returns: every `Community` is a Timorese landing site, including on the 27 redeployed devices, which return their Timor-era trips and nothing from Barbados. **This has not been verified for Kenya, Mozambique or Zanzibar.** Check before switching, or trips from elsewhere will be ingested.
+
+**Nothing changes for a pipeline that does not set the new key.** All four countries currently set `pds.customers` and take the identical path with identical output. Timor-Leste's own switch is worth +2,791 trips (95,685 -> 97,064 after also dropping 1,412 bicycle-tracking trips that were being counted as fishing).
+
+## Known, unfixed: `get_pelagic_boats()` filters
+
+Two faults found while diagnosing the above, both still present:
+
+* Called with `customers = NULL` it still builds one entry from `customer_id`, which may also be `NULL`, and the server answers **HTTP 400**. There is no way to query without a customer filter.
+* Supplying `imeis` appears to **override** `customers` server-side: a request scoped to one customer id returned boats belonging to entirely different customers. Any diagnosis that trusts the customer filter alongside `imeis` will be wrong.
+
+# coasts 4.10.0
+
+## `"latest"` was letting FishBase move underneath the pipeline
+
+`get_combined_tbl()` called `rfishbase::fb_tbl()` with no `version`, so every taxa read followed whatever release the container's `rfishbase` happened to point at. That is not a fixed dataset, and it has already drifted: in releases 26.06 / 26.07 `Caesionidae` and `Scaridae` still exist as family names but carry **zero species**. A taxon whose reference name is one of them expands to nothing, receives no length-weight coefficients, and weighs `NA` — which sums to zero without raising anything. That is what removed `CJX` and `PWT` from Timor-Leste's portal.
+
+* **NEW** `resolve_db_version()`, shaped like the existing `resolve_fao_areas()`: explicit argument, then `metadata.fishbase.db_version`, then `"latest"`. The release is validated against `rfishbase::available_releases()` **per server**, because the two do not publish in lockstep — FishBase has `21.06`, SeaLifeBase does not. One release is passed to both servers, so a release only one of them publishes is rejected up front instead of failing partway through a run.
+* **CHANGED** `get_combined_tbl()` takes `version` and passes it to `fb_tbl()`. Every function above it takes it too — `get_taxa_backbone()`, `filter_by_fao_area()`, `expand_taxonomic_info()`, `get_length_weight_coeffs()`, `get_length_length_coeffs()`.
+* **CHANGED** `get_taxa_morphometrics()` and `enrich_taxa()` resolve the release **once**, at the top, and thread that one value through all their reads. A single run therefore cannot mix two snapshots of FishBase — which is the failure a per-call default would still allow.
+* **CHANGED** `expand_taxonomic_info()` inner-joins the backbone, so a name that matches nothing simply disappears. It now logs the dropped names at WARN, with a count. This is the signal that was missing when `Caesionidae` went empty.
+* **CHANGED** The resolved release is logged next to the row counts already emitted by `get_taxa_morphometrics()` and `enrich_taxa()`, so a run's output says which snapshot produced it.
+* **NEW** `metadata.fishbase.db_version` in `inst/conf.yml`, set to `"latest"`.
+
+**Nothing changes for a pipeline that does not set the key.** The default stays `"latest"`, so output is byte-identical until a country opts in — verified live: `get_combined_tbl("popll")` returns 28,062 rows at `25.04` and 28,016 at `24.07`, and the unpinned path is unchanged. Pinning is the point, though: `"latest"` *is* the drift.
+
+**This unblocks Timor-Leste.** It reads FishBase only through this package, and `rfishbase` has no global version option, so the release had to become a function argument here before Timor could pin anything at all. `peskas.zanzibar.data.pipeline` and `peskas.mozambique.data.pipeline` still carry their own copies of this logic (`getLWCoeffs()`, with separate `fishbase_version` / `sealifebase_version` keys); those are temporary and fold into this package later, so do not treat them as the target shape.
+
+Covered by `tests/testthat/test-fishbase-version.R`, which mocks `available_releases()` for the per-server validation and the backbone for the dropped-name log.
+
+## `get_length_length_coeffs()` documented the conversion backwards
+
+* **FIXED (docs only)** The POPLL fit is `Length1 = aL + bL * Length2` — the *second* column is the predictor. Releases up to 4.9.0 documented it as `Length2 = aL + bL * Length1`. Nothing in the returned columns changes; the risk was to callers following the doc, since reading it backwards inverts every ratio, which is worse than not converting. The data settles it: over FishBase 25.04, `TL ~ FL` rows have a median `bL` of 1.052 (n = 6,641) and `TL ~ SL` a median of 1.204 (n = 8,848). Total length exceeds fork length, and standard length by more, so `bL` is the multiplier onto `Length2`.
+
+# coasts 4.9.0
+
+## `get_assets()`: one place that knows how to read the assets snapshot
+
+The snapshot stores every country's assets in one object, with `form_id` as a comma-separated list of the forms each record belongs to — a shape created here, by `airtable_to_df(list_handler = "collapse")`. Until now every country pipeline decoded that shape itself, in hand-copied blocks. One bad edit to two of those copies took down the Zanzibar and Mozambique pipelines; a third copy carried the same latent faults.
+
+`get_assets()` is the read-side counterpart to `ingest_assets()`: download, filter to the requested form(s), drop the columns that are useful for partitioning but harmful to join on, de-duplicate. `form_id_pattern()` is exported alongside it for callers that need the regex directly.
+
+Both reject the two inputs that previously failed *silently*: an empty form id, which recycled into a pattern matching only empty strings so every asset table came back empty and every join yielded `NA`; and a multi-element id, which made `str_detect()` recycle element-wise against the data rather than test alternatives. An asset table that filters to zero rows now warns, since that means the form id is valid but wrong.
+
 # coasts 4.8.0
 
 ## `exclude_dashboard_ids` was silently emptying the multi-country portal
