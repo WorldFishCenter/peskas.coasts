@@ -6,7 +6,7 @@
 \usage{
 run_stock_assessment(
   n_species = 5L,
-  countries = c("kenya", "mozambique", "zanzibar"),
+  countries = c("kenya", "mozambique", "zanzibar", "timor"),
   methods = c("lbi", "lbspr", "lbb"),
   start_date = "2024-01-01",
   lbb_engine = NULL,
@@ -18,7 +18,7 @@ run_stock_assessment(
 \item{n_species}{Integer. Priority species per country. Default 5.}
 
 \item{countries}{Character vector of country keys under `conf$api$trips`.
-Default Kenya, Mozambique, Zanzibar.}
+Default Kenya, Mozambique, Zanzibar, Timor-Leste.}
 
 \item{methods}{Character vector of methods (`"lbi"`, `"lbspr"`, `"lbb"`).}
 

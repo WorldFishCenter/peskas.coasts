@@ -594,7 +594,7 @@ assess_species_stock <- function(
 #'
 #' @param n_species Integer. Priority species per country. Default 5.
 #' @param countries Character vector of country keys under `conf$api$trips`.
-#'   Default Kenya, Mozambique, Zanzibar.
+#'   Default Kenya, Mozambique, Zanzibar, Timor-Leste.
 #' @param methods Character vector of methods (`"lbi"`, `"lbspr"`, `"lbb"`).
 #' @param start_date Earliest landing date to include, aligning with the
 #'   PDS-covered window. Default `"2024-01-01"`.
@@ -610,7 +610,7 @@ assess_species_stock <- function(
 #' @export
 run_stock_assessment <- function(
   n_species = 5L,
-  countries = c("kenya", "mozambique", "zanzibar"),
+  countries = c("kenya", "mozambique", "zanzibar", "timor"),
   methods = c("lbi", "lbspr", "lbb"),
   start_date = "2024-01-01",
   lbb_engine = NULL,
@@ -619,6 +619,13 @@ run_stock_assessment <- function(
 ) {
   logger::log_threshold(log_threshold)
   conf <- read_config(package = package)
+
+  # Default to the JAGS LBB engine when one is not supplied; it returns NULL
+  # gracefully if JAGS/rjags is unavailable, so the framework still runs on
+  # the indicator and SPR methods.
+  if (is.null(lbb_engine) && "lbb" %in% methods) {
+    lbb_engine <- lbb_engine_jags
+  }
 
   logger::log_info(
     "=== Stock assessment | {paste(countries, collapse = ', ')} ",

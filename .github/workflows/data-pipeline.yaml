@@ -229,3 +229,19 @@ jobs:
       - name: Call export_effort_gear_shapefiles()
         run: Rscript -e 'coasts::export_effort_gear_shapefiles()'
 
+
+  stock-assessment:
+    name: Run length-based stock assessment
+    needs: build-container
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call run_stock_assessment()
+        run: Rscript -e 'coasts::run_stock_assessment()'
