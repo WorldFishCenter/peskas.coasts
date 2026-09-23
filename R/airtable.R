@@ -666,7 +666,8 @@ fetch_asset <- function(
     token = conf$airtable$token
   ) |>
     janitor::clean_names() |>
-    dplyr::select(dplyr::all_of(select_cols))
+    dplyr::select(dplyr::all_of(select_cols)) |>
+    dplyr::mutate(dplyr::across(dplyr::where(is.character), trimws))
 }
 
 #' Build a Form-ID Match Pattern for Airtable Asset Tables
@@ -822,7 +823,9 @@ get_assets <- function(
     purrr::imap(function(tbl, nm) {
       if (nrow(tbl) == 0) {
         warning(
-          "Asset table '", nm, "' matched no rows for the given form id(s). ",
+          "Asset table '",
+          nm,
+          "' matched no rows for the given form id(s). ",
           "Downstream joins on it will yield NA.",
           call. = FALSE
         )

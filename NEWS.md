@@ -1,3 +1,13 @@
+# coasts 4.14.0
+
+## Airtable asset text is trimmed on ingest
+
+* **FIXED**
+
+`fetch_asset()` now strips leading and trailing whitespace from every character
+column, so the assets snapshot the country pipelines read can no longer carry a
+padded join key.
+
 # coasts 4.13.0
 
 ## Restating length-weight coefficients on a total-length basis
