@@ -1713,7 +1713,8 @@ assign_h3_indices <- function(
   # plausible cell on the far side of the world without complaint. See
   # [valid_coordinates()].
   df_clean <- df[
-    valid_coordinates(df[[lon_col]], df[[lat_col]]), ,
+    valid_coordinates(df[[lon_col]], df[[lat_col]]),
+    ,
     drop = FALSE
   ]
 

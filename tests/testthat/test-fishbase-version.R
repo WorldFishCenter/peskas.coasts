@@ -9,9 +9,13 @@
 test_that("db_version resolves from argument, then config, then latest", {
   expect_equal(resolve_db_version(list()), "latest")
   expect_equal(
-    resolve_db_version(list(metadata = list(fishbase = list(
-      db_version = "25.04"
-    )))),
+    resolve_db_version(list(
+      metadata = list(
+        fishbase = list(
+          db_version = "25.04"
+        )
+      )
+    )),
     "25.04"
   )
   # An explicit argument beats configuration.

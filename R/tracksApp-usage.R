@@ -50,7 +50,12 @@ calculate_catch_record_usage <- function(
 ) {
   trips |>
     janitor::clean_names() |>
-    dplyr::select(c(.data$created_at, .data$imei, .data$boat_name, .data$trip_id)) |>
+    dplyr::select(c(
+      .data$created_at,
+      .data$imei,
+      .data$boat_name,
+      .data$trip_id
+    )) |>
     dplyr::rename(date = "created_at") |>
     dplyr::right_join(users, by = c("imei", "boat_name")) |>
     dplyr::filter(.data$country %in% countries) |>
@@ -58,7 +63,12 @@ calculate_catch_record_usage <- function(
     dplyr::mutate(
       date_week = lubridate::floor_date(.data$date, unit = "week")
     ) |>
-    dplyr::group_by(.data$country, .data$date_week, .data$boat_name, .data$imei) |>
+    dplyr::group_by(
+      .data$country,
+      .data$date_week,
+      .data$boat_name,
+      .data$imei
+    ) |>
     dplyr::summarise(
       catch_records = dplyr::n_distinct(.data$trip_id),
       .groups = "drop"
@@ -66,7 +76,11 @@ calculate_catch_record_usage <- function(
     dplyr::arrange(dplyr::desc(.data$catch_records)) |>
     dplyr::distinct() |>
     dplyr::mutate(
-      catch_records = dplyr::if_else(is.na(.data$date_week), 0, .data$catch_records)
+      catch_records = dplyr::if_else(
+        is.na(.data$date_week),
+        0,
+        .data$catch_records
+      )
     )
 }
 

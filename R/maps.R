@@ -110,13 +110,16 @@ derive_fishing_grounds <- function(
     h3_grid_df |>
       dplyr::group_by(.data$h3_index) |>
       dplyr::summarise(
-        fishing_hours        = sum(.data$fishing_hours),
-        unique_trips         = sum(.data$unique_trips),
-        active_dates         = list(sort(unique(do.call(c, .data$active_dates)))),
-        avg_fidelity_sum     = sum(.data$avg_fidelity_sum, na.rm = TRUE),
+        fishing_hours = sum(.data$fishing_hours),
+        unique_trips = sum(.data$unique_trips),
+        active_dates = list(sort(unique(do.call(c, .data$active_dates)))),
+        avg_fidelity_sum = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
-        fishing_pings        = if ("fishing_pings" %in% names(h3_grid_df))
-          sum(.data$fishing_pings) else NA_integer_,
+        fishing_pings = if ("fishing_pings" %in% names(h3_grid_df)) {
+          sum(.data$fishing_pings)
+        } else {
+          NA_integer_
+        },
         .groups = "drop"
       ) |>
       dplyr::mutate(
@@ -142,7 +145,8 @@ derive_fishing_grounds <- function(
     as.numeric(
       max(grid$last_active_date, na.rm = TRUE) -
         min(grid$first_active_date, na.rm = TRUE)
-    ) + 1
+    ) +
+      1
   } else if (!is.null(n_days)) {
     n_days
   } else if ("year" %in% names(h3_grid_df)) {
@@ -165,13 +169,16 @@ derive_fishing_grounds <- function(
       ) |>
       dplyr::group_by(.data$h3_index) |>
       dplyr::summarise(
-        fishing_hours        = sum(.data$fishing_hours),
-        unique_trips         = sum(.data$unique_trips),
-        active_dates         = list(sort(unique(do.call(c, .data$active_dates)))),
-        avg_fidelity_sum     = sum(.data$avg_fidelity_sum, na.rm = TRUE),
+        fishing_hours = sum(.data$fishing_hours),
+        unique_trips = sum(.data$unique_trips),
+        active_dates = list(sort(unique(do.call(c, .data$active_dates)))),
+        avg_fidelity_sum = sum(.data$avg_fidelity_sum, na.rm = TRUE),
         n_trips_for_fidelity = sum(.data$n_trips_for_fidelity, na.rm = TRUE),
-        fishing_pings        = if ("fishing_pings" %in% names(grid))
-          sum(.data$fishing_pings) else NA_integer_,
+        fishing_pings = if ("fishing_pings" %in% names(grid)) {
+          sum(.data$fishing_pings)
+        } else {
+          NA_integer_
+        },
         .groups = "drop"
       ) |>
       dplyr::mutate(
@@ -258,15 +265,15 @@ derive_fishing_grounds <- function(
     dplyr::filter(!is.na(.data$ground_id)) |>
     dplyr::group_by(.data$ground_id) |>
     dplyr::summarise(
-      fishing_hours      = sum(.data$fishing_hours, na.rm = TRUE),
-      unique_trips       = sum(.data$unique_trips, na.rm = TRUE),
-      n_active_days      = length(unique(do.call(c, .data$active_dates))),
-      n_cells            = dplyr::n(),
-      avg_fidelity       = mean(.data$avg_fidelity, na.rm = TRUE),
-      constancy          = mean(.data$constancy, na.rm = TRUE),
-      avg_hours_per_day  = mean(.data$avg_hours_per_day, na.rm = TRUE),
+      fishing_hours = sum(.data$fishing_hours, na.rm = TRUE),
+      unique_trips = sum(.data$unique_trips, na.rm = TRUE),
+      n_active_days = length(unique(do.call(c, .data$active_dates))),
+      n_cells = dplyr::n(),
+      avg_fidelity = mean(.data$avg_fidelity, na.rm = TRUE),
+      constancy = mean(.data$constancy, na.rm = TRUE),
+      avg_hours_per_day = mean(.data$avg_hours_per_day, na.rm = TRUE),
       avg_visits_per_day = mean(.data$avg_visits_per_day, na.rm = TRUE),
-      hours_per_trip     = mean(.data$hours_per_trip, na.rm = TRUE),
+      hours_per_trip = mean(.data$hours_per_trip, na.rm = TRUE),
       .groups = "drop"
     )
 
@@ -277,14 +284,20 @@ derive_fishing_grounds <- function(
       ~ tidyr::replace_na(., 0L)
     )) |>
     dplyr::mutate(
-      fishing_hours_per_km2  = dplyr::if_else(
-        .data$area_km2 > 0, .data$fishing_hours / .data$area_km2, NA_real_
+      fishing_hours_per_km2 = dplyr::if_else(
+        .data$area_km2 > 0,
+        .data$fishing_hours / .data$area_km2,
+        NA_real_
       ),
-      unique_trips_per_km2   = dplyr::if_else(
-        .data$area_km2 > 0, .data$unique_trips / .data$area_km2, NA_real_
+      unique_trips_per_km2 = dplyr::if_else(
+        .data$area_km2 > 0,
+        .data$unique_trips / .data$area_km2,
+        NA_real_
       ),
-      hours_per_day_per_km2  = dplyr::if_else(
-        .data$area_km2 > 0, .data$avg_hours_per_day / .data$area_km2, NA_real_
+      hours_per_day_per_km2 = dplyr::if_else(
+        .data$area_km2 > 0,
+        .data$avg_hours_per_day / .data$area_km2,
+        NA_real_
       )
     ) |>
     dplyr::arrange(dplyr::desc(.data$area_km2))

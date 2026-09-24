@@ -163,7 +163,9 @@ summarize_data <- function(
       dplyr::mutate(
         price_kg = .data$tot_catch_price / .data$tot_catch_kg,
         cpue = .data$tot_catch_kg / .data$n_fishers / .data$trip_duration_hrs,
-        rpue = .data$tot_catch_price / .data$n_fishers / .data$trip_duration_hrs,
+        rpue = .data$tot_catch_price /
+          .data$n_fishers /
+          .data$trip_duration_hrs,
         cpue_day = .data$tot_catch_kg / .data$n_fishers,
         rpue_day = .data$tot_catch_price / .data$n_fishers
       ) |>

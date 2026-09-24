@@ -1,12 +1,12 @@
 ll <- function(...) {
   dplyr::tribble(
-    ~species_found, ~server, ~Length1, ~Length2, ~aL, ~bL,
+    ~species_found , ~server , ~Length1 , ~Length2 , ~aL , ~bL ,
     ...
   )
 }
 lw <- function(...) {
   dplyr::tribble(
-    ~alpha3_code, ~species_found, ~server, ~Type, ~a, ~b,
+    ~alpha3_code , ~species_found , ~server , ~Type , ~a , ~b ,
     ...
   )
 }
@@ -40,9 +40,24 @@ test_that("POPLL is read as Length1 = aL + bL * Length2, not the reverse", {
 test_that("rows with no usable conversion pass through untouched", {
   out <- convert_lw_to_tl(
     lw(
-      "EMP", "Sp one", "fishbase", "FL", 0.02, 3.1, # no conversion published
-      "EMP", "Sp one", "fishbase", "TL", 0.03, 3.0, # already total length
-      "OCZ", "Sp two", "sealifebase", "SL", 0.04, 2.9 # different species
+      "EMP",
+      "Sp one",
+      "fishbase",
+      "FL",
+      0.02,
+      3.1, # no conversion published
+      "EMP",
+      "Sp one",
+      "fishbase",
+      "TL",
+      0.03,
+      3.0, # already total length
+      "OCZ",
+      "Sp two",
+      "sealifebase",
+      "SL",
+      0.04,
+      2.9 # different species
     ),
     ll("Sp one", "fishbase", "SL", "TL", 0, 0.8)
   )
@@ -54,9 +69,24 @@ test_that("several published conversions collapse to their median", {
   out <- convert_lw_to_tl(
     lw("EMP", "Sp one", "fishbase", "SL", 0.01, 3),
     ll(
-      "Sp one", "fishbase", "SL", "TL", 0, 0.7,
-      "Sp one", "fishbase", "SL", "TL", 0, 0.8,
-      "Sp one", "fishbase", "SL", "TL", 0, 0.9
+      "Sp one",
+      "fishbase",
+      "SL",
+      "TL",
+      0,
+      0.7,
+      "Sp one",
+      "fishbase",
+      "SL",
+      "TL",
+      0,
+      0.8,
+      "Sp one",
+      "fishbase",
+      "SL",
+      "TL",
+      0,
+      0.9
     )
   )
   expect_equal(out$a, 0.01 * 0.8^3)
