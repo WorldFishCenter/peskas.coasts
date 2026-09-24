@@ -34,7 +34,7 @@ articles:
 
 reference:
   - title: "The Automated Pipeline"
-    desc: "Functions that drive the bi-daily GitHub Actions workflow."
+    desc: "Functions that drive the daily GitHub Actions workflow."
     contents:
       - ingest_assets
       - enrich_taxa

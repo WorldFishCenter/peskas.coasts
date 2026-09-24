@@ -4,38 +4,120 @@ output: github_document
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# Peskas Coasts: Coastal Fisheries Data Pipeline
+# Peskas Coasts data pipeline
 
-[![R-CMD-check](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/R-CMD-check.yaml)
 [![pkgdown](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml)
-[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-**Peskas Coasts** is the automated data pipeline powering the coastal fisheries analytics at [Peskas.org](https://peskas.org/).
+The code that turns boat GPS tracks into fishing maps, prepares the data for the Peskas Coasts and Peskas Tracks apps, and supplies the shared tools every Peskas country pipeline uses.
 
-This project processes raw ocean tracking data and generates accessible web dashboards for the Western Indian Ocean (WIO) region, including Kenya, Mozambique, and Zanzibar.
+**See the results:** [Peskas Coasts](https://coasts.peskas.org) (regional comparison across countries) and [Peskas Tracks](https://tracks.peskas.org) (app for fishers). **Read more:** [How the pipeline works](https://worldfishcenter.github.io/peskas.coasts/articles/pipeline.html) and [Understanding the models](https://worldfishcenter.github.io/peskas.coasts/articles/metrics-and-models.html).
 
-## What Does This Project Do?
+## What it is
 
-**Peskas Coasts** is an automated data pipeline. Every two days, a scheduled GitHub Actions workflow performs a series of data gathering, classification, and spatial modeling tasks:
+This repository does three jobs for Peskas, WorldFish's system for monitoring small-scale fisheries. It prepares the data behind Peskas Coasts, which compares fishing in Kenya, Zanzibar, Mozambique and Timor-Leste. It keeps Peskas Tracks up to date, the app where fishers see their trips and log their catches. It is also the shared toolkit that the Kenya, Zanzibar, Mozambique and Timor-Leste pipelines use to download GPS tracks, read surveys, store files and publish dashboard data.
 
-1. **Data Ingestion**: Fetches the latest boat GPS tracks from Pelagic Data Systems (PDS) and combines them with human-reported survey data (KoboToolbox).
-2. **Fishing Activity Prediction**: Uses a statistical model (`ssfaitk`) to classify parts of the boat's journey as fishing activity.
-3. **Spatial Modeling**: Translates GPS pings into standardized hexagonal grids (H3) and calculates fisheries metrics, like **Catch Per Unit Effort (CPUE)**.
-4. **Dashboard Delivery**: Exports the final results into web-ready formats (JSON/GeoJSON) and pushes them to MongoDB to update the maps on Peskas.org.
+## What it produces
 
-## Explore the Documentation
+- Maps where boats fish and for how long, by grouping GPS tracks into a standard grid of small hexagons of sea.
+- Estimates catch per hour of fishing in each hexagon for the most-caught species, by linking GPS tracks to landing surveys.
+- Draws the outlines of the main fishing grounds.
+- Combines monthly catch, revenue and price indicators from the four countries, by region and district, with money shown in US dollars.
+- Keeps Peskas Tracks running: fisher accounts linked to each boat's tracker, trip and catch statistics for each fisher, and a weekly report on how the app is used.
+- Backs up the GPS tracks every day.
 
-We've designed this documentation to be accessible to stakeholders, researchers, and developers alike:
+## Where the data comes from
 
-* 📖 **How the Pipeline Works**: A plain-English walkthrough of our automated GitHub Actions workflow. Learn how data travels from a boat's GPS tracker to our web portal.
-* 🗺️ **Understanding the Models**: Discover how we calculate Catch Per Unit Effort (CPUE) and why we use Hexagonal (H3) gridding to protect fisher privacy while highlighting ocean hotspots.
-* 🛠️ **Reference**: For developers looking to interact with the underlying R functions and APIs.
+- **GPS tracks.** GPS trackers (Pelagic Data Systems) are small solar-powered devices on boats that record where they travel. The pipeline downloads new trips and their tracks. A statistical model from WorldFish's [SSF AI toolkit](https://github.com/WorldFishCenter/ssf-ai-toolkit) then marks which parts of each track were fishing and which were travelling.
+- **Landing surveys.** A landing is a boat's return to shore with its catch, recorded by an enumerator (a trained data collector). This pipeline does not read the survey forms itself. It takes the trips that the Kenya, Zanzibar and Mozambique pipelines have already checked and matched to GPS trips, and the monthly summaries that all four country pipelines publish.
+- **Reference data.** Boat and tracker records kept in Airtable, the boundaries of regions and districts (FAO's standard administrative boundaries), and species data from FishBase and SeaLifeBase.
+- **Peskas Tracks.** The catches fishers log in the app.
 
-## The Impact
+The main pipeline runs every day. Fisher accounts in Peskas Tracks are updated every three days and the app usage report is made every Monday.
 
-By automating data cleaning, model prediction, and spatial aggregation, Peskas Coasts provides updated spatial datasets for coastal monitoring.
+**Catch per unit of effort (CPUE)** here means kilograms of catch per hour of fishing, calculated for each hexagon from all the matched trips that fished there.
 
----
+Known limits:
 
-*Peskas Coasts is proudly developed as part of the WorldFish Center's Peskas initiative.*
+- Catch per hour is only calculated for trips that have both a GPS track and a landing survey, for the five most-caught species, and only in hexagons fished by at least three such trips.
+- Money is converted to US dollars with fixed exchange rates written in the code, not current market rates.
+
+## Who runs it
+
+WorldFish builds and runs this pipeline. The survey data comes from each country's partners; see the country pipelines below. For questions, write to <peskas.platform@gmail.com>.
+
+## Part of Peskas
+
+Peskas is WorldFish's open-source platform for monitoring small-scale fisheries (https://peskas.org).
+
+- [Peskas Zanzibar](https://zanzibar.peskas.org), [Peskas Kenya](https://peskas-dashboard-kenya.vercel.app/en), [Peskas Mozambique](https://peskas-dashboard-mozambique.vercel.app): country dashboards
+- [Peskas Timor-Leste](https://timor.peskas.org): Timor-Leste portal
+- [Peskas Coasts](https://coasts.peskas.org): regional comparison across countries
+- [Peskas Tracks](https://tracks.peskas.org): app for fishers to see their trips and log catches
+- [Peskas Kenya BMU dashboard](https://digitalfisheries.kenya.peskas.org): dashboard for Beach Management Units in Kenya
+- [Peskas Management Platform](https://validation.peskas.org): data review and download for survey teams
+- [Peskas Fishery Data API](https://api.peskas.org/docs): programmatic access to landing data
+- Data pipelines: [Kenya](https://github.com/WorldFishCenter/peskas.kenya.data.pipeline), [Zanzibar](https://github.com/WorldFishCenter/peskas.zanzibar.data.pipeline), [Mozambique](https://github.com/WorldFishCenter/peskas.mozambique.data.pipeline), [Timor-Leste](https://github.com/WorldFishCenter/peskas.timor.data.pipeline)
+
+## For developers
+
+The code is an R package called `coasts`. Function reference and articles: <https://worldfishcenter.github.io/peskas.coasts/>.
+
+### Requirements
+
+- R 4.5 with the GDAL, GEOS and PROJ spatial libraries. Production uses the `rocker/geospatial:4.5` image.
+- Python 3 with `ssfaitk` from the SSF AI toolkit, which `predict_pds_tracks()` calls through reticulate. [`Dockerfile.prod`](Dockerfile.prod) shows the exact setup.
+
+### Setup
+
+```r
+devtools::install_deps()
+devtools::load_all()
+```
+
+Credentials come from environment variables. Create a `.env` file in the repository root (it is git-ignored; there is no example file). `read_config()` loads it and reads [`inst/conf.yml`](inst/conf.yml). The variables are:
+
+- Pelagic Data Systems: `PDS_TOKEN`, `PDS_SECRET`, `PDS_USERNAME`, `PDS_PASSWORD`, `PDS_CUSTOMER_ID`
+- Google Cloud: `GCP_SA_KEY` (the service account JSON on a single line)
+- MongoDB: `MONGODB_CONNECTION_STRING_COASTS`, `MONGODB_CONNECTION_STRING_TRACKS`
+- Metadata: `GOOGLE_SHEET_ID`, `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID_FRAME`, `AIRTABLE_BASE_ID_TRACKS_APP`
+
+The `default` profile uses the development buckets and databases. The `production` profile is switched on only by CI on `main`.
+
+### Main commands
+
+```r
+devtools::document()  # after editing roxygen comments; man/ is committed
+devtools::test()
+devtools::check()
+```
+
+Each pipeline step is one exported function, for example `coasts::preprocess_pds_tracks()`. The order of the steps is in [`.github/workflows/data-pipeline.yaml`](.github/workflows/data-pipeline.yaml).
+
+### How it runs in production
+
+GitHub Actions runs every job inside a Docker image built from `Dockerfile.prod`. Runs on `main` use the `production` profile; runs on any other branch use `default`, which writes to the development buckets and databases.
+
+| Workflow | When it runs | What it does |
+|---|---|---|
+| [`data-pipeline.yaml`](.github/workflows/data-pipeline.yaml) | Daily at 00:00 UTC, and on every push | The full pipeline |
+| [`tracks-backup.yaml`](.github/workflows/tracks-backup.yaml) | Daily at 00:00 UTC, and on push to `main` | Backs up the GPS tracks |
+| [`sync-devices-users.yaml`](.github/workflows/sync-devices-users.yaml) | 03:00 UTC on the 1st, 4th, 7th, ... of each month | Copies tracker records to Airtable and updates Peskas Tracks accounts |
+| [`app-usage-report.yaml`](.github/workflows/app-usage-report.yaml) | Mondays at 00:00 UTC, and on push to `main` | Builds the Peskas Tracks usage report |
+
+The country pipelines install the latest GitHub release of `coasts` when they build their images, so a change reaches them only after it is released.
+
+### Releases
+
+Bump `Version:` in `DESCRIPTION` and add a block at the top of [`NEWS.md`](NEWS.md) headed `# coasts X.Y.Z`, written for non-technical readers. On push to `main`, `release.yaml` turns that block into a GitHub release if the version is new.
+
+### Tests
+
+`devtools::test()` runs the tests in `tests/testthat`. No workflow runs them automatically yet.
+
+### Contributing
+
+Read [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md). Code follows the [tidyverse style guide](https://style.tidyverse.org); comment `/style` on a pull request to apply it. New to R packages? See [*R Packages*](https://r-pkgs.org) by Hadley Wickham and Jenny Bryan. For AI-assisted work, see [`CLAUDE.md`](CLAUDE.md).
+
+## Licence
+
+GPL-3 or later. See [`LICENSE.md`](LICENSE.md).

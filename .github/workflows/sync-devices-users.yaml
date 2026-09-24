@@ -2,7 +2,7 @@ name: Sync PDS Devices & Users
 
 on:
   schedule:
-    # Run every 10 days at 3:00 AM UTC
+    # 03:00 UTC on days 1, 4, 7, ... of each month
     - cron: '0 3 */3 * *'
   workflow_dispatch: # Allow manual triggering
 

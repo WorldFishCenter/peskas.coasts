@@ -10,8 +10,9 @@ Description: Provides a comprehensive data pipeline for processing and analyzing
     and geospatial information to support fisheries research and management.
     Features include automated data ingestion from PDS API, spatial gridding and
     summarization of fishing activity patterns, MongoDB integration with geospatial
-    indexing, and cloud storage capabilities. Supports data from Kenya and Zanzibar
-    fisheries with built-in currency conversion and regional harmonization.
+    indexing, and cloud storage capabilities. Supports data from Kenya,
+    Zanzibar, Mozambique and Timor-Leste fisheries with built-in currency
+    conversion and regional harmonization.
 License: GPL (>= 3)
 URL: https://github.com/WorldFishCenter/peskas.coasts
 BugReports: https://github.com/WorldFishCenter/peskas.coasts/issues
