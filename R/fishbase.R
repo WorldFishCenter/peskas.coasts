@@ -611,30 +611,9 @@ get_length_length_coeffs <- function(
 #' )
 #' }
 convert_lw_to_tl <- function(length_weight, length_length, max_intercept = 1) {
-  ratios <- length_length |>
-    dplyr::filter(
-      !is.na(.data$bL),
-      .data$bL > 0,
-      !is.na(.data$aL),
-      abs(.data$aL) <= max_intercept
-    ) |>
-    dplyr::mutate(
-      Type = dplyr::case_when(
-        .data$Length2 == "TL" ~ .data$Length1,
-        .data$Length1 == "TL" ~ .data$Length2,
-        TRUE ~ NA_character_
-      ),
-      ratio = dplyr::case_when(
-        .data$Length2 == "TL" ~ .data$bL,
-        .data$Length1 == "TL" ~ 1 / .data$bL,
-        TRUE ~ NA_real_
-      )
-    ) |>
-    dplyr::filter(
-      !is.na(.data$Type),
-      .data$Type != "TL",
-      !is.na(.data$ratio)
-    ) |>
+  # `L_type ~= ratio * TL`, the fit's intercept set aside.
+  ratios <- tl_conversions(length_length, max_intercept) |>
+    dplyr::mutate(ratio = 1 / .data$slope) |>
     dplyr::group_by(.data$species_found, .data$server, .data$Type) |>
     dplyr::summarise(ratio = stats::median(.data$ratio), .groups = "drop")
 
@@ -656,6 +635,34 @@ convert_lw_to_tl <- function(length_weight, length_length, max_intercept = 1) {
   )
 
   dplyr::select(restated, -"ratio")
+}
+
+#' Total-length conversions from POPLL fits
+#'
+#' POPLL fits `Length1 = aL + bL * Length2`, the second column being the
+#' predictor. Each fit between total length and one other length type becomes
+#' `TL = intercept + slope * <Type>`, inverted when total length is the predictor.
+#'
+#' @param length_length Rows from [get_length_length_coeffs()].
+#' @param max_intercept Fits whose `aL` exceeds this in absolute value are dropped.
+#' @return `length_length` rows with `Type`, `intercept` and `slope` added.
+#' @noRd
+tl_conversions <- function(length_length, max_intercept = Inf) {
+  length_length |>
+    dplyr::filter(
+      !is.na(.data$bL),
+      .data$bL > 0,
+      !is.na(.data$aL),
+      abs(.data$aL) <= max_intercept,
+      xor(.data$Length1 == "TL", .data$Length2 == "TL")
+    ) |>
+    dplyr::mutate(
+      tl_predicts = .data$Length2 == "TL",
+      Type = dplyr::if_else(.data$tl_predicts, .data$Length1, .data$Length2),
+      intercept = dplyr::if_else(.data$tl_predicts, -.data$aL / .data$bL, .data$aL),
+      slope = dplyr::if_else(.data$tl_predicts, 1 / .data$bL, .data$bL)
+    ) |>
+    dplyr::select(-"tl_predicts")
 }
 
 #' Build Length-Weight and Length-Length Tables for a Set of Taxa
@@ -841,7 +848,10 @@ get_taxa_morphometrics <- function(
 #' 3. Restricts species to the resolved FAO area(s) via [filter_by_fao_area()],
 #'    always keeping species with no area assignment.
 #' 4. Joins species-level data from the `species`, `ecology`, and `estimate`
-#'    tables.
+#'    tables, the family, order and class, the IUCN and CITES codes from
+#'    `stocks`, the median length at first maturity from `maturity` and the
+#'    optimum length from the asymptotic length in `popgrowth`, both restated
+#'    to total length with the `popll` fits where a study used another length.
 #' 5. Deduplicates by taking the first non-`NA` value per group.
 #' 6. Cleans column names with [janitor::clean_names()].
 #' 7. Uploads the result via [upload_parquet_to_cloud()] using the
@@ -949,9 +959,16 @@ enrich_taxa <- function(
       "Dangerous",
       "MainCatchingMethod",
       "Importance",
-      "DemersPelag"
+      "DemersPelag",
+      "FamCode"
     ) |>
-    dplyr::distinct()
+    dplyr::distinct() |>
+    dplyr::left_join(
+      get_combined_tbl("families", version = version) |>
+        dplyr::select("FamCode", "Family", "Order", "Class", "server"),
+      by = c("FamCode", "server")
+    ) |>
+    dplyr::select(-"FamCode")
 
   trophic_tab <- get_combined_tbl("ecology", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes) |>
@@ -1004,13 +1021,74 @@ enrich_taxa <- function(
     ) |>
     dplyr::distinct()
 
+  # Conservation status lives per stock; step 5 keeps a species' first
+  # recorded status.
+  stocks_tab <- get_combined_tbl("stocks", version = version) |>
+    dplyr::filter(.data$SpecCode %in% target_codes) |>
+    dplyr::select("SpecCode", "StockCode", "server", "IUCN_Code", "CITES_Code")
+
+  # Lengths on a total-length basis, which is what the landing surveys
+  # measure: a study on fork or standard length is restated with the species'
+  # POPLL fits, and left out when no fit converts it.
+  to_tl <- get_length_length_coeffs(
+    expanded_assets_filtered,
+    length_types = NULL,
+    version = version
+  ) |>
+    tl_conversions() |>
+    dplyr::distinct(.data$SpecCode, .data$server, .data$Type, .data$intercept, .data$slope) |>
+    dplyr::group_by(.data$SpecCode, .data$server, .data$Type) |>
+    dplyr::summarise(
+      intercept = stats::median(.data$intercept),
+      slope = stats::median(.data$slope),
+      .groups = "drop"
+    )
+  median_tl <- function(data, length, type, name) {
+    data |>
+      dplyr::select("SpecCode", "server", value = dplyr::all_of(length), Type = dplyr::all_of(type)) |>
+      dplyr::filter(!is.na(.data$value), !is.na(.data$Type)) |>
+      dplyr::left_join(to_tl, by = c("SpecCode", "server", "Type")) |>
+      dplyr::mutate(
+        tl = dplyr::if_else(
+          .data$Type == "TL",
+          .data$value,
+          .data$intercept + .data$slope * .data$value
+        )
+      ) |>
+      dplyr::filter(!is.na(.data$tl)) |>
+      dplyr::group_by(.data$SpecCode, .data$server) |>
+      dplyr::summarise({{ name }} := stats::median(.data$tl), .groups = "drop")
+  }
+
+  # Length at first maturity, per stock in FishBase.
+  maturity_tab <- get_combined_tbl("maturity", version = version) |>
+    dplyr::inner_join(
+      dplyr::select(stocks_tab, "StockCode", "SpecCode", "server"),
+      by = c("StockCode", "server")
+    ) |>
+    median_tl("Lm", "Type1", LengthMaturityTL)
+
+  # Optimum length, where a cohort's biomass peaks, from the asymptotic length
+  # (Froese & Binohlan 2000: log10 Lopt = 1.0421 log10 Linf - 0.2742).
+  optimum_tab <- get_combined_tbl("popgrowth", version = version) |>
+    dplyr::filter(.data$SpecCode %in% target_codes) |>
+    median_tl("Loo", "Type", LengthInfinityTL) |>
+    dplyr::transmute(
+      .data$SpecCode,
+      .data$server,
+      LengthOptimumTL = 10^(1.0421 * log10(.data$LengthInfinityTL) - 0.2742)
+    )
+
   # ── 5. Join and deduplicate ───────────────────────────────────────────────────
   logger::log_info("Joining and deduplicating biological data")
   all_dat <- list(
     expanded_assets_filtered,
     species_tab,
     trophic_tab,
-    nutrients_tab
+    nutrients_tab,
+    dplyr::select(stocks_tab, -"StockCode"),
+    maturity_tab,
+    optimum_tab
   ) |>
     purrr::reduce(dplyr::left_join, by = c("SpecCode", "server")) |>
     dplyr::group_by(

@@ -500,25 +500,31 @@ export_fishers_stats <- function(package = "coasts") {
 #'
 #' @details
 #' The function performs the following operations:
-#' - Downloads six summary datasets from cloud storage:
+#' - Downloads nine summary datasets from cloud storage:
 #'   - Monthly summaries: Aggregated catch metrics by district and month
 #'   - All monthly summaries: as above but without the dashboard exclusions
 #'   - Taxa summaries: Species-specific metrics in long format
 #'   - Districts summaries: District-level indicators over time
 #'   - Gear summaries: Performance metrics by gear type
 #'   - Grid summaries: Spatial grid data from vessel tracking
+#'   - Taxa traits: FishBase traits per landed taxon
+#'   - Length summaries: recorded catch per length class
+#'   - Gear taxa summaries: recorded catch per gear and species
 #' - Downloads aggregated catch estimates from the modeling step
 #' - Creates geographic regional summaries from the unfiltered monthly data
 #'   (`all_monthly_summaries`), so the coasts portal keeps every survey form
 #'   while the MongoDB `dashboard` collections keep the filtered ones
-#' - Joins aggregated estimates (fishing trips, catch tonnage, revenue) to monthly summaries
+#' - Joins aggregated estimates (fishing trips, catch tonnage, revenue) and the
+#'   share of the fleet tracked behind them (`sampling_rate`) to the monthly
+#'   and district summaries
 #' - Transforms monthly summaries to long format for portal consumption
 #' - Uploads all datasets to specified MongoDB collections
 #'
 #' The function expects the summary files to be named with the pattern:
 #' `{file_prefix}_{table_name}.parquet` where table_name is one of:
 #' monthly_summaries, all_monthly_summaries, taxa_summaries, districts_summaries,
-#' gear_summaries, grid_summaries
+#' gear_summaries, grid_summaries, taxa_traits, length_summaries,
+#' gear_taxa_summaries
 #'
 #' @param log_threshold The logging level threshold for the logger package (e.g., DEBUG, INFO)
 #'   See `logger::log_levels` for available options.
@@ -573,7 +579,10 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
     "taxa_summaries",
     "districts_summaries",
     "gear_summaries",
-    "grid_summaries"
+    "grid_summaries",
+    "taxa_traits",
+    "length_summaries",
+    "gear_taxa_summaries"
   )
 
   for (name in table_names) {
@@ -648,7 +657,8 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
       "date" = "date_month",
       "estimated_fishing_trips" = "estimated_total_trips",
       "estimated_catch_tn",
-      "estimated_revenue" = "estimated_total_revenue"
+      "estimated_revenue" = "estimated_total_revenue",
+      "sampling_rate"
     )
 
   # Transform monthly summaries to long format for portal
@@ -669,7 +679,7 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
   districts_summaries <-
     data_summaries$districts_summaries |>
     dplyr::full_join(monthly_aggregated, by = c("gaul_2_name", "date")) |>
-    dplyr::select(dplyr::where(~ !all(is.na(.))), -"estimated_fishing_trips") |>
+    dplyr::select(dplyr::where(~ !all(is.na(.)))) |>
     tidyr::pivot_longer(
       -c("date", "gaul_2_name"),
       names_to = "indicator",
@@ -687,16 +697,24 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
     taxa_summaries = taxa_summaries_filtered,
     districts_summaries = districts_summaries,
     gear_summaries = data_summaries$gear_summaries,
-    grid_summaries = data_summaries$grid_summaries
+    grid_summaries = data_summaries$grid_summaries,
+    taxa_traits = data_summaries$taxa_traits,
+    length_summaries = data_summaries$length_summaries,
+    gear_taxa_summaries = data_summaries$gear_taxa_summaries
   )
 
-  # Collection names
+  # Collection names. The tables added in 4.15.0 fall back to their own name,
+  # so a pipeline whose config predates them still publishes them.
+  collections <- conf$storage$mongodb$databases$dashboard$collections
   collection_names <- list(
-    monthly_summaries = conf$storage$mongodb$databases$dashboard$collections$monthly_summaries,
-    taxa_summaries = conf$storage$mongodb$databases$dashboard$collections$taxa_summaries,
-    districts_summaries = conf$storage$mongodb$databases$dashboard$collections$districts_summaries,
-    gear_summaries = conf$storage$mongodb$databases$dashboard$collections$gear_summaries,
-    grid_summaries = conf$storage$mongodb$databases$dashboard$collections$grid_summaries
+    monthly_summaries = collections$monthly_summaries,
+    taxa_summaries = collections$taxa_summaries,
+    districts_summaries = collections$districts_summaries,
+    gear_summaries = collections$gear_summaries,
+    grid_summaries = collections$grid_summaries,
+    taxa_traits = collections$taxa_traits %||% "taxa_traits",
+    length_summaries = collections$length_summaries %||% "length_summaries",
+    gear_taxa_summaries = collections$gear_taxa_summaries %||% "gear_taxa_summaries"
   )
 
   # Iterate over the dataframes and upload them

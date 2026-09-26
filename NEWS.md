@@ -1,3 +1,14 @@
+# coasts 4.15.0
+
+## Species traits, fish sizes and corrected species prices for the country dashboards
+
+* **NEW** For every species landed, the country dashboards get its vulnerability to fishing, its place in the food web, its IUCN Red List and CITES status, the length at which it first reproduces and its optimum length, from FishBase and SeaLifeBase.
+* **NEW** Recorded catch by length class, species and gear, to compare the size of the fish landed with the size at which they first reproduce.
+* **NEW** Recorded catch by gear and species, to show what each gear lands.
+* **NEW** District figures include catch and revenue per trip, the estimated number of fishing trips, and the share of the district's boats tracked behind each estimate.
+* **FIXED** Species prices divided a whole trip's value by the weight of one species. Kenya now uses the price recorded for each species; Zanzibar and Mozambique, which record one value per trip, price a species only from trips that landed it alone. Median species prices fall by 30% to 80%.
+* **FIXED** A species' catch on a trip counted only its first catch row, so where a species was split across length classes the rest was lost (recorded catch by species rises 6% in Zanzibar and 2% in Mozambique). Mean length is now weighted by catch.
+
 # coasts 4.14.0
 
 ## Airtable asset text is trimmed on ingest

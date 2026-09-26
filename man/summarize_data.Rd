@@ -14,8 +14,8 @@ summarize_data(
 \item{exclude_dashboard_ids}{Optional character vector of `survey_id` values
 to keep out of the **country dashboard** summaries (e.g. legacy sources or
 forms that should not surface there). Rows matching these ids are dropped
-from `monthly_summaries`, `taxa_summaries`, `districts_summaries` and
-`gear_summaries`. They are **kept** in `all_monthly_summaries` and in
+from `monthly_summaries`, `taxa_summaries`, `districts_summaries`,
+`gear_summaries`, `length_summaries` and `gear_taxa_summaries`. They are **kept** in `all_monthly_summaries` and in
 `<country>_fishery_metrics`, which feed the multi-country coasts portal.
 Defaults to `NULL`, in which case the list is
 read from the package config at `surveys$summaries$exclude_dashboard_ids`
@@ -49,10 +49,19 @@ The function performs the following operations:
   - Monthly summaries: Average catch, price, CPUE, and RPUE by district and month
   - All monthly summaries: the same recipe over every survey form, ignoring
     `exclude_dashboard_ids`; consumed by the multi-country coasts portal
-  - Taxa summaries: Catch metrics by species, district, and month
-  - District summaries: Submission counts and effort metrics by district
+  - Taxa summaries: Catch, catch-weighted mean length and price by species,
+    district, and month
+  - District summaries: Submission counts, effort, and catch and revenue per
+    trip by district
   - Gear summaries: Performance metrics by gear type
   - Grid summaries: Downloaded from cloud storage
+  - Taxa traits: one row per landed taxon with its FishBase traits (from
+    the `taxa_enriched` table [enrich_taxa()] writes to the hub bucket)
+  - Length summaries: recorded catch per length class, species, gear,
+    district and month. Where a country's API rows carry the mean length
+    of the fish measured (Kenya's KEFS), the classes hold those averages
+  - Gear taxa summaries: recorded catch and trips per gear, species,
+    district and month
 - Uploads all summaries to cloud storage as versioned parquet files
 
 The metrics calculated include:

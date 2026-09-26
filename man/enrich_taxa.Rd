@@ -42,7 +42,10 @@ The function performs the following steps:
 3. Restricts species to the resolved FAO area(s) via [filter_by_fao_area()],
    always keeping species with no area assignment.
 4. Joins species-level data from the `species`, `ecology`, and `estimate`
-   tables.
+   tables, the family, order and class, the IUCN and CITES codes from
+   `stocks`, the median length at first maturity from `maturity` and the
+   optimum length from the asymptotic length in `popgrowth`, both restated
+   to total length with the `popll` fits where a study used another length.
 5. Deduplicates by taking the first non-`NA` value per group.
 6. Cleans column names with [janitor::clean_names()].
 7. Uploads the result via [upload_parquet_to_cloud()] using the

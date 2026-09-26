@@ -29,7 +29,9 @@ devtools::document()    # after any roxygen change; man/ is committed
   `get_kobo_data` and `ingest_assets`. `export_portal`, `export_geos` and
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
 - **Portal.** `export_portal` runs once per country, called from each country pipeline with
-  that country's config (`conf$country`). `export_geos` in the coasts pipeline reads the
+  that country's config (`conf$country`), and pushes the `summarize_data()` tables to the
+  country's `portal-*` database (collections and the FishBase-traits dependency: PESKAS.md
+  "Portal collections" and "FishBase traits"). `export_geos` in the coasts pipeline reads the
   per-country `<country>_monthly_summaries_map` files (hard-coded list: kenya, zanzibar,
   mozambique, timor) and pushes the combined `wio_gaul*`, `metrics_gaul*` and `pds_grids`
   collections.

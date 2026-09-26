@@ -24,25 +24,31 @@ in data portals. The function also generates geographic regional summaries.
 }
 \details{
 The function performs the following operations:
-- Downloads six summary datasets from cloud storage:
+- Downloads nine summary datasets from cloud storage:
   - Monthly summaries: Aggregated catch metrics by district and month
   - All monthly summaries: as above but without the dashboard exclusions
   - Taxa summaries: Species-specific metrics in long format
   - Districts summaries: District-level indicators over time
   - Gear summaries: Performance metrics by gear type
   - Grid summaries: Spatial grid data from vessel tracking
+  - Taxa traits: FishBase traits per landed taxon
+  - Length summaries: recorded catch per length class
+  - Gear taxa summaries: recorded catch per gear and species
 - Downloads aggregated catch estimates from the modeling step
 - Creates geographic regional summaries from the unfiltered monthly data
   (`all_monthly_summaries`), so the coasts portal keeps every survey form
   while the MongoDB `dashboard` collections keep the filtered ones
-- Joins aggregated estimates (fishing trips, catch tonnage, revenue) to monthly summaries
+- Joins aggregated estimates (fishing trips, catch tonnage, revenue) and the
+  share of the fleet tracked behind them (`sampling_rate`) to the monthly
+  and district summaries
 - Transforms monthly summaries to long format for portal consumption
 - Uploads all datasets to specified MongoDB collections
 
 The function expects the summary files to be named with the pattern:
 `{file_prefix}_{table_name}.parquet` where table_name is one of:
 monthly_summaries, all_monthly_summaries, taxa_summaries, districts_summaries,
-gear_summaries, grid_summaries
+gear_summaries, grid_summaries, taxa_traits, length_summaries,
+gear_taxa_summaries
 }
 \examples{
 \dontrun{

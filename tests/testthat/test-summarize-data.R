@@ -38,21 +38,41 @@ fake_conf <- function() {
       trips = list(validated = list(cloud_path = "api", file_prefix = "trips"))
     ),
     pds = list(pds_tracks = list(file_prefix = "pds-tracks")),
-    surveys = list(summaries = list(file_prefix = "testland-summaries"))
+    surveys = list(summaries = list(file_prefix = "testland-summaries")),
+    metadata = list(
+      fishbase = list(taxa_enriched = list(file_prefix = "taxa-enriched"))
+    )
+  )
+}
+
+# Two species rows for one taxon code, as enrich_taxa() writes them.
+fake_enriched <- function() {
+  data.frame(
+    alpha3_code = "TUN",
+    species_found = c("Thunnus albacares", "Thunnus obesus"),
+    vulnerability_fishing = c(40, 60),
+    food_troph = c(4.2, 4.4),
+    diet_troph = NA_real_,
+    demers_pelag = "pelagic-oceanic",
+    class = "Teleostei",
+    iucn_code = c("LC", "VU"),
+    cites_code = NA_character_,
+    length_maturity_tl = c(100, 110),
+    length_optimum_tl = c(120, 130)
   )
 }
 
 # Runs summarize_data() with the cloud boundary mocked out, and returns every
 # table it produced, keyed by name: the country-bucket parquet files plus the
 # coasts-bucket uploads.
-run_summarize <- function(exclude_dashboard_ids, validated = fake_validated()) {
+run_summarize <- function(exclude_dashboard_ids, validated = fake_validated(), conf = fake_conf()) {
   withr::local_dir(withr::local_tempdir())
 
   uploaded <- character(0)
   coasts_uploads <- list()
 
   testthat::local_mocked_bindings(
-    read_config = function(...) fake_conf(),
+    read_config = function(...) conf,
     resolve_storage_opts = function(...) list(bucket = "b"),
     download_parquet_from_cloud = function(prefix, ...) {
       if (prefix == "asfis") {
@@ -61,6 +81,9 @@ run_summarize <- function(exclude_dashboard_ids, validated = fake_validated()) {
           scientific_name = "Thunnus albacares",
           english_name = "Yellowfin tuna"
         ))
+      }
+      if (prefix %in% c("taxa-enriched", "taxa-fishbase-enriched")) {
+        return(fake_enriched())
       }
       if (grepl("grid_summaries", prefix)) {
         return(data.frame(lat = 1, lon = 1, time_spent_mins = 1))
@@ -143,4 +166,121 @@ test_that("the new table cannot be confused with the old one by prefix", {
   # `_monthly_summaries_all` would also match a `_monthly_summaries` read
   # (model_fishery_metrics() does exactly that) and could return the wrong file.
   expect_false(startsWith("all_monthly_summaries", "monthly_summaries"))
+})
+
+# One trip landing a species in two length classes (Zanzibar and Mozambique
+# store a class per row), plus a trip landing two species.
+fake_length_classes <- function() {
+  data.frame(
+    survey_id = "keep",
+    gaul_2_name = "Kilifi",
+    trip_id = c("a", "a", "b", "b"),
+    landing_date = lubridate::ymd("2024-01-15"),
+    gear = "gillnet",
+    trip_duration_hrs = 5,
+    n_fishers = 2,
+    n_catch = 2L,
+    length_cm = c(12.5, 32.5, 22.5, 22.5),
+    catch_taxon = c("TUN", "TUN", "TUN", "SKJ"),
+    scientific_name = c(rep("Thunnus albacares", 3), "Katsuwonus pelamis"),
+    catch_kg = c(1, 5, 2, 2),
+    catch_price = NA_real_,
+    tot_catch_kg = c(6, 6, 4, 4),
+    tot_catch_price = c(600, 600, 1000, 1000)
+  )
+}
+
+taxa_value <- function(out, taxon, metric) {
+  out$taxa_summaries |>
+    dplyr::filter(.data$catch_taxon == taxon, .data$metric == !!metric, !is.na(.data$value)) |>
+    dplyr::pull("value")
+}
+
+test_that("a species' catch adds up every length class of a trip", {
+  out <- run_summarize(NULL, validated = fake_length_classes())
+
+  # Trip a: 1 + 5 kg; trip b: 2 kg. Summing only the first row gave 1 + 2.
+  expect_equal(taxa_value(out, "Thunnus albacares", "catch_kg"), 8)
+  # Weighted by catch: (12.5 * 1 + 32.5 * 5 + 22.5 * 2) / 8.
+  expect_equal(taxa_value(out, "Thunnus albacares", "mean_length"), 27.5)
+})
+
+test_that("a trip price is a species price only when the trip landed one species", {
+  out <- run_summarize(NULL, validated = fake_length_classes())
+
+  # Only trip a counts: 600 for 6 kg. Trip b's 1000 covers two species.
+  expect_equal(taxa_value(out, "Thunnus albacares", "price_kg"), 100)
+  expect_length(taxa_value(out, "Katsuwonus pelamis", "price_kg"), 0)
+
+  # A catch row with its own value (Kenya) is used as it is.
+  priced <- fake_length_classes() |> dplyr::mutate(catch_price = .data$catch_kg * 50)
+  out <- run_summarize(NULL, validated = priced)
+  expect_equal(taxa_value(out, "Katsuwonus pelamis", "price_kg"), 50)
+})
+
+test_that("length summaries bin lengths and count the trips behind them", {
+  out <- run_summarize(NULL, validated = fake_length_classes())
+  tun <- dplyr::filter(out$length_summaries, .data$catch_taxon == "Thunnus albacares")
+
+  expect_equal(tun$length_min, c(10, 20, 30))
+  expect_equal(tun$length_max, c(15, 25, 40))
+  expect_equal(tun$catch_kg, c(1, 2, 5))
+  expect_equal(unique(tun$n_trips), 2)
+})
+
+test_that("taxa traits summarise a code's species and name every landed taxon", {
+  out <- run_summarize(NULL, validated = fake_length_classes())
+  traits <- out$taxa_traits
+
+  expect_setequal(traits$catch_taxon, c("Thunnus albacares", "Katsuwonus pelamis"))
+  tun <- dplyr::filter(traits, .data$alpha3_code == "TUN")
+  expect_equal(tun$n_species, 2)
+  expect_equal(tun$vulnerability, 50)
+  expect_equal(c(tun$vulnerability_min, tun$vulnerability_max), c(40, 60))
+  expect_equal(tun$n_threatened, 1)
+  # Two species: no single IUCN category or length stands for the code.
+  expect_true(is.na(tun$iucn_code))
+  expect_true(is.na(tun$length_maturity_cm))
+  expect_true(is.na(tun$length_optimum_cm))
+  # SKJ has no FishBase row here: named, with no traits.
+  expect_true(is.na(dplyr::filter(traits, .data$alpha3_code == "SKJ")$n_species))
+})
+
+test_that("a one-species code carries its IUCN category and lengths", {
+  traits <- summarise_taxa_traits(dplyr::filter(fake_enriched(), .data$species_found == "Thunnus obesus"))
+  expect_equal(traits$iucn_code, "VU")
+  expect_equal(c(traits$length_maturity_cm, traits$length_optimum_cm), c(110, 130))
+
+  # An optimum below maturity, or with no maturity to check it against, is dropped.
+  below <- dplyr::filter(fake_enriched(), .data$species_found == "Thunnus obesus") |>
+    dplyr::mutate(length_optimum_tl = 90)
+  expect_true(is.na(summarise_taxa_traits(below)$length_optimum_cm))
+  unchecked <- dplyr::filter(fake_enriched(), .data$species_found == "Thunnus obesus") |>
+    dplyr::mutate(length_maturity_tl = NA_real_)
+  expect_true(is.na(summarise_taxa_traits(unchecked)$length_optimum_cm))
+})
+
+test_that("gear taxa summaries add up each gear's catch and trips per taxon", {
+  out <- run_summarize(NULL, validated = fake_length_classes())
+  g <- out$gear_taxa_summaries |> dplyr::arrange(.data$catch_taxon)
+  expect_equal(g$catch_taxon, c("Katsuwonus pelamis", "Thunnus albacares"))
+  expect_equal(g$catch_kg, c(2, 8))
+  expect_equal(g$n_trips, c(1, 2))
+})
+
+test_that("a pipeline config without the traits key still summarises", {
+  conf <- fake_conf()
+  conf$metadata <- NULL
+  out <- run_summarize(NULL, validated = fake_length_classes(), conf = conf)
+  expect_equal(dplyr::filter(out$taxa_traits, .data$alpha3_code == "TUN")$n_species, 2)
+})
+
+test_that("a taxa_enriched table from before 4.15.0 still summarises", {
+  old <- dplyr::select(
+    fake_enriched(),
+    -"class", -"iucn_code", -"cites_code", -"length_maturity_tl", -"length_optimum_tl"
+  )
+  traits <- summarise_taxa_traits(old)
+  expect_equal(traits$vulnerability, 50)
+  expect_equal(traits$n_threatened, 0)
 })
