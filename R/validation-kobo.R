@@ -119,7 +119,9 @@ list_validation_statuses <- function(
     url,
     "/api/v2/assets/",
     asset_id,
-    "/data/?fields=",
+    # `.json`, as in get_kobo_data(): without it the KEFS server answers with
+    # its browsable HTML page, although eu.kobotoolbox.org sends JSON.
+    "/data.json?fields=",
     utils::URLencode('["_id","_validation_status"]', reserved = TRUE),
     "&limit=",
     page_size,
@@ -169,6 +171,117 @@ list_validation_statuses <- function(
     validated_by = purrr::map_chr(status, ~ .x$by_whom %||% NA_character_),
     fetch_error = FALSE
   )
+}
+
+#' Reviewers' Decisions on a Survey Form
+#'
+#' @description
+#' A reviewer approves or rejects a submission in the Peskas Management
+#' Platform, which writes the decision to the form's `surveys_flags-<asset_id>`
+#' collection under the reviewer's username and to KoBoToolbox; a reviewer can
+#' also decide in KoBoToolbox directly. A pipeline rewrites that collection on
+#' every run, so it reads the decisions from both first and carries them into
+#' the flags it writes and into its validated data.
+#'
+#' A decision is one made by any account other than the pipeline's own. Where
+#' the collection and KoBoToolbox both hold one for a submission, the later
+#' wins. KoBoToolbox is read with [list_validation_statuses()], every submission
+#' at once.
+#'
+#' @param flags The form's current flags collection, as returned by
+#'   [mdb_collection_pull()], or `NULL`.
+#' @param pipeline_users Character. The accounts the pipeline writes statuses as.
+#' @param asset_id Character. The KoBoToolbox asset id; `NULL` reads the
+#'   collection only.
+#' @param ... Passed to [list_validation_statuses()]: `token`, or `username`
+#'   and `password`, and `url` for a server other than eu.kobotoolbox.org.
+#'
+#' @return A tibble with one row per reviewed submission: `submission_id`
+#'   (integer), `validation_status`, `validated_at`, `validated_by`. When
+#'   KoBoToolbox cannot be read, a warning is logged and the collection's
+#'   decisions are returned alone, so the run goes on. With no pipeline
+#'   account name it stops with an error, so nothing is overwritten.
+#'
+#' @seealso [list_validation_statuses()]
+#'
+#' @keywords validation
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' conf <- read_config()
+#' review_decisions(
+#'   flags = mdb_collection_pull(...),
+#'   pipeline_users = conf$ingestion$adnap$username,
+#'   asset_id = conf$ingestion$adnap$asset_id,
+#'   token = conf$ingestion$adnap$token
+#' )
+#' }
+review_decisions <- function(
+  flags = NULL,
+  pipeline_users,
+  asset_id = NULL,
+  ...
+) {
+  empty <- tibble::tibble(
+    submission_id = integer(),
+    validation_status = character(),
+    validated_at = lubridate::as_datetime(character()),
+    validated_by = character()
+  )
+  # An unset account name (Sys.getenv() gives "") leaves reviewers' decisions
+  # indistinguishable from the pipeline's own; carrying on would overwrite them.
+  pipeline_users <- pipeline_users[!is.na(pipeline_users) & nzchar(pipeline_users)]
+  if (length(pipeline_users) == 0) {
+    stop(
+      "No pipeline account name: reviewers' decisions cannot be told from ",
+      "the pipeline's own. Set the KoBoToolbox username in the configuration."
+    )
+  }
+
+  kobo <- if (!is.null(asset_id)) {
+    tryCatch(
+      list_validation_statuses(asset_id = asset_id, ...),
+      error = function(e) {
+        logger::log_warn(
+          "Could not read KoBoToolbox validation statuses for {asset_id}: ",
+          "{conditionMessage(e)}"
+        )
+        NULL
+      }
+    )
+  }
+
+  reviewed <- function(x) {
+    if (
+      !is.data.frame(x) ||
+        !all(c("submission_id", "validation_status", "validated_by") %in% names(x))
+    ) {
+      return(NULL)
+    }
+    tibble::tibble(
+      # Non-numeric ids become NA and are dropped. Integer ids cap at 2^31-1:
+      # eu.kobotoolbox.org is at 826 million (38%), KEFS's server at 53
+      # thousand (2026-09), as in list_validation_statuses().
+      submission_id = suppressWarnings(as.integer(x[["submission_id"]])),
+      validation_status = x[["validation_status"]],
+      validated_at = lubridate::as_datetime(x[["validated_at"]] %||% NA),
+      validated_by = x[["validated_by"]]
+    ) |>
+      dplyr::filter(
+        !is.na(.data$submission_id),
+        !is.na(.data$validated_by),
+        nzchar(.data$validated_by),
+        !.data$validated_by %in% pipeline_users
+      )
+  }
+
+  empty |>
+    dplyr::bind_rows(reviewed(flags), reviewed(kobo)) |>
+    # Latest first; an undated decision sorts last, and on a tie the
+    # collection's (bound first) is kept.
+    dplyr::arrange(dplyr::desc(.data$validated_at)) |>
+    dplyr::distinct(.data$submission_id, .keep_all = TRUE)
 }
 
 #' Read One Submission's Validation Status From KoBoToolbox

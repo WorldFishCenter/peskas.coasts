@@ -95,6 +95,7 @@ reference:
       - list_validation_statuses
       - get_validation_status
       - update_validation_status
+      - review_decisions
   - title: "Other Utilities and Internals"
     desc: "Additional exported helper functions."
     contents:

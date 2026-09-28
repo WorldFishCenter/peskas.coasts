@@ -1,3 +1,11 @@
+# coasts 4.17.0
+
+## Reviewers' decisions are kept between runs
+
+* **NEW** Reviewers' approvals and rejections are no longer undone by the next pipeline run, in all four countries.
+* **FIXED** Reviewers' decisions on Kenya's KEFS surveys can be read.
+* **FIXED** Help pages show their links and formatting instead of raw markup.
+
 # coasts 4.16.0
 
 ## Survey lengths can be put on the same basis as lengths at maturity
