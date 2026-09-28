@@ -13,65 +13,65 @@ export_pds_spatial(
 }
 \arguments{
 \item{h3_res}{Integer. H3 resolution of the effort grid to export.
-Default is `9L`.}
+Default is \code{9L}.}
 
 \item{min_trips_grounds}{Integer. Minimum unique trips per H3 cell to
-include in fishing grounds derivation and in `pds_effort`. Default is `3L`.}
+include in fishing grounds derivation and in \code{pds_effort}. Default is \code{3L}.}
 
-\item{log_threshold}{Logging threshold. Default is `logger::DEBUG`.}
+\item{log_threshold}{Logging threshold. Default is \code{logger::DEBUG}.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`.}
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}.}
 }
 \value{
-Invisibly `NULL`. Uploads the web-ready files described above to GCS
-  and MongoDB as a side effect.
+Invisibly \code{NULL}. Uploads the web-ready files described above to GCS
+and MongoDB as a side effect.
 }
 \description{
 Reads the pre-computed H3 effort grid and CPUE Parquet files from cloud
 storage, derives fishing grounds, and uploads web-ready files that can be
 fetched directly by a Next.js / DeckGL application.
 
-Versioned files are produced (following the package's `add_version()`
-convention, i.e. `prefix__YYYYMMDDHHMMSS__extension`):
-- `pds-h3-effort-r{h3_res}__*__json`: all-fleet JSON array for
-  `H3HexagonLayer` (one row per `h3_index` × `year`)
-- `pds-h3-effort-gear-r{h3_res}__*__json`: same metrics broken down by
-  `gear` and `country` (one row per `h3_index` × `year` × `gear` × `country`);
-  only emitted when the effort grid carries the `gear`/`country` columns
-- `pds-cpue-r{h3_res}__*__json`: JSON array for `H3HexagonLayer`
-- `pds-fishing-grounds__*__geojson`: GeoJSON `FeatureCollection` for `GeoJsonLayer`
+Versioned files are produced (following the package's \code{add_version()}
+convention, i.e. \code{prefix__YYYYMMDDHHMMSS__extension}):
+\itemize{
+\item \verb{pds-h3-effort-r\{h3_res\}__*__json}: all-fleet JSON array for
+\code{H3HexagonLayer} (one row per \code{h3_index} × \code{year})
+\item \verb{pds-h3-effort-gear-r\{h3_res\}__*__json}: same metrics broken down by
+\code{gear} and \code{country} (one row per \code{h3_index} × \code{year} × \code{gear} × \code{country});
+only emitted when the effort grid carries the \code{gear}/\code{country} columns
+\item \verb{pds-cpue-r\{h3_res\}__*__json}: JSON array for \code{H3HexagonLayer}
+\item \verb{pds-fishing-grounds__*__geojson}: GeoJSON \code{FeatureCollection} for \code{GeoJsonLayer}
+}
 }
 \details{
 Files follow the same versioning convention as other pipeline outputs
-(`add_version()`). The consuming Next.js app uses `cloud_object_name()` or an
+(\code{add_version()}). The consuming Next.js app uses \code{cloud_object_name()} or an
 equivalent GCS listing + timestamp sort to discover the latest version.
 
 Schema for each file:
-- **Effort JSON** (per H3 cell × year):
-  `[{h3_index, year, fishing_hours, unique_trips, n_active_days,
-  avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
-  hours_per_trip}]`
-- **Effort-by-gear JSON** (per H3 cell × year × gear × country): the effort
-  schema with `gear` and `country` inserted after `year`.
-- **CPUE JSON**: `[{h3_index, country, species, cpue, n_trips, lon, lat}]`
-- **Fishing grounds GeoJSON** (same metrics, plus ground-specific; `country`
-  is included when the effort grid carries it):
-  `{ground_id, country, area_km2, n_cells, fishing_hours, unique_trips, n_active_days,
-  avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
-  hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2,
-  hours_per_day_per_km2}`
+\itemize{
+\item \strong{Effort JSON} (per H3 cell × year):
+\verb{[\{h3_index, year, fishing_hours, unique_trips, n_active_days, avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day, hours_per_trip\}]}
+\item \strong{Effort-by-gear JSON} (per H3 cell × year × gear × country): the effort
+schema with \code{gear} and \code{country} inserted after \code{year}.
+\item \strong{CPUE JSON}: \verb{[\{h3_index, country, species, cpue, n_trips, lon, lat\}]}
+\item \strong{Fishing grounds GeoJSON} (same metrics, plus ground-specific; \code{country}
+is included when the effort grid carries it):
+\verb{\{ground_id, country, area_km2, n_cells, fishing_hours, unique_trips, n_active_days, avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day, hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2, hours_per_day_per_km2\}}
+}
 
-When the effort grid carries `country`, the same cells and grounds also go
+When the effort grid carries \code{country}, the same cells and grounds also go
 to the coasts portal MongoDB database for the country dashboards, which
-filter them by `country`:
-- `pds_effort`: one document per `h3_index` × `country`, all years pooled,
-  `{h3_index, country, fishing_hours, unique_trips, n_active_days,
-  avg_hours_per_day, lng, lat}` (`lng`/`lat` is the cell centre)
-- `pds_fishing_grounds`: the fishing grounds GeoJSON, one document per ground
+filter them by \code{country}:
+\itemize{
+\item \code{pds_effort}: one document per \code{h3_index} × \code{country}, all years pooled,
+\verb{\{h3_index, country, fishing_hours, unique_trips, n_active_days, avg_hours_per_day, lng, lat\}} (\code{lng}/\code{lat} is the cell centre)
+\item \code{pds_fishing_grounds}: the fishing grounds GeoJSON, one document per ground
+}
 }
 \seealso{
-[aggregate_pds_effort()], [model_cpue()], [derive_fishing_grounds()]
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}, \code{\link[=model_cpue]{model_cpue()}}, \code{\link[=derive_fishing_grounds]{derive_fishing_grounds()}}
 }
 \keyword{export}
 \keyword{workflow}

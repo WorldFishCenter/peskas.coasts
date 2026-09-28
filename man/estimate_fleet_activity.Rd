@@ -7,30 +7,36 @@
 estimate_fleet_activity(monthly_stats, boat_registry)
 }
 \arguments{
-\item{monthly_stats}{Data frame from `calculate_monthly_trip_stats()` containing:
-- district: District name
-- date_month: Month as date
-- sample_total_trips: Total trips from tracked boats
-- sample_boats_tracked: Number of tracked boats
-- avg_trip_duration_hrs: Average trip duration
-- avg_trips_per_boat_per_month: Average trips per boat}
+\item{monthly_stats}{Data frame from \code{calculate_monthly_trip_stats()} containing:
+\itemize{
+\item district: District name
+\item date_month: Month as date
+\item sample_total_trips: Total trips from tracked boats
+\item sample_boats_tracked: Number of tracked boats
+\item avg_trip_duration_hrs: Average trip duration
+\item avg_trips_per_boat_per_month: Average trips per boat
+}}
 
 \item{boat_registry}{Data frame with columns:
-- gaul_2_name: District name (must match monthly_stats)
-- total_boats: Number of boats registered. A district may span several
-  rows (one per landing site); their boats are summed.}
+\itemize{
+\item gaul_2_name: District name (must match monthly_stats)
+\item total_boats: Number of boats registered. A district may span several
+rows (one per landing site); their boats are summed.
+}}
 }
 \value{
 A data frame combining monthly statistics with fleet estimates:
-  - district: District name
-  - date_month: Month as date
-  - sample_total_trips: Total trips from tracked boats
-  - sample_boats_tracked: Number of tracked boats
-  - avg_trip_duration_hrs: Average trip duration
-  - avg_trips_per_boat_per_month: Average trips per boat
-  - estimated_total_trips: Estimated trips for entire fleet
-  - sampling_rate: Proportion of fleet tracked (0-1)
-  - estimate_confidence: Confidence level ("High", "Medium", "Low")
+\itemize{
+\item district: District name
+\item date_month: Month as date
+\item sample_total_trips: Total trips from tracked boats
+\item sample_boats_tracked: Number of tracked boats
+\item avg_trip_duration_hrs: Average trip duration
+\item avg_trips_per_boat_per_month: Average trips per boat
+\item estimated_total_trips: Estimated trips for entire fleet
+\item sampling_rate: Proportion of fleet tracked (0-1)
+\item estimate_confidence: Confidence level ("High", "Medium", "Low")
+}
 }
 \description{
 Estimates total fleet activity by scaling sample-based trip statistics using
@@ -39,14 +45,18 @@ boat registry data. Calculates sampling rates and confidence levels for the esti
 \details{
 This function combines monthly trip statistics from GPS-tracked boats with
 boat registry data to estimate fleet-wide fishing activity. It calculates:
-- Estimated total trips if all boats were tracked
-- Sampling rate (tracked boats / total boats)
-- Confidence levels based on sampling coverage
+\itemize{
+\item Estimated total trips if all boats were tracked
+\item Sampling rate (tracked boats / total boats)
+\item Confidence levels based on sampling coverage
+}
 
 Confidence levels are assigned as:
-- High: ≥30% of fleet tracked
-- Medium: 10-29% of fleet tracked
-- Low: <10% of fleet tracked
+\itemize{
+\item High: ≥30\% of fleet tracked
+\item Medium: 10-29\% of fleet tracked
+\item Low: <10\% of fleet tracked
+}
 }
 \examples{
 \dontrun{
@@ -63,8 +73,10 @@ fleet_estimates |>
 
 }
 \seealso{
-* [calculate_monthly_trip_stats()] for generating input monthly statistics
-* [calculate_district_totals()] for combining with catch/revenue data
+\itemize{
+\item \code{\link[=calculate_monthly_trip_stats]{calculate_monthly_trip_stats()}} for generating input monthly statistics
+\item \code{\link[=calculate_district_totals]{calculate_district_totals()}} for combining with catch/revenue data
+}
 }
 \keyword{modeling}
 \keyword{workflow}

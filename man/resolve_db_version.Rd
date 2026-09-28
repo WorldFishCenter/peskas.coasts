@@ -7,37 +7,37 @@
 resolve_db_version(conf, version = NULL)
 }
 \arguments{
-\item{conf}{A configuration list as returned by [read_config()].}
+\item{conf}{A configuration list as returned by \code{\link[=read_config]{read_config()}}.}
 
-\item{version}{Optional release string, e.g. `"25.04"`. If `NULL` (default)
+\item{version}{Optional release string, e.g. \code{"25.04"}. If \code{NULL} (default)
 the value is taken from configuration.}
 }
 \value{
-A length-one character vector: either `"latest"` or a release
-  string that exists on **both** servers.
+A length-one character vector: either \code{"latest"} or a release
+string that exists on \strong{both} servers.
 }
 \description{
 Determines which FishBase / SeaLifeBase data release the taxa functions
-read. Resolution order is: the explicit `version` argument, then the
-`metadata.fishbase.db_version` configuration key, then `"latest"`.
+read. Resolution order is: the explicit \code{version} argument, then the
+\code{metadata.fishbase.db_version} configuration key, then \code{"latest"}.
 }
 \details{
-`rfishbase::fb_tbl()` defaults to `"latest"`, which is not a fixed dataset:
-it follows whatever release the installed `rfishbase` points at, so a
+\code{rfishbase::fb_tbl()} defaults to \code{"latest"}, which is not a fixed dataset:
+it follows whatever release the installed \code{rfishbase} points at, so a
 container rebuild silently moves the reference data underneath a pipeline.
-That is not hypothetical. Releases 26.06 / 26.07 still carry `Caesionidae`
-and `Scaridae` as family names but with no species attached, so any taxon
+That is not hypothetical. Releases 26.06 / 26.07 still carry \code{Caesionidae}
+and \code{Scaridae} as family names but with no species attached, so any taxon
 whose reference name is one of those expands to nothing, receives no
-coefficients, and weighs `NA` — which sums to zero without raising an
-error. That is what removed `CJX` and `PWT` from Timor-Leste's portal.
+coefficients, and weighs \code{NA} — which sums to zero without raising an
+error. That is what removed \code{CJX} and \code{PWT} from Timor-Leste's portal.
 
-The release is validated against [rfishbase::available_releases()] for each
+The release is validated against \code{\link[rfishbase:available_releases]{rfishbase::available_releases()}} for each
 server separately, because the two do not publish in lockstep: FishBase has
-`21.06` and SeaLifeBase does not. A single release is passed to both
+\code{21.06} and SeaLifeBase does not. A single release is passed to both
 servers, so a release only one of them publishes is rejected here rather
 than failing halfway through a run.
 
-The default is `"latest"` so that nothing changes for a country that has
-not opted in. Pin the release in configuration — `"latest"` is the drift.
+The default is \code{"latest"} so that nothing changes for a country that has
+not opted in. Pin the release in configuration — \code{"latest"} is the drift.
 }
 \keyword{internal}

@@ -7,25 +7,25 @@
 create_reference_grid(study_area_bbox, cell_size_meters = 500, hex = TRUE)
 }
 \arguments{
-\item{study_area_bbox}{An `sf` polygon or bounding box defining the spatial
+\item{study_area_bbox}{An \code{sf} polygon or bounding box defining the spatial
 extent of the grid.}
 
-\item{cell_size_meters}{Numeric. Grid cell size in metres. Default is `500`.}
+\item{cell_size_meters}{Numeric. Grid cell size in metres. Default is \code{500}.}
 
-\item{hex}{Logical. If `TRUE` (default), creates hexagonal cells; if
-`FALSE`, creates square cells.}
+\item{hex}{Logical. If \code{TRUE} (default), creates hexagonal cells; if
+\code{FALSE}, creates square cells.}
 }
 \value{
-An `sf` polygon object with a `cell_id` column containing a unique
-  identifier for each cell (format: `"GRID_<n>"`).
+An \code{sf} polygon object with a \code{cell_id} column containing a unique
+identifier for each cell (format: \code{"GRID_<n>"}).
 }
 \description{
 Generates a regular square or hexagonal spatial grid over a study area
 bounding box and assigns each cell a stable unique identifier. Create the
-grid once and reuse it across pipeline runs so that `cell_id` values remain
+grid once and reuse it across pipeline runs so that \code{cell_id} values remain
 consistent over time.
 }
 \seealso{
-[prep_fishing_points()], [aggregate_daily_effort()]
+\code{\link[=prep_fishing_points]{prep_fishing_points()}}, \code{\link[=aggregate_daily_effort]{aggregate_daily_effort()}}
 }
 \keyword{preprocessing}

@@ -14,8 +14,8 @@ download_predicted_files(names, provider, options)
 \item{options}{Named list of cloud storage options for the PDS bucket.}
 }
 \value{
-A list with `tracks` (all points read, with the object each came from
-  in `source_file`) and `failed` (names that could not be read).
+A list with \code{tracks} (all points read, with the object each came from
+in \code{source_file}) and \code{failed} (names that could not be read).
 }
 \description{
 Fetches predicted track objects in parallel and reports which of them could

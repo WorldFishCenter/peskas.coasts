@@ -1113,7 +1113,7 @@ upload_aggregation_state <- function(state, names, provider, options) {
 #'   study period length (`n_total_days`) downstream.
 #' - `avg_fidelity_sum`: sum of per-trip fidelity values (fraction of each
 #'   trip's total fishing hours spent in this cell). Divide by
-#'   `n_trips_for_fidelity` to get `avg_fidelity` ∈ [0, 1].
+#'   `n_trips_for_fidelity` to get `avg_fidelity`, between 0 and 1.
 #' - `n_trips_for_fidelity`: number of trips contributing to `avg_fidelity_sum`.
 #' - `fishing_pings`: raw GPS point count (retained for QA; not used as a
 #'   primary metric because ping frequency is irregular).

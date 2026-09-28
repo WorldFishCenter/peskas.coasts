@@ -8,42 +8,42 @@ drop_overlapping_pings(df, prefer = character(0))
 }
 \arguments{
 \item{df}{Prepared fishing points, as returned by
-[prepare_tracks_for_effort()].}
+\code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}.}
 
 \item{prefer}{Character vector of trip identifiers whose copy of a shared
 ping should be kept. Defaults to none.}
 }
 \value{
-`df` with shared pings removed. Row order is not preserved.
+\code{df} with shared pings removed. Row order is not preserved.
 }
 \description{
 Removes pings that appear under more than one trip identifier, keeping a
 single copy.
 }
 \details{
-Complements [index_trip_duplicates()], which only removes trips duplicated
-in full: when PDS moves *part* of a track to another trip the two files
+Complements \code{\link[=index_trip_duplicates]{index_trip_duplicates()}}, which only removes trips duplicated
+in full: when PDS moves \emph{part} of a track to another trip the two files
 overlap without being identical, and the shared pings would otherwise
 contribute their time twice.
 
-Pings are matched on the exact `(timestamp, latitude, longitude)` triple --
+Pings are matched on the exact \verb{(timestamp, latitude, longitude)} triple --
 two vessels reporting the same position to the metre in the same second is
 not a case that occurs in practice, and the triple is compared across trips
 precisely because a retired trip carries no device metadata to group on. The
-copy kept belongs to a trip listed in `prefer` where possible, then to the
+copy kept belongs to a trip listed in \code{prefer} where possible, then to the
 lowest trip identifier, so the outcome does not depend on download order.
 
-`dt_hours` is left as computed within each trip: deduplicating before the
+\code{dt_hours} is left as computed within each trip: deduplicating before the
 intervals were known would turn the removed pings into artificial gaps and
 inflate the survivors.
 
 Only pings within the batch are compared, which is why
-[aggregate_pds_effort()] recalls the trips already aggregated that could
-share pings with it ([recall_overlapping_trips()]) rather than relying on
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}} recalls the trips already aggregated that could
+share pings with it (\code{\link[=recall_overlapping_trips]{recall_overlapping_trips()}}) rather than relying on
 this function alone.
 }
 \seealso{
-[index_trip_duplicates()], [recall_overlapping_trips()],
-  [aggregate_pds_effort()]
+\code{\link[=index_trip_duplicates]{index_trip_duplicates()}}, \code{\link[=recall_overlapping_trips]{recall_overlapping_trips()}},
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 }
 \keyword{internal}

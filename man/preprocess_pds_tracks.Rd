@@ -15,8 +15,8 @@ preprocess_pds_tracks(
 
 \item{grid_size}{Numeric. Size of grid cells in meters (100, 250, 500, or 1000).}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`.}
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}.}
 }
 \value{
 None (invisible).

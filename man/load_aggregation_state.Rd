@@ -7,27 +7,27 @@
 load_aggregation_state(names, provider, options)
 }
 \arguments{
-\item{names}{Object names, as returned by [aggregation_state_names()].}
+\item{names}{Object names, as returned by \code{\link[=aggregation_state_names]{aggregation_state_names()}}.}
 
 \item{provider}{Cloud storage provider key.}
 
 \item{options}{Named list of cloud storage options.}
 }
 \value{
-An aggregation state, or `NULL` if any part could not be read.
+An aggregation state, or \code{NULL} if any part could not be read.
 }
 \description{
 Reads back the manifest, trip registry, per-trip effort and settings that
-[upload_aggregation_state()] wrote.
+\code{\link[=upload_aggregation_state]{upload_aggregation_state()}} wrote.
 }
 \details{
 The four parts describe each other and are only usable together: a manifest
 whose effort store failed to download would have the pipeline skip files
-whose effort is nowhere. Anything missing therefore yields `NULL`, and the
-caller starts from [empty_aggregation_state()] — which is also how the state
+whose effort is nowhere. Anything missing therefore yields \code{NULL}, and the
+caller starts from \code{\link[=empty_aggregation_state]{empty_aggregation_state()}} — which is also how the state
 comes into being on the very first run.
 }
 \seealso{
-[upload_aggregation_state()], [aggregation_state_ok()]
+\code{\link[=upload_aggregation_state]{upload_aggregation_state()}}, \code{\link[=aggregation_state_ok]{aggregation_state_ok()}}
 }
 \keyword{internal}

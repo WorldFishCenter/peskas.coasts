@@ -8,45 +8,50 @@ ingest_assets(log_threshold = logger::DEBUG, package = "coasts")
 }
 \arguments{
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.
-  See `logger::log_levels` for available options.
-
+See \code{logger::log_levels} for available options.
 
 The function retrieves the following asset types from Airtable:
-- **Taxa**: Species information including scientific names, alpha3 codes, and English names
-- **Gear**: Fishing gear types with standardized names
-- **Vessels**: Vessel types with standardized classifications
-- **Landing Sites**: Site information with codes and names
-- **Forms**: Survey form metadata with form IDs and names
+\itemize{
+\item \strong{Taxa}: Species information including scientific names, alpha3 codes, and English names
+\item \strong{Gear}: Fishing gear types with standardized names
+\item \strong{Vessels}: Vessel types with standardized classifications
+\item \strong{Landing Sites}: Site information with codes and names
+\item \strong{Forms}: Survey form metadata with form IDs and names
+}
 
 All assets are deduplicated and stored together in a single RDS file with
 a versioned filename (includes timestamp and git SHA), and uploaded to the
-**shared coasts bucket** — the one every reader of the snapshot resolves.
+\strong{shared coasts bucket} — the one every reader of the snapshot resolves.
 
 The snapshot is cross-country: 1,609 taxa rows, 96 gears, 49 vessels and 736
-landing sites across four countries as of 2026-08-13. `taxa`, `gear` and
-`vessels` therefore carry `country`, so a downstream package can select its
-own rows without inferring them from form ids. Alpha-3 codes are *not*
+landing sites across four countries as of 2026-08-13. \code{taxa}, \code{gear} and
+\code{vessels} therefore carry \code{country}, so a downstream package can select its
+own rows without inferring them from form ids. Alpha-3 codes are \emph{not}
 sufficient on their own: every one of Timor-Leste's 56 codes is also used by
 Kenya, Mozambique or Zanzibar, two of them against a different
-`scientific_name`.}
+\code{scientific_name}.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
 None (invisible). The function performs its operations for side effects:
-  - Creates a local RDS file containing a list of all asset data frames
-  - Uploads file to configured cloud storage
-  - Generates logs of the process
+\itemize{
+\item Creates a local RDS file containing a list of all asset data frames
+\item Uploads file to configured cloud storage
+\item Generates logs of the process
+}
 }
 \description{
 This function handles the automated ingestion of fisheries asset metadata from Airtable.
 It performs the following operations:
-1. Retrieves metadata for taxa, gear types, vessel types, landing sites, and survey forms
-2. Removes duplicate records from each asset type
-3. Packages all assets into a versioned RDS file
-4. Uploads the processed file to configured cloud storage
+\enumerate{
+\item Retrieves metadata for taxa, gear types, vessel types, landing sites, and survey forms
+\item Removes duplicate records from each asset type
+\item Packages all assets into a versioned RDS file
+\item Uploads the processed file to configured cloud storage
+}
 }
 \examples{
 \dontrun{
@@ -56,9 +61,11 @@ ingest_assets()
 
 }
 \seealso{
-* [fetch_asset()] for details on how individual assets are retrieved
-* [add_version()] for details on the file versioning system
-* [upload_cloud_file()] for details on the cloud upload process
+\itemize{
+\item \code{\link[=fetch_asset]{fetch_asset()}} for details on how individual assets are retrieved
+\item \code{\link[=add_version]{add_version()}} for details on the file versioning system
+\item \code{\link[=upload_cloud_file]{upload_cloud_file()}} for details on the cloud upload process
+}
 }
 \keyword{ingestion}
 \keyword{metadata}

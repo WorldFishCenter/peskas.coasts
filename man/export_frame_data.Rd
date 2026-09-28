@@ -7,14 +7,14 @@
 export_frame_data(log_threshold = logger::DEBUG, package = "coasts")
 }
 \arguments{
-\item{log_threshold}{Logging threshold. Default is `logger::DEBUG`.}
+\item{log_threshold}{Logging threshold. Default is \code{logger::DEBUG}.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
-Invisibly `NULL`. Uploads one JSON file to GCS as a side effect.
+Invisibly \code{NULL}. Uploads one JSON file to GCS as a side effect.
 }
 \description{
 Reads the airtable assets snapshot from cloud storage, derives a
@@ -22,13 +22,12 @@ country / region / gear summary of male and female fishers, and uploads
 the result as a versioned JSON file for portal consumption.
 }
 \details{
-The output JSON has one record per `(country, gaul1_name, gaul2_name,
-gear_name)` combination with `fishers_male` and `fishers_female` totals.
-Files follow the package's `add_version()` convention
-(`prefix__YYYYMMDDHHMMSS__extension`).
+The output JSON has one record per \verb{(country, gaul1_name, gaul2_name, gear_name)} combination with \code{fishers_male} and \code{fishers_female} totals.
+Files follow the package's \code{add_version()} convention
+(\code{prefix__YYYYMMDDHHMMSS__extension}).
 }
 \seealso{
-[resolve_storage_opts()], [upload_cloud_file()], [add_version()]
+\code{\link[=resolve_storage_opts]{resolve_storage_opts()}}, \code{\link[=upload_cloud_file]{upload_cloud_file()}}, \code{\link[=add_version]{add_version()}}
 }
 \keyword{export}
 \keyword{workflow}

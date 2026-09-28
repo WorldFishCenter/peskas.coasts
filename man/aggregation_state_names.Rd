@@ -7,14 +7,14 @@
 aggregation_state_names(grid_prefix)
 }
 \arguments{
-\item{grid_prefix}{Cloud prefix of the grid, including the `_r{res}` suffix.}
+\item{grid_prefix}{Cloud prefix of the grid, including the \verb{_r\{res\}} suffix.}
 }
 \value{
-A named list of object names: `manifest`, `registry`, `effort` and
-  `settings`.
+A named list of object names: \code{manifest}, \code{registry}, \code{effort} and
+\code{settings}.
 }
 \description{
-The four side files [aggregate_pds_effort()] keeps beside the grid, named
+The four side files \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}} keeps beside the grid, named
 from the grid's own prefix so that grids at different H3 resolutions keep
 separate state.
 }

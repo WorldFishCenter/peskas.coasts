@@ -8,31 +8,37 @@ preprocess_track_data(data, grid_size = 500)
 }
 \arguments{
 \item{data}{A data frame containing GPS track data with columns:
-- Trip: Unique trip identifier
-- Time: Timestamp of the GPS point
-- Lat: Latitude
-- Lng: Longitude
-- Speed (M/S): Speed in meters per second
-- Range (Meters): Range in meters
-- Heading: Heading in degrees}
+\itemize{
+\item Trip: Unique trip identifier
+\item Time: Timestamp of the GPS point
+\item Lat: Latitude
+\item Lng: Longitude
+\item Speed (M/S): Speed in meters per second
+\item Range (Meters): Range in meters
+\item Heading: Heading in degrees
+}}
 
 \item{grid_size}{Numeric. Size of grid cells in meters. Must be one of:
-- 100: ~100m grid cells
-- 250: ~250m grid cells
-- 500: ~500m grid cells (default)
-- 1000: ~1km grid cells}
+\itemize{
+\item 100: ~100m grid cells
+\item 250: ~250m grid cells
+\item 500: ~500m grid cells (default)
+\item 1000: ~1km grid cells
+}}
 }
 \value{
 A tibble with the following columns:
-  - Trip: Trip identifier
-  - lat_grid: Latitude of grid cell center
-  - lng_grid: Longitude of grid cell center
-  - time_spent_mins: Total time spent in grid cell in minutes
-  - mean_speed: Average speed in grid cell (M/S)
-  - mean_range: Average range in grid cell (Meters)
-  - first_seen: First timestamp in grid cell
-  - last_seen: Last timestamp in grid cell
-  - n_points: Number of GPS points in grid cell
+\itemize{
+\item Trip: Trip identifier
+\item lat_grid: Latitude of grid cell center
+\item lng_grid: Longitude of grid cell center
+\item time_spent_mins: Total time spent in grid cell in minutes
+\item mean_speed: Average speed in grid cell (M/S)
+\item mean_range: Average range in grid cell (Meters)
+\item first_seen: First timestamp in grid cell
+\item last_seen: Last timestamp in grid cell
+\item n_points: Number of GPS points in grid cell
+}
 }
 \description{
 This function processes GPS track data into a spatial grid summary, calculating time spent

@@ -13,23 +13,23 @@ aggregate_trip_effort(
 }
 \arguments{
 \item{tracks}{A data frame of predicted fishing points with columns
-`trip`, `timestamp`, `latitude`, `longitude`.}
+\code{trip}, \code{timestamp}, \code{latitude}, \code{longitude}.}
 
 \item{h3_res}{Integer (0-15). H3 resolution for cell assignment.}
 
 \item{max_gap_hours, gap_policy}{How silent stretches of a track are counted,
-passed to [prepare_tracks_for_effort()] and forwarded by [model_cpue()].
-The defaults match [aggregate_pds_effort()], so CPUE is per hour of the
+passed to \code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}} and forwarded by \code{\link[=model_cpue]{model_cpue()}}.
+The defaults match \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}, so CPUE is per hour of the
 same effort the H3 grid reports; raising them inflates the denominator and
 lowers CPUE.}
 }
 \value{
-A tibble with columns `trip`, `h3_index`, `year`, `fishing_hours`.
+A tibble with columns \code{trip}, \code{h3_index}, \code{year}, \code{fishing_hours}.
 }
 \description{
 Prepares tracks with time intervals and H3 cell assignment via
-[prepare_tracks_for_effort()], then summarises fishing hours per
-`(trip, h3_index, year)` combination. Used to build the effort matrix
+\code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}, then summarises fishing hours per
+\verb{(trip, h3_index, year)} combination. Used to build the effort matrix
 for CPUE estimation.
 }
 \keyword{internal}

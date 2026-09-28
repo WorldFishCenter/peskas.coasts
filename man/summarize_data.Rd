@@ -11,22 +11,22 @@ summarize_data(
 )
 }
 \arguments{
-\item{exclude_dashboard_ids}{Optional character vector of `survey_id` values
-to keep out of the **country dashboard** summaries (e.g. legacy sources or
+\item{exclude_dashboard_ids}{Optional character vector of \code{survey_id} values
+to keep out of the \strong{country dashboard} summaries (e.g. legacy sources or
 forms that should not surface there). Rows matching these ids are dropped
-from `monthly_summaries`, `taxa_summaries`, `districts_summaries`,
-`gear_summaries`, `length_summaries` and `gear_taxa_summaries`. They are **kept** in `all_monthly_summaries` and in
-`<country>_fishery_metrics`, which feed the multi-country coasts portal.
-Defaults to `NULL`, in which case the list is
-read from the package config at `surveys$summaries$exclude_dashboard_ids`
+from \code{monthly_summaries}, \code{taxa_summaries}, \code{districts_summaries},
+\code{gear_summaries}, \code{length_summaries} and \code{gear_taxa_summaries}. They are \strong{kept} in \code{all_monthly_summaries} and in
+\verb{<country>_fishery_metrics}, which feed the multi-country coasts portal.
+Defaults to \code{NULL}, in which case the list is
+read from the package config at \code{surveys$summaries$exclude_dashboard_ids}
 (each downstream package manages its own list). If neither is set, all
 surveys are kept.}
 
 \item{log_threshold}{The logging level threshold for the logger package (e.g., DEBUG, INFO)
-See `logger::log_levels` for available options.}
+See \code{logger::log_levels} for available options.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
@@ -35,42 +35,50 @@ NULL (invisible). The function uploads summary files to cloud storage as a side 
 \description{
 Processes validated survey data from WorldFish sources, filtering out flagged submissions
 and generating summary datasets for various dimensions:
-- Monthly summaries with aggregated catch metrics
-- Taxa summaries with species-specific information
-- District summaries with submission and effort metrics
-- Gear summaries with gear-specific performance metrics
-- Grid summaries from vessel tracking data
+\itemize{
+\item Monthly summaries with aggregated catch metrics
+\item Taxa summaries with species-specific information
+\item District summaries with submission and effort metrics
+\item Gear summaries with gear-specific performance metrics
+\item Grid summaries from vessel tracking data
+}
 }
 \details{
 The function performs the following operations:
-- Retrieves validated WF survey data
-- Filters for approved validation status
-- Creates multiple summary datasets:
-  - Monthly summaries: Average catch, price, CPUE, and RPUE by district and month
-  - All monthly summaries: the same recipe over every survey form, ignoring
-    `exclude_dashboard_ids`; consumed by the multi-country coasts portal
-  - Taxa summaries: Catch, catch-weighted mean length and price by species,
-    district, and month
-  - District summaries: Submission counts, effort, and catch and revenue per
-    trip by district
-  - Gear summaries: Performance metrics by gear type
-  - Grid summaries: Downloaded from cloud storage
-  - Taxa traits: one row per landed taxon with its FishBase traits (from
-    the `taxa_enriched` table [enrich_taxa()] writes to the hub bucket)
-  - Length summaries: recorded catch per length class, species, gear,
-    district and month. Where a country's API rows carry the mean length
-    of the fish measured (Kenya's KEFS), the classes hold those averages
-  - Gear taxa summaries: recorded catch and trips per gear, species,
-    district and month
-- Uploads all summaries to cloud storage as versioned parquet files
+\itemize{
+\item Retrieves validated WF survey data
+\item Filters for approved validation status
+\item Creates multiple summary datasets:
+\itemize{
+\item Monthly summaries: Average catch, price, CPUE, and RPUE by district and month
+\item All monthly summaries: the same recipe over every survey form, ignoring
+\code{exclude_dashboard_ids}; consumed by the multi-country coasts portal
+\item Taxa summaries: Catch, catch-weighted mean length and price by species,
+district, and month
+\item District summaries: Submission counts, effort, and catch and revenue per
+trip by district
+\item Gear summaries: Performance metrics by gear type
+\item Grid summaries: Downloaded from cloud storage
+\item Taxa traits: one row per landed taxon with its FishBase traits (from
+the \code{taxa_enriched} table \code{\link[=enrich_taxa]{enrich_taxa()}} writes to the hub bucket)
+\item Length summaries: recorded catch per length class, species, gear,
+district and month. Where a country's API rows carry the mean length
+of the fish measured (Kenya's KEFS), the classes hold those averages
+\item Gear taxa summaries: recorded catch and trips per gear, species,
+district and month
+}
+\item Uploads all summaries to cloud storage as versioned parquet files
+}
 
 The metrics calculated include:
-- Total and mean catch weight
-- Price per kg of catch
-- CPUE (Catch Per Unit Effort) - both hourly and daily
-- RPUE (Revenue Per Unit Effort) - both hourly and daily
-- Number of submissions and fishers
-- Trip duration
+\itemize{
+\item Total and mean catch weight
+\item Price per kg of catch
+\item CPUE (Catch Per Unit Effort) - both hourly and daily
+\item RPUE (Revenue Per Unit Effort) - both hourly and daily
+\item Number of submissions and fishers
+\item Trip duration
+}
 }
 \examples{
 \dontrun{
@@ -90,10 +98,11 @@ summarize_data(exclude_dashboard_ids = c(
 
 }
 \seealso{
-* [get_validated_surveys()] for details on the input data format
-* [get_validation_status()] for retrieving validation information
-* [upload_cloud_file()] for uploading results to cloud storage
-* [download_parquet_from_cloud()] for retrieving grid summaries
+\itemize{
+\item \code{\link[=get_validation_status]{get_validation_status()}} for retrieving validation information
+\item \code{\link[=upload_cloud_file]{upload_cloud_file()}} for uploading results to cloud storage
+\item \code{\link[=download_parquet_from_cloud]{download_parquet_from_cloud()}} for retrieving grid summaries
+}
 }
 \keyword{mining}
 \keyword{pipeline}

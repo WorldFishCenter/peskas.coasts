@@ -14,98 +14,98 @@ derive_fishing_grounds(
 )
 }
 \arguments{
-\item{h3_grid_df}{Data frame with columns `h3_index`, `fishing_hours`,
-`unique_trips`, `n_active_days`, `first_active_date`, `last_active_date`,
-`avg_fidelity_sum`, `n_trips_for_fidelity` (as returned by
-[aggregate_pds_effort()]). A `year` column is accepted and collapsed by
+\item{h3_grid_df}{Data frame with columns \code{h3_index}, \code{fishing_hours},
+\code{unique_trips}, \code{n_active_days}, \code{first_active_date}, \code{last_active_date},
+\code{avg_fidelity_sum}, \code{n_trips_for_fidelity} (as returned by
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}). A \code{year} column is accepted and collapsed by
 summation / min / max as appropriate.}
 
 \item{min_trips}{Integer. Minimum number of unique trips per H3 cell required
-to retain the cell. Default is `3L`.}
+to retain the cell. Default is \code{3L}.}
 
-\item{min_hours}{Numeric or `NULL`. Minimum accumulated fishing hours per
-cell. `NULL` (default) uses the median of `fishing_hours` across all cells.}
+\item{min_hours}{Numeric or \code{NULL}. Minimum accumulated fishing hours per
+cell. \code{NULL} (default) uses the median of \code{fishing_hours} across all cells.}
 
-\item{min_pings}{Deprecated. Use `min_hours` instead. If supplied, a warning
+\item{min_pings}{Deprecated. Use \code{min_hours} instead. If supplied, a warning
 is emitted and the argument is ignored.}
 
-\item{target_h3_res}{Integer (0-15) or `NULL`. If provided, effort is first
+\item{target_h3_res}{Integer (0-15) or \code{NULL}. If provided, effort is first
 rolled up to this coarser H3 resolution before thresholding. Must be
-lower than the resolution stored in `h3_grid_df`. `NULL` uses the grid
+lower than the resolution stored in \code{h3_grid_df}. \code{NULL} uses the grid
 as-is.}
 
-\item{n_days}{Integer or `NULL`. Deprecated fallback for `n_total_days`.
-When `first_active_date` / `last_active_date` columns are present in
-`h3_grid_df` (grids produced by the current pipeline), `n_total_days` is
+\item{n_days}{Integer or \code{NULL}. Deprecated fallback for \code{n_total_days}.
+When \code{first_active_date} / \code{last_active_date} columns are present in
+\code{h3_grid_df} (grids produced by the current pipeline), \code{n_total_days} is
 inferred automatically and this argument is ignored.}
 }
 \value{
-An `sf` POLYGON object in WGS84 (EPSG 4326) with columns:
-  \describe{
-    \item{`ground_id`}{Stable identifier, e.g. `"FG_1"`, ordered by
-      descending area.}
-    \item{`area_km2`}{Area of each polygon in square kilometres.}
-    \item{`fishing_hours`}{Total accumulated fishing hours within the
-      ground.}
-    \item{`unique_trips`}{Number of unique trips that fished within the
-      ground.}
-    \item{`n_active_days`}{Sum of cell-level active days across all
-      constituent H3 cells.}
-    \item{`n_cells`}{Number of H3 cells that make up the ground.}
-    \item{`avg_fidelity`}{Mean across cells of the average fraction of
-      visiting trips' fishing time spent in each cell. Bounded [0, 1].
-      Higher values indicate stronger habitat preference (fidelity).}
-    \item{`constancy`}{Mean across cells of the fraction of study days each
-      cell was fished. Bounded [0, 1]. Near 0 = sporadic; near 1 = daily.}
-    \item{`avg_hours_per_day`}{Mean across cells of fishing hours per
-      calendar day (`fishing_hours / n_total_days`).}
-    \item{`avg_visits_per_day`}{Mean across cells of unique trips per
-      calendar day (`unique_trips / n_total_days`).}
-    \item{`hours_per_trip`}{Mean across cells of fishing hours per trip
-      (`fishing_hours / unique_trips`).}
-    \item{`fishing_hours_per_km2`}{Total fishing hours divided by ground
-      area (effort density).}
-    \item{`unique_trips_per_km2`}{Total unique trips divided by ground area
-      (visit density).}
-    \item{`hours_per_day_per_km2`}{`avg_hours_per_day` divided by ground
-      area (effort-rate density).}
-  }
-  Returns `NULL` with a warning if no cells survive the filters.
+An \code{sf} POLYGON object in WGS84 (EPSG 4326) with columns:
+\describe{
+\item{\code{ground_id}}{Stable identifier, e.g. \code{"FG_1"}, ordered by
+descending area.}
+\item{\code{area_km2}}{Area of each polygon in square kilometres.}
+\item{\code{fishing_hours}}{Total accumulated fishing hours within the
+ground.}
+\item{\code{unique_trips}}{Number of unique trips that fished within the
+ground.}
+\item{\code{n_active_days}}{Sum of cell-level active days across all
+constituent H3 cells.}
+\item{\code{n_cells}}{Number of H3 cells that make up the ground.}
+\item{\code{avg_fidelity}}{Mean across cells of the average fraction of
+visiting trips' fishing time spent in each cell. Between 0 and 1.
+Higher values indicate stronger habitat preference (fidelity).}
+\item{\code{constancy}}{Mean across cells of the fraction of study days each
+cell was fished. Between 0 and 1. Near 0 = sporadic; near 1 = daily.}
+\item{\code{avg_hours_per_day}}{Mean across cells of fishing hours per
+calendar day (\code{fishing_hours / n_total_days}).}
+\item{\code{avg_visits_per_day}}{Mean across cells of unique trips per
+calendar day (\code{unique_trips / n_total_days}).}
+\item{\code{hours_per_trip}}{Mean across cells of fishing hours per trip
+(\code{fishing_hours / unique_trips}).}
+\item{\code{fishing_hours_per_km2}}{Total fishing hours divided by ground
+area (effort density).}
+\item{\code{unique_trips_per_km2}}{Total unique trips divided by ground area
+(visit density).}
+\item{\code{hours_per_day_per_km2}}{\code{avg_hours_per_day} divided by ground
+area (effort-rate density).}
+}
+Returns \code{NULL} with a warning if no cells survive the filters.
 }
 \description{
-Converts an H3 hexagonal effort grid (as produced by [aggregate_pds_effort()])
+Converts an H3 hexagonal effort grid (as produced by \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}})
 into contiguous fishing ground polygons by filtering cells that meet
 activity thresholds and dissolving their geometries. The result is ready for
 further spatial analysis.
 }
 \details{
 The derivation proceeds in four steps:
+\enumerate{
+\item \strong{Optional rollup}: if \code{target_h3_res} is provided, all effort metrics
+are summed into parent H3 cells at the coarser resolution before applying
+thresholds. This lets you extract broad fishing grounds without
+reprocessing raw tracks.
+\item \strong{Threshold filtering}: cells are kept only when \code{unique_trips >= min_trips} and \code{fishing_hours >= min_hours}. When \code{min_hours} is \code{NULL}
+the median fishing-hours across all cells is used as the threshold.
+\item \strong{Per-cell normalisation}: after collapsing years, the study period
+length (\code{n_total_days}) is inferred from the stored date range
+(\code{first_active_date}, \code{last_active_date}). Per-day rates and constancy
+are computed at the cell level before polygon dissolution so that ground-
+level values are means of cell values (ecologically correct) rather than
+re-derived from ground totals.
+\item \strong{Polygon extraction}: filtered hexagons are converted to polygons via
+\code{\link[=create_spatial_grid]{create_spatial_grid()}}, dissolved into contiguous areas with
+\code{sf::st_union()}, split into individual polygons with
+\code{sf::st_cast("POLYGON")}, and annotated with a stable \code{ground_id} and
+\code{area_km2}.
+}
 
-1. **Optional rollup**: if `target_h3_res` is provided, all effort metrics
-   are summed into parent H3 cells at the coarser resolution before applying
-   thresholds. This lets you extract broad fishing grounds without
-   reprocessing raw tracks.
-2. **Threshold filtering**: cells are kept only when `unique_trips >=
-   min_trips` and `fishing_hours >= min_hours`. When `min_hours` is `NULL`
-   the median fishing-hours across all cells is used as the threshold.
-3. **Per-cell normalisation**: after collapsing years, the study period
-   length (`n_total_days`) is inferred from the stored date range
-   (`first_active_date`, `last_active_date`). Per-day rates and constancy
-   are computed at the cell level before polygon dissolution so that ground-
-   level values are means of cell values (ecologically correct) rather than
-   re-derived from ground totals.
-4. **Polygon extraction**: filtered hexagons are converted to polygons via
-   [create_spatial_grid()], dissolved into contiguous areas with
-   `sf::st_union()`, split into individual polygons with
-   `sf::st_cast("POLYGON")`, and annotated with a stable `ground_id` and
-   `area_km2`.
-
-If the input grid contains a `year` column (as produced by the default
-[aggregate_pds_effort()] schema), effort is collapsed across all years before
+If the input grid contains a \code{year} column (as produced by the default
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}} schema), effort is collapsed across all years before
 thresholding.
 }
 \seealso{
-[aggregate_pds_effort()], [rollup_h3_resolution()],
-  [create_spatial_grid()], [plot_effort_map()]
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}, \code{\link[=rollup_h3_resolution]{rollup_h3_resolution()}},
+\code{\link[=create_spatial_grid]{create_spatial_grid()}}, \code{\link[=plot_effort_map]{plot_effort_map()}}
 }
 \keyword{modeling}

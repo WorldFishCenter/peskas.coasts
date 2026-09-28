@@ -13,7 +13,7 @@ no_women_fishers, no_child_fishers, catch_taxon, catch_price, catch_kg}
 }
 \value{
 A data frame in normalized long format with columns: landing_site,
-  year_month, metric_type, metric_value, gear_type, species, rank
+year_month, metric_type, metric_value, gear_type, species, rank
 }
 \description{
 Transforms catch-level data into normalized fishery performance indicators.

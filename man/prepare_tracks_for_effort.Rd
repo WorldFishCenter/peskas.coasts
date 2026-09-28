@@ -12,54 +12,54 @@ prepare_tracks_for_effort(
 )
 }
 \arguments{
-\item{df}{Data frame of predicted fishing points with columns `trip`,
-`timestamp`, `latitude`, `longitude`.}
+\item{df}{Data frame of predicted fishing points with columns \code{trip},
+\code{timestamp}, \code{latitude}, \code{longitude}.}
 
 \item{h3_res}{Integer (0–15). H3 resolution for cell assignment.}
 
 \item{max_gap_hours}{Numeric. Longest inter-ping interval treated as fishing
-time. Default is `0.25` (15 minutes).}
+time. Default is \code{0.25} (15 minutes).}
 
-\item{gap_policy}{How intervals above `max_gap_hours` are handled.
-`"cap"` (default) counts `max_gap_hours` of them, assuming the vessel kept
-fishing where it was next seen; `"drop"` counts none of them, so effort is
+\item{gap_policy}{How intervals above \code{max_gap_hours} are handled.
+\code{"cap"} (default) counts \code{max_gap_hours} of them, assuming the vessel kept
+fishing where it was next seen; \code{"drop"} counts none of them, so effort is
 only observed time. Changing either setting changes every effort figure the
 pipeline produces.}
 }
 \value{
 The input data frame with additional columns:
-  \describe{
-    \item{`year`}{Integer year extracted from `timestamp`.}
-    \item{`dt_hours`}{Interval in hours to the previous ping within the
-      same trip (0 for the first ping), limited per `gap_policy`.}
-    \item{`h3_index`}{H3 cell identifier at resolution `h3_res`.}
-  }
+\describe{
+\item{\code{year}}{Integer year extracted from \code{timestamp}.}
+\item{\code{dt_hours}}{Interval in hours to the previous ping within the
+same trip (0 for the first ping), limited per \code{gap_policy}.}
+\item{\code{h3_index}}{H3 cell identifier at resolution \code{h3_res}.}
+}
 }
 \description{
 Enriches predicted fishing track points with time-based effort, H3 cell
 assignment, and per-trip total hours (used downstream for the fidelity
-metric). For each trip the inter-ping time interval (`dt_hours`) is computed
-from consecutive timestamps, then limited by `max_gap_hours` so that a silent
+metric). For each trip the inter-ping time interval (\code{dt_hours}) is computed
+from consecutive timestamps, then limited by \code{max_gap_hours} so that a silent
 device does not read as hours of fishing.
 }
 \details{
-Each interval is credited in full to the cell holding the **later** ping, so
+Each interval is credited in full to the cell holding the \strong{later} ping, so
 a long gap does not merely inflate the effort total — it puts unobserved time
 in one particular hexagon, wherever the vessel happened to resurface.
 
 Devices report every few seconds (median interval across a 3,814-trip sample:
-7 seconds, with 95% of intervals under 1.5 minutes), so anything beyond a few
+7 seconds, with 95\% of intervals under 1.5 minutes), so anything beyond a few
 minutes means the device stopped reporting rather than the vessel slowing
 down. Long gaps are rare and dominant at the same time: in that sample
-intervals above one hour were 0.6% of the data and half of all fishing hours.
+intervals above one hour were 0.6\% of the data and half of all fishing hours.
 The default 15-minute limit is roughly 130 missed pings — ample room for a
 genuine signal glitch — while holding any single dropout to a quarter of an
 hour in one cell.
 
-Points whose coordinates are not usable positions ([valid_coordinates()]) are
+Points whose coordinates are not usable positions (\code{\link[=valid_coordinates]{valid_coordinates()}}) are
 dropped before any of this, and counted in a warning. A ping with no position
 is a ping the grid has nowhere to put, so it is treated as one the device
 never sent: the time it covers passes to the next ping that does have a
-position, and `max_gap_hours` limits it there like any other silence.
+position, and \code{max_gap_hours} limits it there like any other silence.
 }
 \keyword{internal}

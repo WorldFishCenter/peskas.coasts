@@ -7,26 +7,26 @@
 get_tl_conversions(expanded, version = "latest")
 }
 \arguments{
-\item{expanded}{A table as returned by [expand_taxonomic_info()].}
+\item{expanded}{A table as returned by \code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}.}
 
 \item{version}{FishBase / SeaLifeBase release to read. See
-[resolve_db_version()].}
+\code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-A tibble with one row per `SpecCode`, `server` and `Type` (the length
-  type converted from, e.g. `"FL"`), carrying the `intercept` and `slope` of
-  the conversion. Species or types with no published fit are absent.
+A tibble with one row per \code{SpecCode}, \code{server} and \code{Type} (the length
+type converted from, e.g. \code{"FL"}), carrying the \code{intercept} and \code{slope} of
+the conversion. Species or types with no published fit are absent.
 }
 \description{
-One line `TL = intercept + slope * <Type>` per species and length type, for
+One line \verb{TL = intercept + slope * <Type>} per species and length type, for
 restating a length measured on fork, standard or another length type as total
-length. [enrich_taxa()] restates the FishBase lengths at maturity and optimum
+length. \code{\link[=enrich_taxa]{enrich_taxa()}} restates the FishBase lengths at maturity and optimum
 with it, so a survey that converts its own lengths with the same table puts
 both sides of the size-at-maturity comparison on one basis.
 }
 \details{
 Every length type is read from the POPLL table, and each fit is oriented so
-that total length is the response (see [get_length_length_coeffs()] for the
+that total length is the response (see \code{\link[=get_length_length_coeffs]{get_length_length_coeffs()}} for the
 direction of the table). Where a species has several fits for one type, the
 median intercept and the median slope are kept; identical fits published
 twice count once.
@@ -40,6 +40,6 @@ taxa |>
 }
 }
 \seealso{
-[get_length_length_coeffs()], [convert_lw_to_tl()]
+\code{\link[=get_length_length_coeffs]{get_length_length_coeffs()}}, \code{\link[=convert_lw_to_tl]{convert_lw_to_tl()}}
 }
 \keyword{taxa}

@@ -9,26 +9,26 @@ assign_h3_indices(df, lat_col = "lat", lon_col = "lon", h3_res = 9)
 \arguments{
 \item{df}{A data frame with GPS coordinates.}
 
-\item{lat_col}{Character. Name of the latitude column. Default is `"lat"`.}
+\item{lat_col}{Character. Name of the latitude column. Default is \code{"lat"}.}
 
-\item{lon_col}{Character. Name of the longitude column. Default is `"lon"`.}
+\item{lon_col}{Character. Name of the longitude column. Default is \code{"lon"}.}
 
-\item{h3_res}{Integer (0–15). H3 resolution level. Default is `9`
+\item{h3_res}{Integer (0–15). H3 resolution level. Default is \code{9}
 (~174 m edge length). Higher values produce smaller, finer cells.}
 }
 \value{
 The input data frame (minus rows with missing coordinates) with an
-  additional `h3_index` character column.
+additional \code{h3_index} character column.
 }
 \description{
-Adds an `h3_index` column to a GPS data frame by mapping each coordinate to
+Adds an \code{h3_index} column to a GPS data frame by mapping each coordinate to
 its containing H3 hexagon at the specified resolution. Rows whose coordinates
 are not usable positions are dropped --- missing, non-finite, or outside the
-latitude/longitude range, all of which [valid_coordinates()] describes. The
+latitude/longitude range, all of which \code{\link[=valid_coordinates]{valid_coordinates()}} describes. The
 data frame is returned in its original unprojected (WGS84) form with the
 index appended.
 }
 \seealso{
-[aggregate_h3_effort()], [rollup_h3_resolution()]
+\code{\link[=aggregate_h3_effort]{aggregate_h3_effort()}}, \code{\link[=rollup_h3_resolution]{rollup_h3_resolution()}}
 }
 \keyword{preprocessing}

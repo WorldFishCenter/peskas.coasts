@@ -75,7 +75,6 @@
 #' }
 #'
 #' @seealso
-#' * [get_validated_surveys()] for details on the input data format
 #' * [get_validation_status()] for retrieving validation information
 #' * [upload_cloud_file()] for uploading results to cloud storage
 #' * [download_parquet_from_cloud()] for retrieving grid summaries

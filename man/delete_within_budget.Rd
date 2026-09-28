@@ -15,7 +15,7 @@ delete_within_budget(names, bucket, spent, total, max_delete_frac, reason)
 
 \item{total}{Integer. Size of the store the budget is a fraction of.}
 
-\item{max_delete_frac}{Numeric. Share of `total` this run may delete.}
+\item{max_delete_frac}{Numeric. Share of \code{total} this run may delete.}
 
 \item{reason}{Character. What is being deleted, for the log line.}
 }
@@ -24,12 +24,12 @@ The number of objects deleted so far in this run, including these.
 }
 \description{
 Deletes objects only while the run's total deletions stay within
-`max_delete_frac` of the store, and reports how much of the budget is left.
+\code{max_delete_frac} of the store, and reports how much of the budget is left.
 }
 \details{
-[predict_pds_tracks()] deletes on two occasions — trips the API no longer
+\code{\link[=predict_pds_tracks]{predict_pds_tracks()}} deletes on two occasions — trips the API no longer
 lists, and refreshes that produced nothing — and the cap is meant to bound
-what one run can remove *in total*. Checking each occasion separately against
+what one run can remove \emph{in total}. Checking each occasion separately against
 the same store size would let a single run delete nearly twice the documented
 share, so the budget is carried between them: what has already gone counts
 against what may still go.

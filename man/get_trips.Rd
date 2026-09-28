@@ -38,7 +38,7 @@ get_trips(
 Default is 5. Set to 1 to disable retrying.}
 
 \item{max_url_chars}{Integer. Longest request URL to build before splitting
-an `imeis` filter across several requests. Default `7000`, comfortably
+an \code{imeis} filter across several requests. Default \code{7000}, comfortably
 inside the 8192-byte limit that nginx, Apache and most CDNs impose.}
 }
 \value{
@@ -51,21 +51,21 @@ with options to filter by IMEIs and include additional information.
 \details{
 This request covers the entire trip history in a single streaming response,
 which makes it the largest and most failure-prone call in the pipeline. It is
-therefore wrapped in [httr2::req_retry()] with `retry_on_failure = TRUE`, so
+therefore wrapped in \code{\link[httr2:req_retry]{httr2::req_retry()}} with \code{retry_on_failure = TRUE}, so
 low-level transport failures — notably
-`Recv failure: Connection reset by peer`, which has failed production runs —
+\verb{Recv failure: Connection reset by peer}, which has failed production runs —
 are retried with exponential backoff rather than aborting the run. HTTP 429,
 500 and 503 are also treated as transient.
+\subsection{IMEI filters are chunked automatically}{
 
-## IMEI filters are chunked automatically
-
-`imeis` is sent as a comma-separated query parameter, so a long device list
+\code{imeis} is sent as a comma-separated query parameter, so a long device list
 becomes a very long URL. At roughly 16 characters per IMEI, ~500 devices is
 all that fits inside the usual 8192-byte limit, past which the server answers
-**HTTP 400 Bad Request** — a failure that looks nothing like "your URL is too
-long". When the list would overflow `max_url_chars`, it is split into as many
+\strong{HTTP 400 Bad Request} — a failure that looks nothing like "your URL is too
+long". When the list would overflow \code{max_url_chars}, it is split into as many
 requests as needed and the results row-bound and deduplicated. Callers see one
 data frame either way.
+}
 }
 \examples{
 \dontrun{

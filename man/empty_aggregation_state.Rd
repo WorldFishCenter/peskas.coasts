@@ -11,13 +11,13 @@ empty_aggregation_state(settings)
 under.}
 }
 \value{
-An aggregation state: `manifest`, `registry`, `effort`, `settings`.
+An aggregation state: \code{manifest}, \code{registry}, \code{effort}, \code{settings}.
 }
 \description{
 The state a run starts from when there is nothing usable to carry forward:
 typed but empty, so the first batch binds onto columns of the right kind.
 }
 \seealso{
-[load_aggregation_state()], [aggregation_state_ok()]
+\code{\link[=load_aggregation_state]{load_aggregation_state()}}, \code{\link[=aggregation_state_ok]{aggregation_state_ok()}}
 }
 \keyword{internal}

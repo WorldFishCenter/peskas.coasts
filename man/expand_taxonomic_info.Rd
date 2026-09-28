@@ -8,33 +8,37 @@ expand_taxonomic_info(data, strip_parentheticals = FALSE, version = "latest")
 }
 \arguments{
 \item{data}{A data frame with at minimum the following columns:
-- `alpha3_code`: FAO 3-alpha (interagency) code identifying the taxon
-  group, e.g. `"EMP"` for emperors. Passed through untouched.
-- `scientific_name`: Scientific name at any taxonomic rank; trailing
-  ` spp` is stripped before matching.}
+\itemize{
+\item \code{alpha3_code}: FAO 3-alpha (interagency) code identifying the taxon
+group, e.g. \code{"EMP"} for emperors. Passed through untouched.
+\item \code{scientific_name}: Scientific name at any taxonomic rank; trailing
+\code{ spp} is stripped before matching.
+}}
 
-\item{strip_parentheticals}{Logical. If `TRUE`, a trailing parenthetical is
-removed from `scientific_name` before matching, so that
-`"Haemulidae (=Pomadasyidae)"` matches the family `Haemulidae`. Defaults to
-`FALSE`, which preserves the historical behaviour of leaving such names
+\item{strip_parentheticals}{Logical. If \code{TRUE}, a trailing parenthetical is
+removed from \code{scientific_name} before matching, so that
+\code{"Haemulidae (=Pomadasyidae)"} matches the family \code{Haemulidae}. Defaults to
+\code{FALSE}, which preserves the historical behaviour of leaving such names
 unmatched. See Details.}
 
 \item{version}{FishBase / SeaLifeBase release to read. Defaults to
-`"latest"`, which is not a fixed dataset — see [resolve_db_version()].}
+\code{"latest"}, which is not a fixed dataset — see \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
 A tibble with columns:
-  - `alpha3_code`: Passed through from input.
-  - `original_name`: The original `scientific_name` value.
-  - `SpecCode`: FishBase / SeaLifeBase species identifier.
-  - `species_found`: Matched binomial species name.
-  - `server`: Source database (`"fishbase"` or `"sealifebase"`).
+\itemize{
+\item \code{alpha3_code}: Passed through from input.
+\item \code{original_name}: The original \code{scientific_name} value.
+\item \code{SpecCode}: FishBase / SeaLifeBase species identifier.
+\item \code{species_found}: Matched binomial species name.
+\item \code{server}: Source database (\code{"fishbase"} or \code{"sealifebase"}).
+}
 }
 \description{
 Given a data frame of taxa names, searches FishBase and SeaLifeBase for
 matching species. Matching is attempted at multiple taxonomic ranks: species
 (binomial), genus, family, order, and class. This allows coarser records
-(e.g. `"Lutjanidae spp"`) to expand to all species in that family.
+(e.g. \code{"Lutjanidae spp"}) to expand to all species in that family.
 }
 \details{
 The function builds a lookup dictionary by pivoting the taxonomy backbone
@@ -42,23 +46,23 @@ wide-to-long across ranks, so a single join resolves names at any level.
 Records that do not match any rank are dropped (inner join) and the names
 that were dropped are logged at WARN. A name can go from matching to
 unmatched purely because the underlying release changed: 26.06 / 26.07 keep
-`Caesionidae` and `Scaridae` as family names but attach no species to
-either, so both silently expand to nothing. Pin `version` and read the
+\code{Caesionidae} and \code{Scaridae} as family names but attach no species to
+either, so both silently expand to nothing. Pin \code{version} and read the
 warning.
 
 Matching is against the FishBase / SeaLifeBase backbone only. It therefore
 resolves nothing for names that are not ranks those databases carry —
-tribes (`"Thunnini"`), infraorders (`"Reptantia"`, `"Brachyura"`), informal
-groupings (`"Osteichthyes"`, `"Algae"`, `"Selachimorpha"`) — nor for
-superseded binomials (`"Leiognathus equulus"`, which FishBase now lists as
-*Leiognathus equula*). Such taxa need a synonym or common-name route.
+tribes (\code{"Thunnini"}), infraorders (\code{"Reptantia"}, \code{"Brachyura"}), informal
+groupings (\code{"Osteichthyes"}, \code{"Algae"}, \code{"Selachimorpha"}) — nor for
+superseded binomials (\code{"Leiognathus equulus"}, which FishBase now lists as
+\emph{Leiognathus equula}). Such taxa need a synonym or common-name route.
 
-`strip_parentheticals` exists because some FAO names carry an alternative
+\code{strip_parentheticals} exists because some FAO names carry an alternative
 name in brackets. Three appear in the Peskas frame:
-`"Haemulidae (=Pomadasyidae)"`, `"Selachimorpha (Pleurotremata)"` and
-`"Labridae (ex Scaridae)"`. It is off by default precisely because turning it
+\code{"Haemulidae (=Pomadasyidae)"}, \code{"Selachimorpha (Pleurotremata)"} and
+\code{"Labridae (ex Scaridae)"}. It is off by default precisely because turning it
 on changes results for taxa that existing pipelines already publish — with it
-on, `Haemulidae` gains 138 species and `Labridae` 569, where today both match
+on, \code{Haemulidae} gains 138 species and \code{Labridae} 569, where today both match
 nothing. Enable it deliberately, per pipeline, and re-baseline when you do.
 }
 \examples{

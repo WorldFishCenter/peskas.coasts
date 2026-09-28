@@ -65,10 +65,10 @@
 #'       constituent H3 cells.}
 #'     \item{`n_cells`}{Number of H3 cells that make up the ground.}
 #'     \item{`avg_fidelity`}{Mean across cells of the average fraction of
-#'       visiting trips' fishing time spent in each cell. Bounded [0, 1].
+#'       visiting trips' fishing time spent in each cell. Between 0 and 1.
 #'       Higher values indicate stronger habitat preference (fidelity).}
 #'     \item{`constancy`}{Mean across cells of the fraction of study days each
-#'       cell was fished. Bounded [0, 1]. Near 0 = sporadic; near 1 = daily.}
+#'       cell was fished. Between 0 and 1. Near 0 = sporadic; near 1 = daily.}
 #'     \item{`avg_hours_per_day`}{Mean across cells of fishing hours per
 #'       calendar day (`fishing_hours / n_total_days`).}
 #'     \item{`avg_visits_per_day`}{Mean across cells of unique trips per

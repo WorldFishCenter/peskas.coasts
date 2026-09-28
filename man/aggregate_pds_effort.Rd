@@ -14,92 +14,93 @@ aggregate_pds_effort(
 )
 }
 \arguments{
-\item{log_threshold}{The logging threshold to use. Default is `logger::DEBUG`.}
+\item{log_threshold}{The logging threshold to use. Default is \code{logger::DEBUG}.}
 
 \item{h3_res}{Integer (0–15). H3 resolution level for the output grid.
-Default is `9` (~174 m edge length). Different resolutions write to
+Default is \code{9} (~174 m edge length). Different resolutions write to
 separate cloud prefixes.}
 
 \item{max_gap_hours, gap_policy}{How silent stretches of a track are counted,
-passed to [prepare_tracks_for_effort()]. Both are recorded with the
+passed to \code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}. Both are recorded with the
 aggregation state: changing either makes every stored figure incomparable,
 so the grid is rebuilt from the predicted tracks.}
 
 \item{batch_size}{Integer. Most predicted-track objects to hold in memory at
 once. The function reads the whole backlog either way; this only sets how
-much of it is in flight at a time. The default of `8000` is far above a
+much of it is in flight at a time. The default of \code{8000} is far above a
 normal delta, so ordinary runs are a single batch and are unaffected.
 Lower it on a smaller machine. See the batching section below.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
 Invisibly returns the merged H3 grid data frame (columns:
-  `h3_index`, `year`, `gear`, `country`, `fishing_hours`, `unique_trips`,
-  `n_active_days`, `first_active_date`, `last_active_date`,
-  `avg_fidelity_sum`, `n_trips_for_fidelity`, `fishing_pings`), or `NULL` if
-  there was nothing to process.
+\code{h3_index}, \code{year}, \code{gear}, \code{country}, \code{fishing_hours}, \code{unique_trips},
+\code{n_active_days}, \code{first_active_date}, \code{last_active_date},
+\code{avg_fidelity_sum}, \code{n_trips_for_fidelity}, \code{fishing_pings}), or \code{NULL} if
+there was nothing to process.
 }
 \description{
 Downloads all per-trip predicted fishing track files produced by
-[predict_pds_tracks()] and aggregates them into an H3 hexagonal grid of
+\code{\link[=predict_pds_tracks]{predict_pds_tracks()}} and aggregates them into an H3 hexagonal grid of
 cumulative fishing effort. The result is uploaded as a versioned parquet
 file to the country-level cloud storage bucket.
 }
 \details{
-Predicted track files contain fishing-only GPS points (columns: `trip`,
-`timestamp`, `latitude`, `longitude`). This function:
+Predicted track files contain fishing-only GPS points (columns: \code{trip},
+\code{timestamp}, \code{latitude}, \code{longitude}). This function:
+\enumerate{
+\item Lists all files under \code{conf$pds$pds_tracks_predicted$file_prefix} in the
+PDS bucket.
+\item Downloads only \strong{new} files (incremental via manifest) in parallel using
+\code{furrr}.
+\item Prepares each track with \code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}, which computes
+per-ping time intervals (\code{dt_hours}), assigns H3 cell indices, and
+records per-trip total hours for fidelity computation.
+\item Removes tracks PDS has already delivered under another trip identifier,
+whole trips first (\code{\link[=index_trip_duplicates]{index_trip_duplicates()}}) and then the pings two
+partially overlapping trips share (\code{\link[=drop_overlapping_pings]{drop_overlapping_pings()}}).
+\item Adds what survives to the per-trip effort store (\code{\link[=build_trip_effort]{build_trip_effort()}}).
+\item Derives the whole grid from that store (\code{\link[=derive_effort_grid]{derive_effort_grid()}}) and
+uploads it.
+}
+\subsection{Incremental state}{
 
-1. Lists all files under `conf$pds$pds_tracks_predicted$file_prefix` in the
-   PDS bucket.
-2. Downloads only **new** files (incremental via manifest) in parallel using
-   `furrr`.
-3. Prepares each track with [prepare_tracks_for_effort()], which computes
-   per-ping time intervals (`dt_hours`), assigns H3 cell indices, and
-   records per-trip total hours for fidelity computation.
-4. Removes tracks PDS has already delivered under another trip identifier,
-   whole trips first ([index_trip_duplicates()]) and then the pings two
-   partially overlapping trips share ([drop_overlapping_pings()]).
-5. Adds what survives to the per-trip effort store ([build_trip_effort()]).
-6. Derives the whole grid from that store ([derive_effort_grid()]) and
-   uploads it.
-
-## Incremental state
-
-Four side files sit next to the grid. `aggregated_manifest.rds` lists the
+Four side files sit next to the grid. \code{aggregated_manifest.rds} lists the
 objects already aggregated with the modification time they were aggregated
-at; `aggregated_trips.rds` lists every trip seen, with its device, its
+at; \code{aggregated_trips.rds} lists every trip seen, with its device, its
 window, the fingerprint of its track and the trip it duplicates if it was
-dropped; `aggregated_trip_effort.parquet` holds fishing hours and pings per
-trip, cell, year, gear, country and day; `aggregated_settings.rds` records
+dropped; \code{aggregated_trip_effort.parquet} holds fishing hours and pings per
+trip, cell, year, gear, country and day; \code{aggregated_settings.rds} records
 the gap handling those hours were measured under.
 
 The store — not the published grid — is what carries between runs, and the
 grid is rebuilt from it in full every time. That is what makes a trip
-*removable*: PDS revises trips continuously (identifiers are retired, and
+\emph{removable}: PDS revises trips continuously (identifiers are retired, and
 the same identifier can come to describe a different window), so
-[predict_pds_tracks()] deletes and replaces files, and effort that was
+\code{\link[=predict_pds_tracks]{predict_pds_tracks()}} deletes and replaces files, and effort that was
 already counted has to be taken back out. A grid of running totals cannot do
 that; a per-trip store can, by dropping the affected trips' rows — together
 with any trip that was dropped as a duplicate of them, and any trip that
-might share pings with the incoming batch ([recall_overlapping_trips()]) —
+might share pings with the incoming batch (\code{\link[=recall_overlapping_trips]{recall_overlapping_trips()}}) —
 and re-reading only the handful of files involved. Deriving from the whole
 store each run also makes the result independent of how trips were batched,
-so `unique_trips` is a distinct count rather than a sum of per-batch counts.
+so \code{unique_trips} is a distinct count rather than a sum of per-batch counts.
 
 A trip's rows are replaced rather than added to, so reading a file twice
 changes nothing. Everything is re-read from the predicted tracks only when
-the state is missing or written by an older schema, or when `max_gap_hours` /
-`gap_policy` differ from the values the stored hours were measured under —
+the state is missing or written by an older schema, or when \code{max_gap_hours} /
+\code{gap_policy} differ from the values the stored hours were measured under —
 settings that leave no trace in the files themselves. A new model version
-needs no trigger of its own: [predict_pds_tracks()] deletes every
+needs no trigger of its own: \code{\link[=predict_pds_tracks]{predict_pds_tracks()}} deletes every
 old-version file and writes new ones, which the per-file comparison already
 sees, and it sees precisely which files moved rather than assuming all of
 them did.
+}
 
-## Batching large backlogs
+\subsection{Batching large backlogs}{
 
 Peak memory is set by how many points are read at once, not by how many the
 store holds, and the two are normally unrelated: a daily run reads the delta
@@ -108,7 +109,7 @@ region registered for the first time breaks that assumption, because its
 whole history is new at once. Read in one go, 25 million points need roughly
 25 GB and the run is killed by the operating system rather than failing in R.
 
-So the backlog is read in batches of `batch_size` objects, and the loop is
+So the backlog is read in batches of \code{batch_size} objects, and the loop is
 inside this function: there is one way to call it, and it does the whole
 backlog whatever size that is. A normal delta is smaller than a single batch
 and behaves exactly as it did before batching existed.
@@ -120,52 +121,55 @@ grid is derived once at the end rather than per batch, since it is rebuilt
 from the whole store every time regardless.
 
 Batching does not change the result. Trips that might share pings are
-recalled whatever batch they fall in ([recall_overlapping_trips()]), and the
+recalled whatever batch they fall in (\code{\link[=recall_overlapping_trips]{recall_overlapping_trips()}}), and the
 grid is derived from the entire store, so how the trips were divided leaves
 no trace. A store built over eleven batches and one built in a single pass
-agree on cell count, `unique_trips` and per-cell effort to floating-point
+agree on cell count, \code{unique_trips} and per-cell effort to floating-point
 summation order.
 
 As a guide to sizing, predicted-track objects hold a few hundred points each,
 so the default 8,000 is roughly two million points, or about 2.7 GB. Lower it
 if the machine is smaller than that; there is no reason to raise it.
+}
 
-## Grid schema
+\subsection{Grid schema}{
 
-The grid is partitioned by `year`, `gear`, and `country`, so there may be
-several rows per `(h3_index, year)` — one per `(gear, country)` combination.
-`gear` and `country` come from the per-trip device metadata
-(trip → IMEI → Airtable `pds_devices`); trips with no device metadata are
-kept under `gear = "unknown"` / `country = "unknown"` so totals are
+The grid is partitioned by \code{year}, \code{gear}, and \code{country}, so there may be
+several rows per \verb{(h3_index, year)} — one per \verb{(gear, country)} combination.
+\code{gear} and \code{country} come from the per-trip device metadata
+(trip → IMEI → Airtable \code{pds_devices}); trips with no device metadata are
+kept under \code{gear = "unknown"} / \code{country = "unknown"} so totals are
 preserved. Because each trip maps to exactly one gear and one country,
-summing over `gear` and `country` (and `year`) recovers the all-time,
-all-fleet totals — see [plot_effort_map()] for temporal maps. Primary
+summing over \code{gear} and \code{country} (and \code{year}) recovers the all-time,
+all-fleet totals — see \code{\link[=plot_effort_map]{plot_effort_map()}} for temporal maps. Primary
 effort columns:
+\itemize{
+\item \code{fishing_hours}: accumulated fishing time (sum of capped inter-ping
+intervals). This is the primary effort metric.
+\item \code{unique_trips}: count of distinct trips contributing to the cell.
+\item \code{n_active_days}: count of distinct calendar days with fishing activity.
+\item \code{first_active_date} / \code{last_active_date}: date range for inferring the
+study period length (\code{n_total_days}) downstream.
+\item \code{avg_fidelity_sum}: sum of per-trip fidelity values (fraction of each
+trip's total fishing hours spent in this cell). Divide by
+\code{n_trips_for_fidelity} to get \code{avg_fidelity}, between 0 and 1.
+\item \code{n_trips_for_fidelity}: number of trips contributing to \code{avg_fidelity_sum}.
+\item \code{fishing_pings}: raw GPS point count (retained for QA; not used as a
+primary metric because ping frequency is irregular).
+}
 
-- `fishing_hours`: accumulated fishing time (sum of capped inter-ping
-  intervals). This is the primary effort metric.
-- `unique_trips`: count of distinct trips contributing to the cell.
-- `n_active_days`: count of distinct calendar days with fishing activity.
-- `first_active_date` / `last_active_date`: date range for inferring the
-  study period length (`n_total_days`) downstream.
-- `avg_fidelity_sum`: sum of per-trip fidelity values (fraction of each
-  trip's total fishing hours spent in this cell). Divide by
-  `n_trips_for_fidelity` to get `avg_fidelity` ∈ [0, 1].
-- `n_trips_for_fidelity`: number of trips contributing to `avg_fidelity_sum`.
-- `fishing_pings`: raw GPS point count (retained for QA; not used as a
-  primary metric because ping frequency is irregular).
-
-**Multi-resolution support:** passing different `h3_res` values writes to
-separate cloud prefixes (e.g. `predicted-pds-h3_grid_r9`,
-`predicted-pds-h3_grid_r7`), so grids at multiple resolutions can coexist.
-Use [rollup_h3_resolution()] to derive coarser views from a stored fine grid,
-or pass a coarser `h3_res` directly to recompute from raw tracks.
-[derive_fishing_grounds()] can further roll up to any resolution before
+\strong{Multi-resolution support:} passing different \code{h3_res} values writes to
+separate cloud prefixes (e.g. \code{predicted-pds-h3_grid_r9},
+\code{predicted-pds-h3_grid_r7}), so grids at multiple resolutions can coexist.
+Use \code{\link[=rollup_h3_resolution]{rollup_h3_resolution()}} to derive coarser views from a stored fine grid,
+or pass a coarser \code{h3_res} directly to recompute from raw tracks.
+\code{\link[=derive_fishing_grounds]{derive_fishing_grounds()}} can further roll up to any resolution before
 extracting contiguous fishing ground polygons.
 }
+}
 \seealso{
-[predict_pds_tracks()], [derive_fishing_grounds()],
-  [rollup_h3_resolution()], [plot_effort_map()]
+\code{\link[=predict_pds_tracks]{predict_pds_tracks()}}, \code{\link[=derive_fishing_grounds]{derive_fishing_grounds()}},
+\code{\link[=rollup_h3_resolution]{rollup_h3_resolution()}}, \code{\link[=plot_effort_map]{plot_effort_map()}}
 }
 \keyword{modeling}
 \keyword{workflow}

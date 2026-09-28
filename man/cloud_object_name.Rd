@@ -27,32 +27,32 @@ cloud_object_name(
 \item{options}{A named list of cloud storage provider options.}
 }
 \value{
-A character string with the full object name, or `character(0)` if
-  no matching objects are found.
+A character string with the full object name, or \code{character(0)} if
+no matching objects are found.
 }
 \description{
-Resolves **one** versioned object in cloud storage. When `version = "latest"`,
+Resolves \strong{one} versioned object in cloud storage. When \code{version = "latest"},
 returns the most recently updated object matching the prefix and extension.
 }
 \section{Resolves one object, never enumerates a bucket}{
 
-This function is **not** a listing helper. It always returns a single name —
-`selected_rows$name[1]` — even though it groups internally by `base_name` and
-`ext`. Point it at a prefix that matches many *distinct* base names (for
+This function is \strong{not} a listing helper. It always returns a single name —
+\code{selected_rows$name[1]} — even though it groups internally by \code{base_name} and
+\code{ext}. Point it at a prefix that matches many \emph{distinct} base names (for
 example one object per GPS trip, where tens of thousands share a prefix) and
 it silently hands back an arbitrary one of them rather than erroring. It is
-built for the versioned-snapshot pattern `<prefix>__<version>__.<ext>`, where
+built for the versioned-snapshot pattern \verb{<prefix>__<version>__.<ext>}, where
 the prefix identifies exactly one logical dataset and the only question is
 which version of it to take.
 
-To enumerate objects, use [cloud_object_names()], which returns every match.
+To enumerate objects, use \code{\link[=cloud_object_names]{cloud_object_names()}}, which returns every match.
 
 The single-name return type is depended upon by downstream pipelines and will
 not change.
 }
 
 \seealso{
-[cloud_object_names()] for enumeration.
+\code{\link[=cloud_object_names]{cloud_object_names()}} for enumeration.
 }
 \keyword{internal}
 \keyword{storage}

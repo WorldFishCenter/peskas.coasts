@@ -7,18 +7,18 @@
 filter_by_fao_area(expanded, fao_areas, version = "latest")
 }
 \arguments{
-\item{expanded}{A table as returned by [expand_taxonomic_info()].}
+\item{expanded}{A table as returned by \code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}.}
 
 \item{fao_areas}{An integer vector of FAO major fishing area codes.}
 
 \item{version}{FishBase / SeaLifeBase release to read. See
-[resolve_db_version()].}
+\code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-`expanded`, filtered, with the `AreaCode` column dropped.
+\code{expanded}, filtered, with the \code{AreaCode} column dropped.
 }
 \description{
-Joins the `faoareas` table from both servers onto an expanded taxa table and
+Joins the \code{faoareas} table from both servers onto an expanded taxa table and
 keeps only species recorded in the requested FAO major fishing areas.
 Species with no area assignment at all are always retained.
 }

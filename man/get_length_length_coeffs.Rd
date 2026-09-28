@@ -11,46 +11,48 @@ get_length_length_coeffs(
 )
 }
 \arguments{
-\item{expanded}{A table as returned by [expand_taxonomic_info()], optionally
+\item{expanded}{A table as returned by \code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}, optionally
 already restricted to an FAO area.}
 
 \item{length_types}{Character vector of length measurement codes to keep.
-Both `Length1` and `Length2` must be in this set. Defaults to
-`c("TL", "FL")` — total and fork length. Pass `NULL` to apply no filter.}
+Both \code{Length1} and \code{Length2} must be in this set. Defaults to
+\code{c("TL", "FL")} — total and fork length. Pass \code{NULL} to apply no filter.}
 
 \item{version}{FishBase / SeaLifeBase release to read. See
-[resolve_db_version()].}
+\code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
 A tibble with:
-  - `alpha3_code`, `original_name`, `SpecCode`, `species_found`, `server`:
-    carried through from `expanded`.
-  - `Length1`, `Length2`: the measurement types converted from and to.
-  - `aL`, `bL`: intercept and slope of the conversion.
-  - `LengthMin`, `LengthMax`, `Number`, `Sex`, `r2`: study metadata.
+\itemize{
+\item \code{alpha3_code}, \code{original_name}, \code{SpecCode}, \code{species_found}, \code{server}:
+carried through from \code{expanded}.
+\item \code{Length1}, \code{Length2}: the measurement types converted from and to.
+\item \code{aL}, \code{bL}: intercept and slope of the conversion.
+\item \code{LengthMin}, \code{LengthMax}, \code{Number}, \code{Sex}, \code{r2}: study metadata.
+}
 }
 \description{
 Attaches length-length conversion coefficients from the FishBase /
-SeaLifeBase `popll` table to an expanded taxa table. These convert one length
-measurement into another via `Length1 = aL + bL * Length2` — note the
-direction: **`Length2` is the predictor** — which is required whenever a
+SeaLifeBase \code{popll} table to an expanded taxa table. These convert one length
+measurement into another via \code{Length1 = aL + bL * Length2} — note the
+direction: \strong{\code{Length2} is the predictor} — which is required whenever a
 survey records a different length type from the one the length-weight
 coefficients are expressed in.
 }
 \details{
-Note the naming: the `popll` table calls the conversion coefficients `a` and
-`b`, the same names the length-*weight* table uses for entirely different
-quantities. They are renamed to `aL` / `bL` here so that the two tables can
+Note the naming: the \code{popll} table calls the conversion coefficients \code{a} and
+\code{b}, the same names the length-\emph{weight} table uses for entirely different
+quantities. They are renamed to \code{aL} / \code{bL} here so that the two tables can
 be joined without collision.
 
-**The direction is `Length1 = aL + bL * Length2`, not the reverse.**
+\strong{The direction is \code{Length1 = aL + bL * Length2}, not the reverse.}
 Releases up to 4.9.0 documented it backwards. Reading it the wrong way round
 inverts every ratio, which is worse than not converting at all. The data
-settles it: over FishBase 25.04, rows with `Length1 = "TL"`,
-`Length2 = "FL"` have a median `bL` of 1.052 (n = 6,641) and
-`Length1 = "TL"`, `Length2 = "SL"` a median of 1.204 (n = 8,848). Total
+settles it: over FishBase 25.04, rows with \code{Length1 = "TL"},
+\code{Length2 = "FL"} have a median \code{bL} of 1.052 (n = 6,641) and
+\code{Length1 = "TL"}, \code{Length2 = "SL"} a median of 1.204 (n = 8,848). Total
 length exceeds both fork and standard length, and standard length by more,
-so `bL` can only be the multiplier *onto* `Length2`.
+so \code{bL} can only be the multiplier \emph{onto} \code{Length2}.
 
 This is load-bearing wherever a survey's recorded length type differs from
 the coefficient type. Timor-Leste's v1 survey form records fork length while
@@ -69,6 +71,6 @@ ll <- taxa |>
 }
 }
 \seealso{
-[get_length_weight_coeffs()], [get_taxa_morphometrics()]
+\code{\link[=get_length_weight_coeffs]{get_length_weight_coeffs()}}, \code{\link[=get_taxa_morphometrics]{get_taxa_morphometrics()}}
 }
 \keyword{taxa}

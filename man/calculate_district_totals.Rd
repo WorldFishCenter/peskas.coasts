@@ -7,30 +7,36 @@
 calculate_district_totals(fleet_estimates, monthly_summaries)
 }
 \arguments{
-\item{fleet_estimates}{Data frame from `estimate_fleet_activity()` containing:
-- district: District name
-- date_month: Month as date
-- estimated_total_trips: Estimated trips for entire fleet
-- sampling_rate: Proportion of fleet tracked
-- Other fleet statistics}
+\item{fleet_estimates}{Data frame from \code{estimate_fleet_activity()} containing:
+\itemize{
+\item district: District name
+\item date_month: Month as date
+\item estimated_total_trips: Estimated trips for entire fleet
+\item sampling_rate: Proportion of fleet tracked
+\item Other fleet statistics
+}}
 
 \item{monthly_summaries}{Data frame with catch/revenue data containing:
-- district: District name (must match fleet_estimates)
-- date: Month as date (will be matched to date_month)
-- metric: Metric name (filtered for mean_catch_kg and mean_catch_price)
-- value: Metric value}
+\itemize{
+\item district: District name (must match fleet_estimates)
+\item date: Month as date (will be matched to date_month)
+\item metric: Metric name (filtered for mean_catch_kg and mean_catch_price)
+\item value: Metric value
+}}
 }
 \value{
 A data frame with district-level totals:
-  - district: District name
-  - date_month: Month as date
-  - sample_total_trips: Trips from tracked boats
-  - estimated_total_trips: Estimated trips for entire fleet
-  - sampling_rate: Proportion of fleet tracked
-  - mean_catch_kg: Average catch per trip
-  - mean_catch_price: Average revenue per trip
-  - estimated_total_catch_kg: Estimated total catch for district
-  - estimated_total_revenue: Estimated total revenue for district
+\itemize{
+\item district: District name
+\item date_month: Month as date
+\item sample_total_trips: Trips from tracked boats
+\item estimated_total_trips: Estimated trips for entire fleet
+\item sampling_rate: Proportion of fleet tracked
+\item mean_catch_kg: Average catch per trip
+\item mean_catch_price: Average revenue per trip
+\item estimated_total_catch_kg: Estimated total catch for district
+\item estimated_total_revenue: Estimated total revenue for district
+}
 }
 \description{
 Combines fleet activity estimates with catch and revenue data to calculate
@@ -40,8 +46,10 @@ to scale up from sample-based averages.
 \details{
 This function merges fleet activity data with monthly catch/revenue summaries
 to estimate total district-level fishing production. The calculations are:
-- Total catch = mean catch per trip × estimated total trips
-- Total revenue = mean revenue per trip × estimated total trips
+\itemize{
+\item Total catch = mean catch per trip × estimated total trips
+\item Total revenue = mean revenue per trip × estimated total trips
+}
 
 Only districts with catch data are included in the results.
 }
@@ -60,8 +68,10 @@ district_totals |>
 
 }
 \seealso{
-* [calculate_monthly_trip_stats()] for trip statistics
-* [estimate_fleet_activity()] for fleet-wide estimates
+\itemize{
+\item \code{\link[=calculate_monthly_trip_stats]{calculate_monthly_trip_stats()}} for trip statistics
+\item \code{\link[=estimate_fleet_activity]{estimate_fleet_activity()}} for fleet-wide estimates
+}
 }
 \keyword{analysis}
 \keyword{workflow}

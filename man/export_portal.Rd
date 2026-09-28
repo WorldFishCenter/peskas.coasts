@@ -8,10 +8,10 @@ export_portal(log_threshold = logger::DEBUG, package = "coasts")
 }
 \arguments{
 \item{log_threshold}{The logging level threshold for the logger package (e.g., DEBUG, INFO)
-See `logger::log_levels` for available options.}
+See \code{logger::log_levels} for available options.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
@@ -24,28 +24,32 @@ in data portals. The function also generates geographic regional summaries.
 }
 \details{
 The function performs the following operations:
-- Downloads nine summary datasets from cloud storage:
-  - Monthly summaries: Aggregated catch metrics by district and month
-  - All monthly summaries: as above but without the dashboard exclusions
-  - Taxa summaries: Species-specific metrics in long format
-  - Districts summaries: District-level indicators over time
-  - Gear summaries: Performance metrics by gear type
-  - Grid summaries: Spatial grid data from vessel tracking
-  - Taxa traits: FishBase traits per landed taxon
-  - Length summaries: recorded catch per length class
-  - Gear taxa summaries: recorded catch per gear and species
-- Downloads aggregated catch estimates from the modeling step
-- Creates geographic regional summaries from the unfiltered monthly data
-  (`all_monthly_summaries`), so the coasts portal keeps every survey form
-  while the MongoDB `dashboard` collections keep the filtered ones
-- Joins aggregated estimates (fishing trips, catch tonnage, revenue) and the
-  share of the fleet tracked behind them (`sampling_rate`) to the monthly
-  and district summaries
-- Transforms monthly summaries to long format for portal consumption
-- Uploads all datasets to specified MongoDB collections
+\itemize{
+\item Downloads nine summary datasets from cloud storage:
+\itemize{
+\item Monthly summaries: Aggregated catch metrics by district and month
+\item All monthly summaries: as above but without the dashboard exclusions
+\item Taxa summaries: Species-specific metrics in long format
+\item Districts summaries: District-level indicators over time
+\item Gear summaries: Performance metrics by gear type
+\item Grid summaries: Spatial grid data from vessel tracking
+\item Taxa traits: FishBase traits per landed taxon
+\item Length summaries: recorded catch per length class
+\item Gear taxa summaries: recorded catch per gear and species
+}
+\item Downloads aggregated catch estimates from the modeling step
+\item Creates geographic regional summaries from the unfiltered monthly data
+(\code{all_monthly_summaries}), so the coasts portal keeps every survey form
+while the MongoDB \code{dashboard} collections keep the filtered ones
+\item Joins aggregated estimates (fishing trips, catch tonnage, revenue) and the
+share of the fleet tracked behind them (\code{sampling_rate}) to the monthly
+and district summaries
+\item Transforms monthly summaries to long format for portal consumption
+\item Uploads all datasets to specified MongoDB collections
+}
 
 The function expects the summary files to be named with the pattern:
-`{file_prefix}_{table_name}.parquet` where table_name is one of:
+\verb{\{file_prefix\}_\{table_name\}.parquet} where table_name is one of:
 monthly_summaries, all_monthly_summaries, taxa_summaries, districts_summaries,
 gear_summaries, grid_summaries, taxa_traits, length_summaries,
 gear_taxa_summaries
@@ -61,9 +65,11 @@ export_portal(logger::INFO)
 
 }
 \seealso{
-* [summarize_data()] for generating the summary datasets
-* [download_parquet_from_cloud()] for retrieving data from cloud storage
-* [mdb_collection_push()] for uploading data to MongoDB
+\itemize{
+\item \code{\link[=summarize_data]{summarize_data()}} for generating the summary datasets
+\item \code{\link[=download_parquet_from_cloud]{download_parquet_from_cloud()}} for retrieving data from cloud storage
+\item \code{\link[=mdb_collection_push]{mdb_collection_push()}} for uploading data to MongoDB
+}
 }
 \keyword{export}
 \keyword{workflow}

@@ -14,24 +14,24 @@ prep_fishing_points(
 \arguments{
 \item{df}{A data frame containing GPS fishing point records.}
 
-\item{lat_col}{Character. Name of the latitude column. Default is `"lat"`.}
+\item{lat_col}{Character. Name of the latitude column. Default is \code{"lat"}.}
 
-\item{lon_col}{Character. Name of the longitude column. Default is `"lon"`.}
+\item{lon_col}{Character. Name of the longitude column. Default is \code{"lon"}.}
 
 \item{crs_projected}{Integer. EPSG code of the target projected CRS.
-Default is `32632` (UTM zone 32N). Choose a zone that covers your study
+Default is \code{32632} (UTM zone 32N). Choose a zone that covers your study
 area for accurate metric distances.}
 }
 \value{
-An `sf` POINT object in the requested projected CRS.
+An \code{sf} POINT object in the requested projected CRS.
 }
 \description{
-Converts a data frame of GPS fishing observations to a projected `sf` POINT
+Converts a data frame of GPS fishing observations to a projected \code{sf} POINT
 object. Rows with missing coordinates are dropped. The result is in a metric
 CRS suitable for distance-based operations such as grid creation and spatial
 joins.
 }
 \seealso{
-[create_reference_grid()], [aggregate_daily_effort()]
+\code{\link[=create_reference_grid]{create_reference_grid()}}, \code{\link[=aggregate_daily_effort]{aggregate_daily_effort()}}
 }
 \keyword{preprocessing}

@@ -8,13 +8,17 @@ prepare_boat_registry(boats_table = NULL)
 }
 \arguments{
 \item{boats_table}{Data frame containing boat registry information with:
-- District: District name for each boat
-- Additional boat metadata (boat ID, registration details, etc.)}
+\itemize{
+\item District: District name for each boat
+\item Additional boat metadata (boat ID, registration details, etc.)
+}}
 }
 \value{
 A data frame with boat counts by district:
-  - district: District name (standardized from metadata)
-  - total_boats: Total number of boats registered in the district
+\itemize{
+\item district: District name (standardized from metadata)
+\item total_boats: Total number of boats registered in the district
+}
 }
 \description{
 Processes boat registry data from metadata table to create a summary
@@ -37,7 +41,9 @@ print(boat_registry)
 
 }
 \seealso{
-* [estimate_fleet_activity()] for using boat registry in fleet estimates
+\itemize{
+\item \code{\link[=estimate_fleet_activity]{estimate_fleet_activity()}} for using boat registry in fleet estimates
+}
 }
 \keyword{preprocessing}
 \keyword{workflow}

@@ -20,27 +20,27 @@ cloud_object_names(
 \item{options}{A named list of cloud storage provider options.}
 
 \item{extension}{A character string the object name must end with. Default
-`""`, i.e. no extension filter.}
+\code{""}, i.e. no extension filter.}
 
-\item{latest_only}{Logical. If `TRUE`, keeps only the most recently updated
-object per distinct `base_name`, applying [cloud_object_name()]'s
+\item{latest_only}{Logical. If \code{TRUE}, keeps only the most recently updated
+object per distinct \code{base_name}, applying \code{\link[=cloud_object_name]{cloud_object_name()}}'s
 "latest" semantics to each base name independently rather than across the
-whole match set. Default `FALSE`, which returns everything.}
+whole match set. Default \code{FALSE}, which returns everything.}
 }
 \value{
 A character vector of object names, sorted, possibly of length zero.
-  Never `NA`.
+Never \code{NA}.
 }
 \description{
-Enumerates **every** object matching a prefix and extension, unlike
-[cloud_object_name()] which resolves a single versioned object. Use this when
+Enumerates \strong{every} object matching a prefix and extension, unlike
+\code{\link[=cloud_object_name]{cloud_object_name()}} which resolves a single versioned object. Use this when
 a prefix legitimately covers many distinct objects — for example one Parquet
 file per GPS trip.
 }
 \details{
-Names that do not follow the `<base_name>__<version>__.<ext>` convention are
-still returned when `latest_only = FALSE`; they are skipped when
-`latest_only = TRUE`, because there is no version to compare.
+Names that do not follow the \verb{<base_name>__<version>__.<ext>} convention are
+still returned when \code{latest_only = FALSE}; they are skipped when
+\code{latest_only = TRUE}, because there is no version to compare.
 }
 \examples{
 \dontrun{
@@ -63,6 +63,6 @@ latest_each <- cloud_object_names(
 }
 }
 \seealso{
-[cloud_object_name()] for resolving a single versioned object.
+\code{\link[=cloud_object_name]{cloud_object_name()}} for resolving a single versioned object.
 }
 \keyword{storage}

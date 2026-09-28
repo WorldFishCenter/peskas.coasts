@@ -7,24 +7,24 @@
 enrich_taxa(log_threshold = logger::DEBUG, fao_areas = NULL, version = NULL)
 }
 \arguments{
-\item{log_threshold}{Logging threshold passed to [logger::log_threshold()].
-Defaults to [logger::DEBUG].}
+\item{log_threshold}{Logging threshold passed to \code{\link[logger:log_threshold]{logger::log_threshold()}}.
+Defaults to \link[logger:log_levels]{logger::DEBUG}.}
 
 \item{fao_areas}{Optional numeric vector of FAO major fishing area codes to
-restrict species to. If `NULL` (default) the value is resolved from the
-`metadata.fishbase.fao_areas` configuration key, falling back to
-`c(51, 57)` (Western and Eastern Indian Ocean). Timor-Leste is Area 71.
-Pass `57` to reproduce pre-4.6.0 output — see [resolve_fao_areas()] for
+restrict species to. If \code{NULL} (default) the value is resolved from the
+\code{metadata.fishbase.fao_areas} configuration key, falling back to
+\code{c(51, 57)} (Western and Eastern Indian Ocean). Timor-Leste is Area 71.
+Pass \code{57} to reproduce pre-4.6.0 output — see \code{\link[=resolve_fao_areas]{resolve_fao_areas()}} for
 why 57 alone was never right for the Western Indian Ocean.}
 
-\item{version}{FishBase / SeaLifeBase release to read. If `NULL` (default)
-it is resolved from the `metadata.fishbase.db_version` configuration key,
-falling back to `"latest"`. Resolved once and used for every read, so one
-run cannot mix snapshots. See [resolve_db_version()].}
+\item{version}{FishBase / SeaLifeBase release to read. If \code{NULL} (default)
+it is resolved from the \code{metadata.fishbase.db_version} configuration key,
+falling back to \code{"latest"}. Resolved once and used for every read, so one
+run cannot mix snapshots. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
 Invisible NULL. Called for its side effect of uploading the enriched
-  taxa Parquet file to cloud storage.
+taxa Parquet file to cloud storage.
 }
 \description{
 Main pipeline function that downloads the taxa metadata from cloud storage,
@@ -37,33 +37,35 @@ bucket.
 }
 \details{
 The function performs the following steps:
-1. Downloads the latest metadata RDS file (Airtable assets) from GCS.
-2. Extracts the `taxa` table and calls [expand_taxonomic_info()].
-3. Restricts species to the resolved FAO area(s) via [filter_by_fao_area()],
-   always keeping species with no area assignment.
-4. Joins species-level data from the `species`, `ecology`, and `estimate`
-   tables, the family, order and class, the IUCN and CITES codes from
-   `stocks`, the median length at first maturity from `maturity` and the
-   optimum length from the asymptotic length in `popgrowth`, both restated
-   to total length with the `popll` fits where a study used another length.
-5. Deduplicates by taking the first non-`NA` value per group.
-6. Cleans column names with [janitor::clean_names()].
-7. Uploads the result via [upload_parquet_to_cloud()] using the
-   `metadata.fishbase.taxa_enriched.file_prefix` configuration key.
+\enumerate{
+\item Downloads the latest metadata RDS file (Airtable assets) from GCS.
+\item Extracts the \code{taxa} table and calls \code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}.
+\item Restricts species to the resolved FAO area(s) via \code{\link[=filter_by_fao_area]{filter_by_fao_area()}},
+always keeping species with no area assignment.
+\item Joins species-level data from the \code{species}, \code{ecology}, and \code{estimate}
+tables, the family, order and class, the IUCN and CITES codes from
+\code{stocks}, the median length at first maturity from \code{maturity} and the
+optimum length from the asymptotic length in \code{popgrowth}, both restated
+to total length with the \code{popll} fits where a study used another length.
+\item Deduplicates by taking the first non-\code{NA} value per group.
+\item Cleans column names with \code{\link[janitor:clean_names]{janitor::clean_names()}}.
+\item Uploads the result via \code{\link[=upload_parquet_to_cloud]{upload_parquet_to_cloud()}} using the
+\code{metadata.fishbase.taxa_enriched.file_prefix} configuration key.
+}
 
 Both the assets snapshot it reads and the enriched table it writes resolve
-through `resolve_storage_opts(conf, "coasts")` — the shared hub bucket, which
-is where [ingest_pds_trips()] and the other readers of these objects look.
-Within the `coasts` package itself the hub and country buckets are the same,
+through \code{resolve_storage_opts(conf, "coasts")} — the shared hub bucket, which
+is where \code{\link[=ingest_pds_trips]{ingest_pds_trips()}} and the other readers of these objects look.
+Within the \code{coasts} package itself the hub and country buckets are the same,
 so this is a no-op; in a downstream package that defines
-`storage.google.options_coasts` it directs both ends at the hub rather than
+\code{storage.google.options_coasts} it directs both ends at the hub rather than
 scattering per-country copies.
 
 This function emits traits and nutrients only. For length-weight and
-length-length coefficients see [get_taxa_morphometrics()].
+length-length coefficients see \code{\link[=get_taxa_morphometrics]{get_taxa_morphometrics()}}.
 
-The nutrients are the seven `rfishbase::estimate()` models: calcium, iron,
-omega-3, protein, **selenium**, vitamin A and zinc, per 100 g of raw
+The nutrients are the seven \code{rfishbase::estimate()} models: calcium, iron,
+omega-3, protein, \strong{selenium}, vitamin A and zinc, per 100 g of raw
 portion, in the units FishBase and SeaLifeBase publish them — calcium, iron
 and zinc in mg, selenium and vitamin A in μg, omega-3 and protein in g. They
 are passed through unconverted, and no substitute is supplied for species
@@ -87,7 +89,7 @@ coasts::enrich_taxa(version = "25.04")
 }
 }
 \seealso{
-[get_taxa_morphometrics()], [resolve_fao_areas()],
-  [resolve_storage_opts()]
+\code{\link[=get_taxa_morphometrics]{get_taxa_morphometrics()}}, \code{\link[=resolve_fao_areas]{resolve_fao_areas()}},
+\code{\link[=resolve_storage_opts]{resolve_storage_opts()}}
 }
 \keyword{workflow}
