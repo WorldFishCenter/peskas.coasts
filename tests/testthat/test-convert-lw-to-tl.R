@@ -112,3 +112,22 @@ test_that("the species and server keys must both match", {
   expect_equal(out$a, 0.01)
   expect_equal(out$Type, "SL")
 })
+
+test_that("get_tl_conversions() orients every fit onto total length", {
+  fits <- dplyr::tribble(
+    ~alpha3_code, ~SpecCode, ~server, ~Length1, ~Length2, ~aL, ~bL,
+    "YFT", 1, "fishbase", "TL", "FL", 0.5, 1.10, # TL predicted from FL
+    "YFT", 1, "fishbase", "FL", "TL", 0, 1 / 1.20, # FL predicted from TL
+    "TUS", 1, "fishbase", "TL", "FL", 0.5, 1.10, # same fit, second taxon code
+    "YFT", 1, "fishbase", "SL", "FL", 0, 0.9 # no total length: dropped
+  )
+  out <- testthat::with_mocked_bindings(
+    get_tl_conversions(data.frame()),
+    get_length_length_coeffs = function(...) fits
+  )
+  expect_equal(nrow(out), 1)
+  expect_equal(out$Type, "FL")
+  # Median of TL = 0.5 + 1.1 FL and TL = 1.2 FL, the repeated fit counted once.
+  expect_equal(out$intercept, 0.25)
+  expect_equal(out$slope, 1.15)
+})

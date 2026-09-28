@@ -665,6 +665,53 @@ tl_conversions <- function(length_length, max_intercept = Inf) {
     dplyr::select(-"tl_predicts")
 }
 
+#' Total-Length Conversions for Expanded Taxa
+#'
+#' One line `TL = intercept + slope * <Type>` per species and length type, for
+#' restating a length measured on fork, standard or another length type as total
+#' length. [enrich_taxa()] restates the FishBase lengths at maturity and optimum
+#' with it, so a survey that converts its own lengths with the same table puts
+#' both sides of the size-at-maturity comparison on one basis.
+#'
+#' @param expanded A table as returned by [expand_taxonomic_info()].
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
+#'
+#' @return A tibble with one row per `SpecCode`, `server` and `Type` (the length
+#'   type converted from, e.g. `"FL"`), carrying the `intercept` and `slope` of
+#'   the conversion. Species or types with no published fit are absent.
+#'
+#' @details
+#' Every length type is read from the POPLL table, and each fit is oriented so
+#' that total length is the response (see [get_length_length_coeffs()] for the
+#' direction of the table). Where a species has several fits for one type, the
+#' median intercept and the median slope are kept; identical fits published
+#' twice count once.
+#'
+#' @seealso [get_length_length_coeffs()], [convert_lw_to_tl()]
+#'
+#' @keywords taxa
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' taxa <- data.frame(alpha3_code = "YFT", scientific_name = "Thunnus albacares")
+#' taxa |>
+#'   expand_taxonomic_info() |>
+#'   get_tl_conversions()
+#' }
+get_tl_conversions <- function(expanded, version = "latest") {
+  get_length_length_coeffs(expanded, length_types = NULL, version = version) |>
+    tl_conversions() |>
+    dplyr::distinct(.data$SpecCode, .data$server, .data$Type, .data$intercept, .data$slope) |>
+    dplyr::group_by(.data$SpecCode, .data$server, .data$Type) |>
+    dplyr::summarise(
+      intercept = stats::median(.data$intercept),
+      slope = stats::median(.data$slope),
+      .groups = "drop"
+    )
+}
+
 #' Build Length-Weight and Length-Length Tables for a Set of Taxa
 #'
 #' Single entry point for the morphometric half of the taxa pipeline: expands a
@@ -1030,19 +1077,7 @@ enrich_taxa <- function(
   # Lengths on a total-length basis, which is what the landing surveys
   # measure: a study on fork or standard length is restated with the species'
   # POPLL fits, and left out when no fit converts it.
-  to_tl <- get_length_length_coeffs(
-    expanded_assets_filtered,
-    length_types = NULL,
-    version = version
-  ) |>
-    tl_conversions() |>
-    dplyr::distinct(.data$SpecCode, .data$server, .data$Type, .data$intercept, .data$slope) |>
-    dplyr::group_by(.data$SpecCode, .data$server, .data$Type) |>
-    dplyr::summarise(
-      intercept = stats::median(.data$intercept),
-      slope = stats::median(.data$slope),
-      .groups = "drop"
-    )
+  to_tl <- get_tl_conversions(expanded_assets_filtered, version = version)
   median_tl <- function(data, length, type, name) {
     data |>
       dplyr::select("SpecCode", "server", value = dplyr::all_of(length), Type = dplyr::all_of(type)) |>

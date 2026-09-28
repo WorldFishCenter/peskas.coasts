@@ -260,7 +260,13 @@ derive_fishing_grounds <- function(
   # Raw totals are summed; normalised metrics are averaged across cells.
   # `n_active_days` is computed as the unique union of cell-level active_dates
   # so the same day fished in multiple cells of the same ground counts once.
-  effort_by_ground <- sf::st_join(hex_sf, grounds, join = sf::st_within) |>
+  # Cells are matched by their centre: after st_union a hexagon's own outline
+  # can fall a hair outside its ground, and st_within then drops it.
+  cell_centres <- sf::st_set_geometry(
+    hex_sf,
+    h3jsr::cell_to_point(hex_sf$h3_index, simple = TRUE)
+  )
+  effort_by_ground <- sf::st_join(cell_centres, grounds, join = sf::st_within) |>
     sf::st_drop_geometry() |>
     dplyr::filter(!is.na(.data$ground_id)) |>
     dplyr::group_by(.data$ground_id) |>

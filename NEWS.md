@@ -1,3 +1,10 @@
+# coasts 4.16.0
+
+## Survey lengths can be put on the same basis as lengths at maturity
+
+* **NEW** `get_tl_conversions()` gives, for each species and length type, the FishBase / SeaLifeBase line that restates a length as total length. `enrich_taxa()` already restated lengths at maturity and optimum this way and now calls the same function, so a country pipeline that converts its survey lengths with it compares like with like. Kenya uses it for the fish KEFS measures on fork length. `taxa_enriched` is unchanged.
+* **FIXED** Fishing grounds could miss effort cells at their edges: after the cells are merged into a ground, a cell's outline can fall slightly outside it, and the cell was dropped from the ground's totals. Cells are now matched by their centre.
+
 # coasts 4.15.1
 
 ## One figure per district and month
