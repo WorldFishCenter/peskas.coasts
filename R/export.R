@@ -771,16 +771,24 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 #'   hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2,
 #'   hours_per_day_per_km2}`
 #'
+#' When the effort grid carries `country`, the same cells and grounds also go
+#' to the coasts portal MongoDB database for the country dashboards, which
+#' filter them by `country`:
+#' - `pds_effort`: one document per `h3_index` × `country`, all years pooled,
+#'   `{h3_index, country, fishing_hours, unique_trips, n_active_days,
+#'   avg_hours_per_day, lng, lat}` (`lng`/`lat` is the cell centre)
+#' - `pds_fishing_grounds`: the fishing grounds GeoJSON, one document per ground
+#'
 #' @param h3_res Integer. H3 resolution of the effort grid to export.
 #'   Default is `9L`.
 #' @param min_trips_grounds Integer. Minimum unique trips per H3 cell to
-#'   include in fishing grounds derivation. Default is `3L`.
+#'   include in fishing grounds derivation and in `pds_effort`. Default is `3L`.
 #' @param log_threshold Logging threshold. Default is `logger::DEBUG`.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`.
 #'
 #' @return Invisibly `NULL`. Uploads the web-ready files described above to GCS
-#'   as a side effect.
+#'   and MongoDB as a side effect.
 #'
 #' @seealso [aggregate_pds_effort()], [model_cpue()], [derive_fishing_grounds()]
 #'
@@ -953,6 +961,32 @@ export_pds_spatial <- function(
       options = coasts_opts
     )
     logger::log_info("Uploaded: {basename(effort_gear_filename)}")
+
+    # Country dashboards: all years pooled per country, ratio recomputed from
+    # the totals as in the coasts portal's "all years" view.
+    effort_country <- effort |>
+      dplyr::summarise(
+        fishing_hours = sum(.data$fishing_hours),
+        unique_trips = sum(.data$unique_trips),
+        n_active_days = dplyr::n_distinct(do.call(c, .data$active_dates)),
+        .by = c("h3_index", "country")
+      ) |>
+      dplyr::filter(.data$unique_trips >= min_trips_grounds) |>
+      dplyr::mutate(
+        avg_hours_per_day = .data$fishing_hours / .data$n_active_days
+      )
+    centres <- sf::st_coordinates(
+      h3jsr::cell_to_point(effort_country$h3_index, simple = TRUE)
+    )
+    effort_country$lng <- centres[, "X"]
+    effort_country$lat <- centres[, "Y"]
+    mdb_collection_push(
+      data = effort_country,
+      connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+      collection_name = conf$storage$mongodb$coasts_portal$collection$pds_effort,
+      db_name = conf$storage$mongodb$coasts_portal$database_name
+    )
+    logger::log_info("Pushed {nrow(effort_country)} country effort cells")
   }
 
   # -- CPUE ----------------------------------------------------------------------
@@ -1066,6 +1100,16 @@ export_pds_spatial <- function(
       options = coasts_opts
     )
     logger::log_info("Uploaded: {basename(grounds_filename)}")
+
+    if (has_gear) {
+      mdb_collection_push(
+        data = grounds_export,
+        connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+        collection_name = conf$storage$mongodb$coasts_portal$collection$pds_fishing_grounds,
+        db_name = conf$storage$mongodb$coasts_portal$database_name,
+        geo = TRUE
+      )
+    }
   } else {
     logger::log_warn(
       "No fishing grounds passed min_trips = {min_trips_grounds}",

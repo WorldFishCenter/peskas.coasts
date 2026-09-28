@@ -16,7 +16,7 @@ export_pds_spatial(
 Default is `9L`.}
 
 \item{min_trips_grounds}{Integer. Minimum unique trips per H3 cell to
-include in fishing grounds derivation. Default is `3L`.}
+include in fishing grounds derivation and in `pds_effort`. Default is `3L`.}
 
 \item{log_threshold}{Logging threshold. Default is `logger::DEBUG`.}
 
@@ -25,7 +25,7 @@ to `"coasts"`.}
 }
 \value{
 Invisibly `NULL`. Uploads the web-ready files described above to GCS
-  as a side effect.
+  and MongoDB as a side effect.
 }
 \description{
 Reads the pre-computed H3 effort grid and CPUE Parquet files from cloud
@@ -61,6 +61,14 @@ Schema for each file:
   avg_fidelity, constancy, avg_hours_per_day, avg_visits_per_day,
   hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2,
   hours_per_day_per_km2}`
+
+When the effort grid carries `country`, the same cells and grounds also go
+to the coasts portal MongoDB database for the country dashboards, which
+filter them by `country`:
+- `pds_effort`: one document per `h3_index` × `country`, all years pooled,
+  `{h3_index, country, fishing_hours, unique_trips, n_active_days,
+  avg_hours_per_day, lng, lat}` (`lng`/`lat` is the cell centre)
+- `pds_fishing_grounds`: the fishing grounds GeoJSON, one document per ground
 }
 \seealso{
 [aggregate_pds_effort()], [model_cpue()], [derive_fishing_grounds()]

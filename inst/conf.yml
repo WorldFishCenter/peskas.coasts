@@ -132,6 +132,8 @@ default:
           wio_gaul2: wio_gaul2
           metrics_gaul1: metrics_gaul1
           metrics_gaul2: metrics_gaul2
+          pds_effort: pds_effort
+          pds_fishing_grounds: pds_fishing_grounds
       tracks_app:
         connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_TRACKS')
         database_name: portal-dev

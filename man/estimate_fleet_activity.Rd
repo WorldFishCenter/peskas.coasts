@@ -16,8 +16,9 @@ estimate_fleet_activity(monthly_stats, boat_registry)
 - avg_trips_per_boat_per_month: Average trips per boat}
 
 \item{boat_registry}{Data frame with columns:
-- district: District name (must match monthly_stats)
-- total_boats: Total number of boats registered in district}
+- gaul_2_name: District name (must match monthly_stats)
+- total_boats: Number of boats registered. A district may span several
+  rows (one per landing site); their boats are summed.}
 }
 \value{
 A data frame combining monthly statistics with fleet estimates:

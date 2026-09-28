@@ -238,8 +238,9 @@ calculate_monthly_trip_stats <- function(trips_data) {
 #'   - avg_trip_duration_hrs: Average trip duration
 #'   - avg_trips_per_boat_per_month: Average trips per boat
 #' @param boat_registry Data frame with columns:
-#'   - district: District name (must match monthly_stats)
-#'   - total_boats: Total number of boats registered in district
+#'   - gaul_2_name: District name (must match monthly_stats)
+#'   - total_boats: Number of boats registered. A district may span several
+#'     rows (one per landing site); their boats are summed.
 #'
 #' @return A data frame combining monthly statistics with fleet estimates:
 #'   - district: District name
@@ -272,6 +273,16 @@ calculate_monthly_trip_stats <- function(trips_data) {
 #' @keywords workflow modeling
 #' @export
 estimate_fleet_activity <- function(monthly_stats, boat_registry) {
+  # Airtable `geo` holds one row per landing site, and several can share a
+  # GAUL2 unit (Cidade De Maputo: four, Lamu West: two). Joined unsummed, each
+  # district-month came out once per row, and export_portal() pushed them all.
+  boat_registry <- boat_registry |>
+    dplyr::group_by(.data$gaul_2_name) |>
+    dplyr::summarise(
+      total_boats = stat_or_na(.data$total_boats, sum),
+      .groups = "drop"
+    )
+
   monthly_stats |>
     dplyr::left_join(boat_registry, by = "gaul_2_name") |>
     dplyr::mutate(
@@ -540,7 +551,7 @@ generate_fleet_analysis <- function(
         na.rm = TRUE
       ),
       total_estimated_revenue = sum(
-        .data$estimated_total_catch_kg,
+        .data$estimated_total_revenue,
         na.rm = TRUE
       ),
       avg_monthly_catch_kg = mean(.data$estimated_total_catch_kg, na.rm = TRUE),

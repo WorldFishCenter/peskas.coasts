@@ -1,3 +1,12 @@
+# coasts 4.15.1
+
+## One figure per district and month
+
+* **FIXED** Districts with several landing sites in Airtable appeared once per landing site in the country dashboards, each copy scaled by that site's boat count alone: Cidade De Maputo four times (207, 120, 94 and 76 boats), Lamu West twice. Their boats are now summed, so each district-month appears once and Cidade De Maputo's estimated trips, catch and revenue are based on its 497 boats.
+* **FIXED** The annual summary in the fleet analysis output reported total catch in kg as total revenue. Nothing reads it yet.
+
+* **NEW** Pushes predicted fishing and fishing areas in country dashbaords besides the regional portal
+
 # coasts 4.15.0
 
 ## Species traits, fish sizes and corrected species prices for the country dashboards
