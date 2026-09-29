@@ -4,7 +4,7 @@ R package `coasts`, the shared hub of Peskas: storage/Mongo/KoBo/Airtable helper
 every country pipeline, PDS ingestion, the WIO regional portal data (grids, GAUL maps,
 regional metrics) and the tracks-app data. It also runs its own pipeline for the regional
 products.
-Ecosystem context (other repos, data flow, cross-repo contracts): see PESKAS.md, loaded via CLAUDE.local.md.
+Ecosystem context (other repos, data flow, cross-repo contracts): loaded by the `peskas` Claude Code plugin (repo `peskas-context`).
 
 ## Commands
 ```r
@@ -30,7 +30,7 @@ devtools::document()    # after any roxygen change; man/ is committed
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
 - **Portal.** `export_portal` runs once per country, called from each country pipeline with
   that country's config (`conf$country`), and pushes the `summarize_data()` tables to the
-  country's `portal-*` database (collections and the FishBase-traits dependency: PESKAS.md
+  country's `portal-*` database (collections and the FishBase-traits dependency: the Peskas context
   "Portal collections" and "FishBase traits"). `export_geos` in the coasts pipeline reads the
   per-country `<country>_monthly_summaries_map` files (hard-coded list: kenya, zanzibar,
   mozambique, timor) and pushes the combined `wio_gaul*`, `metrics_gaul*` and `pds_grids`
@@ -58,7 +58,7 @@ devtools::document()    # after any roxygen change; man/ is committed
   columns) as a coasts release first (bump DESCRIPTION, add the `NEWS.md` block), then bump
   each pipeline. Grep `../peskas.*.data.pipeline` for callers before changing a signature.
 - When a function starts reading a new config key, add it to every calling country's
-  `inst/config.yml` too (PESKAS.md: coasts reads country config).
+  `inst/config.yml` too (the Peskas context: coasts reads country config).
 - Add a name to `pds.customers` only when all its devices belong to one country; one entry
   widens the filter for the whole regional product.
 - Adding a country to the regional portal means editing the hard-coded list in
@@ -72,7 +72,7 @@ devtools::document()    # after any roxygen change; man/ is committed
   and compare counts: communities come from current device records, so a site with no device
   left drops its trips.
 - Renaming a tracks-app collection or field breaks `tracks-explorer`; renaming portal
-  collections breaks `peskas.dashboard` (see PESKAS.md).
+  collections breaks `peskas.dashboard` (see the Peskas context).
 - Stray `*.rds`/`*.parquet` files in the repo root are local downloads (gitignored); do not
   rely on them.
 - `export_frame_data()` is run by hand when a new census arrives (every few years), not in a
