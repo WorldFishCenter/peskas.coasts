@@ -79,7 +79,7 @@ Credentials come from environment variables. Create a `.env` file in the reposit
 - Pelagic Data Systems: `PDS_TOKEN`, `PDS_SECRET`, `PDS_USERNAME`, `PDS_PASSWORD`, `PDS_CUSTOMER_ID`
 - Google Cloud: `GCP_SA_KEY` (the service account JSON on a single line)
 - MongoDB: `MONGODB_CONNECTION_STRING_COASTS`, `MONGODB_CONNECTION_STRING_TRACKS`
-- Metadata: `GOOGLE_SHEET_ID`, `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID_FRAME`, `AIRTABLE_BASE_ID_TRACKS_APP`
+- Metadata: `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID_FRAME`, `AIRTABLE_BASE_ID_TRACKS_APP`
 
 The `default` profile uses the development buckets and databases. The `production` profile is switched on only by CI on `main`.
 

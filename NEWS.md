@@ -1,3 +1,19 @@
+# coasts 4.18.0
+
+## Kenya, Zanzibar and Mozambique boats are placed by where they land
+
+* **NEW** Fleet activity estimates in Kenya, Zanzibar and Mozambique place each tracked boat in the district where its trips land, read from its GPS track, instead of a district entered by hand for every tracker. New, moved and reassigned trackers count without anyone linking them. Timor-Leste is unchanged.
+* **NEW** Fishing trips longer than two days now count in these three countries, where multi-day trips are real.
+* **FIXED** Mozambique's TotalEnergies trackers (formerly Syberintel) are included again after the customer was renamed.
+* **NEW** The pipelines warn when a tracker customer in their settings is unknown, for example after it is renamed, instead of silently leaving its boats out.
+
+# coasts 4.17.1
+
+## Timor-Leste fleet estimates use the right boats
+
+* **FIXED** Timor-Leste's fleet activity estimates count the right boats again. They return to the regional portal once each tracker is linked to its district.
+* **FIXED** Zanzibar's and Kenya's revenue and prices on the regional portal are converted to US dollars at one rate per currency.
+
 # coasts 4.17.0
 
 ## Reviewers' decisions are kept between runs

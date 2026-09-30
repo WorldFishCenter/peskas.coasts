@@ -149,6 +149,154 @@ process_trip_data <- function(
   return(trips_stats)
 }
 
+# The country's trips placed where their boats land, in the shape
+# process_trip_data() returns plus `gaul_2_code`. See generate_fleet_analysis().
+landing_trip_data <- function(conf, geo) {
+  country_opts <- resolve_storage_opts(conf, "country")
+  trips <- download_parquet_from_cloud(
+    prefix = conf$pds$pds_trips$file_prefix,
+    provider = conf$storage$google$key,
+    options = country_opts,
+    version = conf$pds$pds_trips$version
+  )
+  descriptors <- download_parquet_from_cloud(
+    prefix = conf$pds$pds_tracks$descriptors$file_prefix,
+    provider = conf$storage$google$key,
+    options = country_opts
+  )
+  polygons <- cloud_object_name(
+    prefix = conf$metadata$map_boundaries$gaul2,
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options_coasts,
+    version = "latest",
+    extension = "geojson"
+  ) |>
+    download_cloud_file(
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options_coasts
+    ) |>
+    sf::st_read(quiet = TRUE)
+
+  # Only districts in the frame can be raised; matching by code keeps a
+  # spelling difference ("Buzi", "Búzi") from losing one.
+  districts <- polygons |>
+    dplyr::transmute(gaul_2_code = as.character(.data$gaul2_code)) |>
+    dplyr::inner_join(
+      geo |>
+        dplyr::select("gaul_2_code", "gaul_2_name") |>
+        dplyr::filter(!duplicated(.data$gaul_2_code)),
+      by = "gaul_2_code"
+    )
+
+  landings <- trips |>
+    dplyr::inner_join(
+      dplyr::select(descriptors, "Trip", "end_lat", "end_lng"),
+      by = "Trip"
+    ) |>
+    dplyr::filter(!is.na(.data$end_lat), !is.na(.data$end_lng))
+  if (nrow(landings) == 0) {
+    stop(
+      "No trip has a described track. Run describe_pds_tracks() before ",
+      "generate_fleet_analysis().",
+      call. = FALSE
+    )
+  }
+  logger::log_info(
+    "{nrow(landings)} of {nrow(trips)} trips have a described track"
+  )
+
+  located <- locate_landings(landings, districts) |>
+    dplyr::mutate(
+      landing_date = lubridate::floor_date(.data$Ended, "day"),
+      date_month = lubridate::floor_date(.data$landing_date, "month")
+    ) |>
+    assign_home_district()
+  logger::log_info("{nrow(located)} trips placed in a district")
+
+  located |>
+    dplyr::transmute(
+      gaul_2_code = .data$gaul_2_code,
+      gaul_2_name = .data$gaul_2_name,
+      community = .data$Community,
+      trip = .data$Trip,
+      boat = .data$IMEI,
+      landing_date = .data$landing_date,
+      date_month = .data$date_month,
+      duration_hrs = .data$`Duration (Seconds)` / 3600
+    )
+}
+
+#' Place trip landings in districts
+#'
+#' @param landings A data frame with the landing point in `end_lat` and
+#'   `end_lng` (degrees).
+#' @param districts An sf data frame of district polygons with `gaul_2_code`
+#'   and `gaul_2_name`.
+#' @param max_km Landings farther than this from every district stay unplaced.
+#' @return `landings` with `landing_km` (distance to the nearest district),
+#'   `gaul_2_code` and `gaul_2_name`, the last two `NA` beyond `max_km`.
+#' @keywords internal
+locate_landings <- function(landings, districts, max_km = 30) {
+  # Planar metres on the local UTM zone: GAUL outlines are not valid spherical
+  # polygons, and the planar engine repairs them where the spherical one fails.
+  zone <- floor((mean(landings$end_lng) + 180) / 6) + 1
+  crs <- if (mean(landings$end_lat) < 0) 32700 + zone else 32600 + zone
+  shapes <- districts |>
+    sf::st_transform(crs) |>
+    sf::st_make_valid()
+  points <- landings |>
+    sf::st_as_sf(coords = c("end_lng", "end_lat"), crs = 4326, remove = FALSE) |>
+    sf::st_transform(crs)
+
+  nearest <- sf::st_nearest_feature(points, shapes)
+  km <- as.numeric(
+    sf::st_distance(points, shapes[nearest, ], by_element = TRUE)
+  ) /
+    1000
+  placed <- km <= max_km
+
+  landings |>
+    dplyr::mutate(
+      landing_km = km,
+      gaul_2_code = dplyr::if_else(placed, shapes$gaul_2_code[nearest], NA),
+      gaul_2_name = dplyr::if_else(placed, shapes$gaul_2_name[nearest], NA)
+    )
+}
+
+#' Place each tracker in one district per month
+#'
+#' A tracker belongs, each month, to the district where most of its trips
+#' landed, so a tracker moved to another boat or site follows its landings.
+#'
+#' @param located Trips with `IMEI`, `date_month`, `gaul_2_code` and
+#'   `gaul_2_name` (`NA` for a trip that landed nowhere near a district).
+#' @return The trips of trackers placed that month, all carrying the tracker's
+#'   district. Trackers with no placed trip that month are dropped.
+#' @keywords internal
+assign_home_district <- function(located) {
+  home <- located |>
+    dplyr::filter(!is.na(.data$gaul_2_code)) |>
+    dplyr::count(
+      .data$IMEI,
+      .data$date_month,
+      .data$gaul_2_code,
+      .data$gaul_2_name
+    ) |>
+    # Ties go to the first district by name, so reruns agree.
+    dplyr::arrange(.data$gaul_2_name) |>
+    dplyr::slice_max(
+      .data$n,
+      n = 1,
+      with_ties = FALSE,
+      by = c("IMEI", "date_month")
+    ) |>
+    dplyr::select(-"n")
+
+  located |>
+    dplyr::select(-"gaul_2_code", -"gaul_2_name") |>
+    dplyr::inner_join(home, by = c("IMEI", "date_month"))
+}
+
 #' Calculate Monthly Trip Statistics by District
 #'
 #' @description
@@ -418,6 +566,23 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #' The function creates a comprehensive analysis that scales GPS-tracked boat data
 #' to estimate total fleet activity, catch, and revenue by district and time period.
 #'
+#' Where a tracker is depends on `pds.fleet_location`:
+#' * Not set: the district linked to the device in Airtable `pds_devices`. The
+#'   fleet is the devices owned by the customers in `pds.fleet_customers`, or in
+#'   `pds.customers` when that key is not set. A pipeline that selects trips
+#'   with `pds.exclude_customers` cannot set `pds.customers`, so it names its
+#'   fleet with `pds.fleet_customers`. Trips longer than 48 hours are dropped.
+#' * `landing`: where the boat lands, with no manual link. Each trip in the
+#'   country's `pds.pds_trips` file is placed by the end point of its track
+#'   (written by [describe_pds_tracks()]) in the nearest of the country's
+#'   districts, matched by GAUL code to the `metadata.map_boundaries.gaul2`
+#'   polygons, and left unplaced beyond 30 km. That reaches a frame district
+#'   from the newer GAUL districts carved out of it (Chonguene and Limpopo from
+#'   Xai-Xai) while leaving out places the frame lacks (Palma, Kilwa, both over
+#'   100 km from any of their country's districts). Each tracker then belongs, each
+#'   month, to the district where most of its trips landed, and all its trips
+#'   of that month count there. Trips of any length are kept.
+#'
 #' @param log_threshold Logging threshold level (default: logger::DEBUG).
 #'   Controls the verbosity of logging output during pipeline execution.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
@@ -478,23 +643,30 @@ generate_fleet_analysis <- function(
     readr::read_rds() |>
     purrr::keep_at(c("devices", "geo"))
 
-  devices <- assets$devices |>
-    dplyr::filter(.data$customer_name %in% conf$pds$customers)
+  if (identical(conf$pds$fleet_location, "landing")) {
+    trips_stats <- landing_trip_data(conf = conf, geo = assets$geo)
+    regions <- assets$geo |>
+      dplyr::filter(.data$gaul_2_code %in% trips_stats$gaul_2_code)
+  } else {
+    # pds.customers also selects trips, which a pipeline using exclude_customers can't set.
+    fleet_customers <- conf$pds$fleet_customers %||% conf$pds$customers
+    devices <- assets$devices |>
+      dplyr::filter(.data$customer_name %in% fleet_customers)
 
-  regions <-
-    assets$geo |>
-    dplyr::filter(.data$gaul_2_code %in% c(devices$gaul_2_code))
+    regions <-
+      assets$geo |>
+      dplyr::filter(.data$gaul_2_code %in% c(devices$gaul_2_code))
+
+    trips_stats <- process_trip_data(
+      conf = conf,
+      devices_table = devices,
+      imei_list = unique(devices$imei)
+    )
+  }
 
   boat_registry <-
     regions |>
     dplyr::select("gaul_2_name", "total_boats")
-
-  # Process raw trip data
-  trips_stats <- process_trip_data(
-    conf = conf,
-    devices_table = devices,
-    imei_list = unique(devices$imei)
-  )
 
   monthly_summaries <-
     download_parquet_from_cloud(

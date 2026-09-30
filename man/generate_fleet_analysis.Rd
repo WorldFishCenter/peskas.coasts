@@ -43,6 +43,25 @@ This function executes the complete analysis pipeline:
 
 The function creates a comprehensive analysis that scales GPS-tracked boat data
 to estimate total fleet activity, catch, and revenue by district and time period.
+
+Where a tracker is depends on \code{pds.fleet_location}:
+\itemize{
+\item Not set: the district linked to the device in Airtable \code{pds_devices}. The
+fleet is the devices owned by the customers in \code{pds.fleet_customers}, or in
+\code{pds.customers} when that key is not set. A pipeline that selects trips
+with \code{pds.exclude_customers} cannot set \code{pds.customers}, so it names its
+fleet with \code{pds.fleet_customers}. Trips longer than 48 hours are dropped.
+\item \code{landing}: where the boat lands, with no manual link. Each trip in the
+country's \code{pds.pds_trips} file is placed by the end point of its track
+(written by \code{\link[=describe_pds_tracks]{describe_pds_tracks()}}) in the nearest of the country's
+districts, matched by GAUL code to the \code{metadata.map_boundaries.gaul2}
+polygons, and left unplaced beyond 30 km. That reaches a frame district
+from the newer GAUL districts carved out of it (Chonguene and Limpopo from
+Xai-Xai) while leaving out places the frame lacks (Palma, Kilwa, both over
+100 km from any of their country's districts). Each tracker then belongs, each
+month, to the district where most of its trips landed, and all its trips
+of that month count there. Trips of any length are kept.
+}
 }
 \section{Output Files}{
 

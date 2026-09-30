@@ -139,8 +139,8 @@ variables are:
 - Google Cloud: `GCP_SA_KEY` (the service account JSON on a single line)
 - MongoDB: `MONGODB_CONNECTION_STRING_COASTS`,
   `MONGODB_CONNECTION_STRING_TRACKS`
-- Metadata: `GOOGLE_SHEET_ID`, `AIRTABLE_TOKEN`,
-  `AIRTABLE_BASE_ID_FRAME`, `AIRTABLE_BASE_ID_TRACKS_APP`
+- Metadata: `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID_FRAME`,
+  `AIRTABLE_BASE_ID_TRACKS_APP`
 
 The `default` profile uses the development buckets and databases. The
 `production` profile is switched on only by CI on `main`.

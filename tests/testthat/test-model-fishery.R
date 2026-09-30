@@ -23,3 +23,50 @@ test_that("estimate_fleet_activity keeps one row per district-month", {
   # A district with no boat count stays unestimated rather than zero.
   expect_true(is.na(out$total_boats[out$gaul_2_name == "Lamu West"]))
 })
+
+# Two coastal districts side by side, each 0.1 degrees (about 11 km) wide.
+square <- function(lng) {
+  sf::st_polygon(list(cbind(
+    lng + c(0, 0.1, 0.1, 0, 0),
+    -5 + c(0, 0, 0.1, 0.1, 0)
+  )))
+}
+districts <- sf::st_sf(
+  gaul_2_code = c("1", "2"),
+  gaul_2_name = c("West", "East"),
+  geometry = sf::st_sfc(square(39.0), square(39.1), crs = 4326)
+)
+
+test_that("a landing goes to the district it is in or beside, not one far out", {
+  landings <- data.frame(
+    Trip = 1:3,
+    # inside West; about 2 km off East's coast; about 45 km out at sea
+    end_lng = c(39.05, 39.22, 39.6),
+    end_lat = -4.95
+  )
+
+  out <- locate_landings(landings, districts)
+
+  expect_equal(out$gaul_2_name, c("West", "East", NA))
+  expect_equal(out$landing_km[1], 0)
+  expect_true(out$landing_km[2] > 1 && out$landing_km[2] < 3)
+})
+
+test_that("a tracker counts where most of its trips landed that month", {
+  jan <- as.Date("2026-01-01")
+  feb <- as.Date("2026-02-01")
+  located <- data.frame(
+    Trip = 1:7,
+    IMEI = c(1, 1, 1, 1, 2, 2, 1),
+    date_month = c(jan, jan, jan, feb, jan, jan, jan),
+    gaul_2_code = c("1", "1", "2", "2", NA, NA, NA),
+    gaul_2_name = c("West", "West", "East", "East", NA, NA, NA)
+  )
+
+  out <- assign_home_district(located)
+
+  # Trip 3 landed in East and trip 7 at sea, yet both are January trips of a
+  # West tracker. February follows the tracker's move; tracker 2 landed nowhere.
+  expect_equal(out$Trip, c(1L, 2L, 3L, 4L, 7L))
+  expect_equal(out$gaul_2_name, c("West", "West", "West", "East", "West"))
+})

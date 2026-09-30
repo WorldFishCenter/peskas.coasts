@@ -602,7 +602,8 @@ ingest_pelagic_boats <- function(conf = NULL) {
         .data$customer_name == "FSSP2: Traders" ~ "Timor-Leste",
         .data$customer_name == "Kenya AABS" ~ "kenya",
         .data$customer_name == "WorldFish - India" ~ "india",
-        .data$customer_name == "Syberintel - distributor" ~ "mozambique",
+        .data$customer_name ==
+          "Totalenergies Mozambique TEPMA1 (formerly Syberintel)" ~ "mozambique",
         TRUE ~ NA
       ),
       country = stringr::str_to_title(.data$country)
@@ -612,6 +613,16 @@ ingest_pelagic_boats <- function(conf = NULL) {
   logger::log_info(
     "Retrieved and processed {nrow(boats)} boat records from PDS"
   )
+
+  # A customer that is new or renamed in PDS gets no country in Airtable until
+  # it is added to the mapping above.
+  unmapped <- unique(boats$customer_name[is.na(boats$country)])
+  if (length(unmapped) > 0) {
+    logger::log_warn(
+      "No country for PDS customer(s) {paste(unmapped, collapse = ', ')}; ",
+      "add them to the mapping in ingest_pelagic_boats()."
+    )
+  }
 
   # Get countries data from Airtable
   countries_df <- airtable_to_df(

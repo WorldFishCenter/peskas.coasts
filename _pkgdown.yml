@@ -41,6 +41,7 @@ reference:
       - ingest_pds_trips
       - merge_survey_trips
       - ingest_pds_tracks
+      - describe_pds_tracks
       - preprocess_pds_tracks
       - predict_pds_tracks
       - aggregate_pds_effort

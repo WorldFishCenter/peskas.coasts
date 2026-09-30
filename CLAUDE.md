@@ -25,7 +25,9 @@ devtools::document()    # after any roxygen change; man/ is committed
   `inst/config.yml`, so the same function runs against the country's buckets and databases.
   Any exported function with a `package` argument is a cross-repo API.
 - **Where things live.** PDS ingestion (`ingest_pds_trips`, `ingest_pds_tracks`,
-  `select_country_trips`, `backup_tracks`) is in `R/ingestion-pds.R`. `R/ingestion.R` holds
+  `describe_pds_tracks`, `select_country_trips`, `backup_tracks`) is in `R/ingestion-pds.R`.
+  `generate_fleet_analysis` is in `R/model-fishery.R`; with `pds.fleet_location: landing` it
+  places trackers by where their trips land (`landing_trip_data`) instead of the Airtable link. `R/ingestion.R` holds
   `get_kobo_data` and `ingest_assets`. `export_portal`, `export_geos` and
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
 - **Portal.** `export_portal` runs once per country, called from each country pipeline with
@@ -35,8 +37,9 @@ devtools::document()    # after any roxygen change; man/ is committed
   per-country `<country>_monthly_summaries_map` files (hard-coded list: kenya, zanzibar,
   mozambique, timor) and pushes the combined `wio_gaul*`, `metrics_gaul*` and `pds_grids`
   collections. `export_pds_spatial` also pushes the coasts portal's effort cells and fishing
-  grounds, tagged by `country`, as `pds_effort` and `pds_fishing_grounds`; every country
-  dashboard's effort map reads them there, filtered to its country.
+  grounds, tagged by `country`, as `pds_effort` and `pds_fishing_grounds`; the rewritten
+  dashboard's effort map (`peskas.dashboard` branch `shadcn-migration`) reads them there,
+  filtered to its country.
 - **`api.trips`** in `inst/conf.yml` (`peskas-api-dev` / `peskas-api-prod`) lists each
   country's `raw`/`validated` paths in the peskas-api bucket. `merge_survey_trips()`
   (`R/match-trips.R`) reads every country's validated trips from there, plus the
@@ -48,8 +51,8 @@ devtools::document()    # after any roxygen change; man/ is committed
   `fishers-stats`, `fishers-performance`) are read by `tracks-explorer` (`api/fisher-stats/`,
   `api/waypoints.js`). `sync_device_users` writes `users` (with the generated login
   passwords); `export_fishers_stats` writes stats and performance.
-- **Currency.** `export_geos` converts RPUE and price to USD with hard-coded rates in
-  `R/export.R` (TZS 0.00037, KES 0.0077, MZN 0.016).
+- **Currency.** `export_geos` converts RPUE and price per kg to USD with hard-coded rates in
+  `R/export.R`, one per currency: TZS 0.00038, KES 0.0077, MZN 0.016.
 - `mdb_collection_push(geo = TRUE)` drops the collection, reinserts, and builds a
   `geometry` 2dsphere index.
 

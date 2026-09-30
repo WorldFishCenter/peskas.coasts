@@ -78,6 +78,17 @@ select_country_trips <- function(
     )
   }
 
+  # A customer PDS has renamed matches no device, and its trackers would leave
+  # (or, on a denylist, stay) without a word.
+  unknown <- setdiff(c(customers, exclude_customers), devices$customer_name)
+  if (length(unknown) > 0) {
+    logger::log_warn(
+      "No device in Airtable pds_devices is under ",
+      "{paste(unknown, collapse = ', ')}, so the rule ignores it. Check the ",
+      "name against the PDS customer list: it may have been renamed."
+    )
+  }
+
   # The two sides arrive as text or as numbers depending on the source. A
   # 15-digit IMEI is exact as a double, so numeric is a safe common ground.
   imei <- suppressWarnings(as.numeric(trips$IMEI))
@@ -522,6 +533,185 @@ process_single_track <- function(trip_id, conf) {
   )
 }
 
+
+#' Describe Pelagic Data Systems (PDS) Tracks
+#'
+#' @description
+#' Writes one row per trip with where its track starts and ends, read from the
+#' stored tracks.
+#'
+#' @details
+#' Columns: `Trip`, `Boat`, `start_end_distance` (metres between the first and
+#' last point), `outliers_proportion` (percentage of points faster than 30 m/s),
+#' `timetrace_dispersion` (standard deviation of the time between points),
+#' `start_lat`, `start_lng`, `end_lat` and `end_lng`. The end point is where the
+#' boat landed, which is how [generate_fleet_analysis()] places a tracker when
+#' `pds.fleet_location` is `landing`.
+#'
+#' The step is incremental: only trips absent from the previous descriptors
+#' file are read, so the first run reads every stored track and later runs read
+#' only new ones. A trip whose track is not stored yet is retried next run.
+#'
+#' The parameters needed are:
+#' ```
+#' pds:
+#'   pds_trips:
+#'     file_prefix:
+#'     version:
+#'   pds_tracks:
+#'     file_prefix:
+#'     descriptors:
+#'       file_prefix:
+#' ```
+#'
+#' @param log_threshold The logging threshold to use. Default is logger::DEBUG.
+#' @param package Name of the package whose `inst/conf.yml` to read. Defaults
+#'   to `"coasts"`.
+#'
+#' @return None (invisible).
+#'
+#' @keywords workflow ingestion
+#' @export
+describe_pds_tracks <- function(
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+  country_opts <- resolve_storage_opts(conf, "country")
+
+  trips <- download_parquet_from_cloud(
+    prefix = conf$pds$pds_trips$file_prefix,
+    provider = conf$storage$google$key,
+    options = country_opts,
+    version = conf$pds$pds_trips$version
+  )
+
+  logger::log_info("Listing stored tracks...")
+  tracks_list <- cloud_object_names(
+    prefix = conf$pds$pds_tracks$file_prefix,
+    provider = conf$pds_storage$google$key,
+    options = resolve_storage_opts(conf, "pds"),
+    extension = "parquet"
+  )
+
+  described <- tryCatch(
+    download_parquet_from_cloud(
+      prefix = conf$pds$pds_tracks$descriptors$file_prefix,
+      provider = conf$storage$google$key,
+      options = country_opts
+    ),
+    error = function(e) {
+      logger::log_info("No existing descriptors file found")
+      NULL
+    }
+  )
+
+  to_describe <- setdiff(unique(trips$Trip), described$Trip)
+  logger::log_info(
+    "{NROW(described)} trips already described, {length(to_describe)} to read"
+  )
+  if (length(to_describe) == 0) {
+    return(invisible())
+  }
+
+  future::plan(future::multisession)
+  new_descriptors <- furrr::future_map_dfr(
+    to_describe,
+    describe_one_track,
+    conf = conf,
+    tracks_list = tracks_list,
+    .progress = TRUE
+  )
+  future::plan(future::sequential)
+
+  # Trips with no stored track are retried every run; when that is all there
+  # was, rewriting the same file would only add an identical version.
+  if (nrow(new_descriptors) == 0) {
+    logger::log_info("No new track could be read; descriptors unchanged")
+    return(invisible())
+  }
+
+  descriptors <- dplyr::bind_rows(described, new_descriptors)
+  upload_parquet_to_cloud(
+    data = descriptors,
+    prefix = conf$pds$pds_tracks$descriptors$file_prefix,
+    provider = conf$storage$google$key,
+    options = country_opts
+  )
+  logger::log_success("Wrote descriptors for {nrow(descriptors)} trips")
+}
+
+# One trip's descriptors, or zero rows when its track is not stored or empty.
+describe_one_track <- function(Trip, conf, tracks_list) {
+  # Nothing may escape as a bare condition: R deparses the call when printing a
+  # deferred warning, which would put `conf` and its credentials in the job log.
+  withCallingHandlers(
+    {
+      track_file <- sprintf(
+        "%s_%s.parquet",
+        conf$pds$pds_tracks$file_prefix,
+        as.character(Trip)
+      )
+      if (!track_file %in% tracks_list) {
+        logger::log_warn("No stored track for trip {Trip}")
+        return(tibble::tibble())
+      }
+      track <- tryCatch(
+        download_cloud_file(
+          name = track_file,
+          provider = conf$pds_storage$google$key,
+          options = resolve_storage_opts(conf, "pds")
+        ) |>
+          arrow::read_parquet(),
+        error = function(e) {
+          logger::log_warn("Trip {Trip}: {conditionMessage(e)}")
+          NULL
+        }
+      )
+      unlink(track_file)
+      if (is.null(track)) tibble::tibble() else track_descriptors(track, Trip)
+    },
+    warning = function(w) {
+      logger::log_debug("Trip {Trip}: {conditionMessage(w)}")
+      invokeRestart("muffleWarning")
+    }
+  )
+}
+
+#' Descriptors of one PDS track
+#'
+#' @param track Track points with `Time`, `Boat`, `Lat`, `Lng` and
+#'   `Speed (M/S)`, as returned by [get_trip_points()].
+#' @param Trip The trip id.
+#' @return A one-row tibble, or zero rows when the track has no located point.
+#' @keywords internal
+track_descriptors <- function(track, Trip) {
+  track <- track[!is.na(track$Lat) & !is.na(track$Lng), ]
+  if (nrow(track) == 0) {
+    return(tibble::tibble())
+  }
+  track <- track[order(track$Time), ]
+  ends <- sf::st_sfc(
+    sf::st_point(c(track$Lng[1], track$Lat[1])),
+    sf::st_point(c(track$Lng[nrow(track)], track$Lat[nrow(track)])),
+    crs = 4326
+  )
+
+  tibble::tibble(
+    Trip = Trip,
+    Boat = dplyr::first(track$Boat),
+    start_end_distance = as.numeric(sf::st_distance(ends[1], ends[2])),
+    outliers_proportion = sum(track$`Speed (M/S)` > 30, na.rm = TRUE) /
+      nrow(track) *
+      100,
+    timetrace_dispersion = stats::sd(diff(track$Time)),
+    start_lat = track$Lat[1],
+    start_lng = track$Lng[1],
+    end_lat = track$Lat[nrow(track)],
+    end_lng = track$Lng[nrow(track)]
+  )
+}
 
 #' Backup Pelagic Tracks (Fallback)
 #'

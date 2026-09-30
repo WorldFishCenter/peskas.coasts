@@ -58,7 +58,7 @@ default:
     # whose devices belong unambiguously to one country.
     customers:
       - "WorldFish - Mozambique"
-      - "Syberintel - distributor"
+      - "Totalenergies Mozambique TEPMA1 (formerly Syberintel)"
       - "Kenya"
       - "Kenya AABS"
       - "WorldFish - Kenya"
