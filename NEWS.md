@@ -1,3 +1,10 @@
+# coasts 4.19.0
+
+## A second estimate of total catch and revenue, made the FAO way
+
+* **NEW** Kenya, Zanzibar and Mozambique get a second monthly estimate of total catch and revenue for each district, made with the FAO sample-survey method and split by gear or boat type, with a flag saying how reliable each figure is. It sits beside the current estimates so the two can be compared.
+* **FIXED** Estimated catch and revenue are no longer shown for a district and month with fewer than ten surveyed trips, where a single trip stood for the whole fleet: in Zanzibar's Mjini, one large ring-net catch had turned December 2025 into 5,400 tonnes.
+
 # coasts 4.18.0
 
 ## Kenya, Zanzibar and Mozambique boats are placed by where they land

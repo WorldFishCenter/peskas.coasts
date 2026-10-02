@@ -471,11 +471,15 @@ estimate_fleet_activity <- function(monthly_stats, boat_registry) {
 #'   - estimated_total_trips: Estimated trips for entire fleet
 #'   - sampling_rate: Proportion of fleet tracked
 #'   - Other fleet statistics
-#' @param monthly_summaries Data frame with catch/revenue data containing:
-#'   - district: District name (must match fleet_estimates)
+#' @param monthly_summaries Data frame with catch/revenue data per district and
+#'   month, as in the `districts_summaries` table of [summarize_data()]:
+#'   - gaul_2_name: District name (must match fleet_estimates)
 #'   - date: Month as date (will be matched to date_month)
-#'   - metric: Metric name (filtered for mean_catch_kg and mean_catch_price)
-#'   - value: Metric value
+#'   - n_submissions: Surveyed trips
+#'   - mean_catch_kg, mean_catch_price: Average catch and revenue per trip
+#' @param min_trips Surveyed trips a district and month needs for its catch and
+#'   revenue to be raised; below it a handful of trips would stand for the whole
+#'   fleet, so the totals stay `NA`.
 #'
 #' @return A data frame with district-level totals:
 #'   - district: District name
@@ -483,6 +487,7 @@ estimate_fleet_activity <- function(monthly_stats, boat_registry) {
 #'   - sample_total_trips: Trips from tracked boats
 #'   - estimated_total_trips: Estimated trips for entire fleet
 #'   - sampling_rate: Proportion of fleet tracked
+#'   - n_submissions: Surveyed trips
 #'   - mean_catch_kg: Average catch per trip
 #'   - mean_catch_price: Average revenue per trip
 #'   - estimated_total_catch_kg: Estimated total catch for district
@@ -507,7 +512,11 @@ estimate_fleet_activity <- function(monthly_stats, boat_registry) {
 #'
 #' @keywords workflow analysis
 #' @export
-calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
+calculate_district_totals <- function(
+  fleet_estimates,
+  monthly_summaries,
+  min_trips = 10
+) {
   fleet_estimates |>
     # Join with catch/revenue data
     dplyr::full_join(
@@ -516,13 +525,20 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
     ) |>
     # Calculate total estimates based on fleet-wide projections
     dplyr::mutate(
+      enough_trips = .data$n_submissions >= min_trips,
       # Total catch estimates (mean catch per trip × estimated total trips)
-      estimated_total_catch_kg = .data$mean_catch_kg *
-        .data$estimated_total_trips,
+      estimated_total_catch_kg = dplyr::if_else(
+        .data$enough_trips,
+        .data$mean_catch_kg * .data$estimated_total_trips,
+        NA_real_
+      ),
 
       # Total revenue estimates (mean revenue per trip × estimated total trips)
-      estimated_total_revenue = .data$mean_catch_price *
-        .data$estimated_total_trips
+      estimated_total_revenue = dplyr::if_else(
+        .data$enough_trips,
+        .data$mean_catch_price * .data$estimated_total_trips,
+        NA_real_
+      )
     ) |>
     # Select relevant columns
     dplyr::select(
@@ -533,6 +549,7 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
       "estimated_total_trips",
       "sampling_rate",
       # Sample-based averages
+      "n_submissions",
       "mean_catch_kg",
       "mean_catch_price",
       # Fleet-wide totals
@@ -556,7 +573,8 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #' 1. Reads configuration parameters and retrieves metadata
 #' 2. Prepares boat registry from metadata
 #' 3. Processes trip data from PDS API using device IMEIs
-#' 4. Downloads monthly summaries from cloud storage
+#' 4. Downloads the districts summaries (surveyed trips, mean catch and revenue
+#'    per trip by district and month) from cloud storage
 #' 5. Calculates monthly trip statistics from GPS data
 #' 6. Estimates fleet-wide activity using boat registry
 #' 7. Calculates district totals using catch/revenue data
@@ -604,6 +622,9 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #'   - total_estimated_revenue: Total estimated annual revenue
 #'   - avg_monthly_catch_kg: Average monthly catch
 #'   - avg_monthly_revenue: Average monthly revenue
+#' - **fao**: The same totals raised with the FAO method, per district, fishing
+#'   unit and month (see [raise_catch_fao()]); `NULL` for a country whose config
+#'   has no `fao.surveys`
 #'
 #' @examples
 #' \dontrun{
@@ -641,7 +662,7 @@ generate_fleet_analysis <- function(
       options = conf$storage$google$options_coasts
     ) |>
     readr::read_rds() |>
-    purrr::keep_at(c("devices", "geo"))
+    purrr::keep_at(c("devices", "geo", "frame", "gear_groups"))
 
   if (identical(conf$pds$fleet_location, "landing")) {
     trips_stats <- landing_trip_data(conf = conf, geo = assets$geo)
@@ -668,11 +689,12 @@ generate_fleet_analysis <- function(
     regions |>
     dplyr::select("gaul_2_name", "total_boats")
 
-  monthly_summaries <-
+  # Same means as the monthly summaries, plus the surveyed-trip count.
+  districts_summaries <-
     download_parquet_from_cloud(
       prefix = paste0(
         conf$surveys$summaries$file_prefix,
-        "_monthly_summaries"
+        "_districts_summaries"
       ),
       provider = conf$storage$google$key,
       options = conf$storage$google$options
@@ -690,7 +712,7 @@ generate_fleet_analysis <- function(
   # Calculate district totals
   district_totals <- calculate_district_totals(
     fleet_estimates = fleet_estimates,
-    monthly_summaries = monthly_summaries
+    monthly_summaries = districts_summaries
   ) |>
     tidyr::complete(
       .data$gaul_2_name,
@@ -748,7 +770,8 @@ generate_fleet_analysis <- function(
     list(
       fleet_estimates = fleet_estimates,
       district_totals = district_totals,
-      annual_summary = annual_summary
+      annual_summary = annual_summary,
+      fao = raise_catch_fao(conf, assets)
     )
 
   # Save aggregated results

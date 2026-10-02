@@ -252,6 +252,8 @@ get_kobo_data <- function(
 #' The function retrieves the following asset types from Airtable:
 #' - **Taxa**: Species information including scientific names, alpha3 codes, and English names
 #' - **Gear**: Fishing gear types with standardized names
+#' - **Gear groups**: Each standardized gear's FAO ISSCFG main group
+#'   (`fao_category`), used by the FAO raising in [generate_fleet_analysis()]
 #' - **Vessels**: Vessel types with standardized classifications
 #' - **Landing Sites**: Site information with codes and names
 #' - **Forms**: Survey form metadata with form IDs and names
@@ -327,6 +329,12 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
       gear = fetch_asset(
         table_name = "gears",
         select_cols = c("country", "form_id", "survey_label", "standard_name"),
+        conf = conf
+      ),
+      # Its own table: the pipelines join `gear` whole into their surveys.
+      gear_groups = fetch_asset(
+        table_name = "gears",
+        select_cols = c("standard_name", "fao_category"),
         conf = conf
       ),
       vessels = fetch_asset(

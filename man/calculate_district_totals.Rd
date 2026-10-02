@@ -4,7 +4,7 @@
 \alias{calculate_district_totals}
 \title{Calculate District-Level Total Catch and Revenue}
 \usage{
-calculate_district_totals(fleet_estimates, monthly_summaries)
+calculate_district_totals(fleet_estimates, monthly_summaries, min_trips = 10)
 }
 \arguments{
 \item{fleet_estimates}{Data frame from \code{estimate_fleet_activity()} containing:
@@ -16,13 +16,18 @@ calculate_district_totals(fleet_estimates, monthly_summaries)
 \item Other fleet statistics
 }}
 
-\item{monthly_summaries}{Data frame with catch/revenue data containing:
+\item{monthly_summaries}{Data frame with catch/revenue data per district and
+month, as in the \code{districts_summaries} table of \code{\link[=summarize_data]{summarize_data()}}:
 \itemize{
-\item district: District name (must match fleet_estimates)
+\item gaul_2_name: District name (must match fleet_estimates)
 \item date: Month as date (will be matched to date_month)
-\item metric: Metric name (filtered for mean_catch_kg and mean_catch_price)
-\item value: Metric value
+\item n_submissions: Surveyed trips
+\item mean_catch_kg, mean_catch_price: Average catch and revenue per trip
 }}
+
+\item{min_trips}{Surveyed trips a district and month needs for its catch and
+revenue to be raised; below it a handful of trips would stand for the whole
+fleet, so the totals stay \code{NA}.}
 }
 \value{
 A data frame with district-level totals:
@@ -32,6 +37,7 @@ A data frame with district-level totals:
 \item sample_total_trips: Trips from tracked boats
 \item estimated_total_trips: Estimated trips for entire fleet
 \item sampling_rate: Proportion of fleet tracked
+\item n_submissions: Surveyed trips
 \item mean_catch_kg: Average catch per trip
 \item mean_catch_price: Average revenue per trip
 \item estimated_total_catch_kg: Estimated total catch for district

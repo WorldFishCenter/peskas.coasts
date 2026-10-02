@@ -660,6 +660,13 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
       "estimated_revenue" = "estimated_total_revenue",
       "sampling_rate"
     )
+  if (!is.null(aggregated_data$fao)) {
+    monthly_aggregated <- dplyr::full_join(
+      monthly_aggregated,
+      fao_portal_metrics(aggregated_data$fao),
+      by = c("gaul_2_name", "date")
+    )
+  }
 
   # Transform monthly summaries to long format for portal
   monthly_summaries <-

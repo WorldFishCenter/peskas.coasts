@@ -24,6 +24,32 @@ test_that("estimate_fleet_activity keeps one row per district-month", {
   expect_true(is.na(out$total_boats[out$gaul_2_name == "Lamu West"]))
 })
 
+# Mjini, December 2025: one ring-net trip of 720 kg was raised to the whole
+# district's fleet, mostly hand-line and trap boats landing a few kilos.
+test_that("calculate_district_totals does not raise a month with fewer than ten surveyed trips", {
+  fleet_estimates <- data.frame(
+    gaul_2_name = c("Mjini", "Mkoani"),
+    date_month = as.Date("2025-12-01"),
+    sample_total_trips = 20,
+    estimated_total_trips = 100,
+    sampling_rate = 0.1
+  )
+  summaries <- data.frame(
+    gaul_2_name = c("Mjini", "Mkoani"),
+    date = as.Date("2025-12-01"),
+    n_submissions = c(1L, 10L),
+    mean_catch_kg = c(720, 20),
+    mean_catch_price = c(7e6, 2e4)
+  )
+
+  out <- calculate_district_totals(fleet_estimates, summaries)
+
+  expect_equal(out$estimated_total_catch_kg, c(NA, 100 * 20))
+  expect_equal(out$estimated_total_revenue, c(NA, 100 * 2e4))
+  # Effort does not depend on the survey sample and is kept.
+  expect_equal(out$estimated_total_trips, c(100, 100))
+})
+
 # Two coastal districts side by side, each 0.1 degrees (about 11 km) wide.
 square <- function(lng) {
   sf::st_polygon(list(cbind(
