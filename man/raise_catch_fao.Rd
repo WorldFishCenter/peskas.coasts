@@ -2,7 +2,7 @@
 % Please edit documentation in R/model-fao.R
 \name{raise_catch_fao}
 \alias{raise_catch_fao}
-\title{Raise catch and revenue with the FAO sample-survey method}
+\title{Raise catch and revenue with the FAO ARTFISH method}
 \usage{
 raise_catch_fao(conf, assets)
 }
@@ -21,10 +21,10 @@ the raising fails.
 }
 \description{
 Estimates monthly total catch and revenue per district and fishing unit with
-the method of OPEN ARTFISH (de Graaf, Stamatopoulos & Jarrett 2017, FAO):
-boats in the census × days each boat fishes in the month × catch per fishing
-day. \code{\link[=generate_fleet_analysis]{generate_fleet_analysis()}} runs it beside its own raising, so the two
-come from the same data and can be compared.
+FAO's ARTFISH method, as set out for OPEN ARTFISH (de Graaf, Stamatopoulos &
+Jarrett 2017, FAO): boats in the census × days each boat fishes in the month ×
+catch per fishing day. \code{\link[=generate_fleet_analysis]{generate_fleet_analysis()}} runs it beside the GPS
+tracker method, so the two come from the same data and can be compared.
 }
 \details{
 \itemize{

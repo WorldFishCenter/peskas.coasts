@@ -43,7 +43,9 @@ per trip by district and month) from cloud storage
 }
 
 The function creates a comprehensive analysis that scales GPS-tracked boat data
-to estimate total fleet activity, catch, and revenue by district and time period.
+to estimate total fleet activity, catch, and revenue by district and time period:
+the GPS tracker method. A country whose config has \code{fao.surveys} also gets the
+FAO ARTFISH method's totals (\code{\link[=raise_catch_fao]{raise_catch_fao()}}).
 
 Where a tracker is depends on \code{pds.fleet_location}:
 \itemize{
@@ -79,7 +81,7 @@ The function creates an RDS file containing a list with three components:
 \item avg_monthly_catch_kg: Average monthly catch
 \item avg_monthly_revenue: Average monthly revenue
 }
-\item \strong{fao}: The same totals raised with the FAO method, per district, fishing
+\item \strong{fao}: The same totals raised with the FAO ARTFISH method, per district, fishing
 unit and month (see \code{\link[=raise_catch_fao]{raise_catch_fao()}}); \code{NULL} for a country whose config
 has no \code{fao.surveys}
 }

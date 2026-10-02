@@ -2,7 +2,7 @@
 % Please edit documentation in R/model-fao.R
 \name{fao_portal_metrics}
 \alias{fao_portal_metrics}
-\title{FAO totals per district and month, as portal metrics}
+\title{FAO ARTFISH totals per district and month, as portal metrics}
 \usage{
 fao_portal_metrics(fao)
 }
@@ -15,7 +15,7 @@ One row per district and month with \code{estimated_fishing_trips_fao},
 }
 \description{
 Adds up the fishing units of \code{\link[=raise_catch_fao]{raise_catch_fao()}} into the three metrics
-\code{\link[=export_portal]{export_portal()}} publishes beside the current method's: catch in tonnes,
+\code{\link[=export_portal]{export_portal()}} publishes beside the GPS tracker method's: catch in tonnes,
 revenue, and fishing trips (boats × days fished, one trip a day), each only
 where the catch was raised.
 }

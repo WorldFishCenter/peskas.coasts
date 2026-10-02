@@ -1,11 +1,11 @@
-#' Raise catch and revenue with the FAO sample-survey method
+#' Raise catch and revenue with the FAO ARTFISH method
 #'
 #' @description
 #' Estimates monthly total catch and revenue per district and fishing unit with
-#' the method of OPEN ARTFISH (de Graaf, Stamatopoulos & Jarrett 2017, FAO):
-#' boats in the census × days each boat fishes in the month × catch per fishing
-#' day. [generate_fleet_analysis()] runs it beside its own raising, so the two
-#' come from the same data and can be compared.
+#' FAO's ARTFISH method, as set out for OPEN ARTFISH (de Graaf, Stamatopoulos &
+#' Jarrett 2017, FAO): boats in the census × days each boat fishes in the month ×
+#' catch per fishing day. [generate_fleet_analysis()] runs it beside the GPS
+#' tracker method, so the two come from the same data and can be compared.
 #'
 #' @details
 #' - **Fishing unit**: what the census counts in each country (`category_kind`
@@ -46,7 +46,7 @@ raise_catch_fao <- function(conf, assets) {
   if (is.null(conf$fao$surveys)) {
     return(NULL)
   }
-  # A failure here must not stop the current estimates from going out.
+  # A failure here must not stop the GPS tracker method's estimates from going out.
   tryCatch(
     {
       api <- conf$api$trips$validated
@@ -63,23 +63,23 @@ raise_catch_fao <- function(conf, assets) {
       trips <- fao_trips(landings, surveys)
       out <- estimate_catch_fao(trips, assets$frame, assets$gear_groups)
       logger::log_info(
-        "FAO raising: {sum(out$n_trips)} of {nrow(trips)} trips raised in {nrow(out)} district-unit-months"
+        "FAO ARTFISH raising: {sum(out$n_trips)} of {nrow(trips)} trips raised in {nrow(out)} district-unit-months"
       )
       out
     },
     error = function(e) {
       logger::log_error(
-        "FAO raising failed, the current estimates go out alone: {conditionMessage(e)}"
+        "FAO ARTFISH raising failed, the GPS tracker estimates go out alone: {conditionMessage(e)}"
       )
       NULL
     }
   )
 }
 
-#' FAO totals per district and month, as portal metrics
+#' FAO ARTFISH totals per district and month, as portal metrics
 #'
 #' Adds up the fishing units of [raise_catch_fao()] into the three metrics
-#' [export_portal()] publishes beside the current method's: catch in tonnes,
+#' [export_portal()] publishes beside the GPS tracker method's: catch in tonnes,
 #' revenue, and fishing trips (boats × days fished, one trip a day), each only
 #' where the catch was raised.
 #'

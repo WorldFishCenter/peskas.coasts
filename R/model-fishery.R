@@ -582,7 +582,9 @@ calculate_district_totals <- function(
 #' 9. Saves aggregated results to RDS file and uploads to cloud storage
 #'
 #' The function creates a comprehensive analysis that scales GPS-tracked boat data
-#' to estimate total fleet activity, catch, and revenue by district and time period.
+#' to estimate total fleet activity, catch, and revenue by district and time period:
+#' the GPS tracker method. A country whose config has `fao.surveys` also gets the
+#' FAO ARTFISH method's totals ([raise_catch_fao()]).
 #'
 #' Where a tracker is depends on `pds.fleet_location`:
 #' * Not set: the district linked to the device in Airtable `pds_devices`. The
@@ -622,7 +624,7 @@ calculate_district_totals <- function(
 #'   - total_estimated_revenue: Total estimated annual revenue
 #'   - avg_monthly_catch_kg: Average monthly catch
 #'   - avg_monthly_revenue: Average monthly revenue
-#' - **fao**: The same totals raised with the FAO method, per district, fishing
+#' - **fao**: The same totals raised with the FAO ARTFISH method, per district, fishing
 #'   unit and month (see [raise_catch_fao()]); `NULL` for a country whose config
 #'   has no `fao.surveys`
 #'
