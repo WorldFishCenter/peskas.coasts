@@ -26,8 +26,13 @@ devtools::document()    # after any roxygen change; man/ is committed
   Any exported function with a `package` argument is a cross-repo API.
 - **Where things live.** PDS ingestion (`ingest_pds_trips`, `ingest_pds_tracks`,
   `describe_pds_tracks`, `select_country_trips`, `backup_tracks`) is in `R/ingestion-pds.R`.
-  `generate_fleet_analysis` is in `R/model-fishery.R`; with `pds.fleet_location: landing` it
-  places trackers by where their trips land (`landing_trip_data`) instead of the Airtable link. `R/ingestion.R` holds
+  `generate_fleet_analysis` (the GPS tracker method) is in `R/model-fishery.R`; with `pds.fleet_location: landing` it
+  places trackers by where their trips land (`landing_trip_data`) instead of the Airtable link.
+  It also raises the same totals with the FAO ARTFISH method (`raise_catch_fao`, `R/model-fao.R`) for a
+  country whose config has `fao.surveys` (the validated survey file with the weekly fishing-days
+  answer), from the API trips, the snapshot's `frame` census and `gear_groups` (FAO
+  categories, its own table because the pipelines join `gear` whole into their surveys), and
+  stores them as `fao` in the same file; `export_portal` publishes them as `*_fao` metrics. `R/ingestion.R` holds
   `get_kobo_data` and `ingest_assets`. `export_portal`, `export_geos` and
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
 - **Portal.** `export_portal` runs once per country, called from each country pipeline with

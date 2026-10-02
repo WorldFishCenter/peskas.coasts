@@ -33,7 +33,8 @@ This function executes the complete analysis pipeline:
 \item Reads configuration parameters and retrieves metadata
 \item Prepares boat registry from metadata
 \item Processes trip data from PDS API using device IMEIs
-\item Downloads monthly summaries from cloud storage
+\item Downloads the districts summaries (surveyed trips, mean catch and revenue
+per trip by district and month) from cloud storage
 \item Calculates monthly trip statistics from GPS data
 \item Estimates fleet-wide activity using boat registry
 \item Calculates district totals using catch/revenue data
@@ -42,7 +43,9 @@ This function executes the complete analysis pipeline:
 }
 
 The function creates a comprehensive analysis that scales GPS-tracked boat data
-to estimate total fleet activity, catch, and revenue by district and time period.
+to estimate total fleet activity, catch, and revenue by district and time period:
+the GPS tracker method. A country whose config has \code{fao.surveys} also gets the
+FAO ARTFISH method's totals (\code{\link[=raise_catch_fao]{raise_catch_fao()}}).
 
 Where a tracker is depends on \code{pds.fleet_location}:
 \itemize{
@@ -78,6 +81,9 @@ The function creates an RDS file containing a list with three components:
 \item avg_monthly_catch_kg: Average monthly catch
 \item avg_monthly_revenue: Average monthly revenue
 }
+\item \strong{fao}: The same totals raised with the FAO ARTFISH method, per district, fishing
+unit and month (see \code{\link[=raise_catch_fao]{raise_catch_fao()}}); \code{NULL} for a country whose config
+has no \code{fao.surveys}
 }
 }
 
