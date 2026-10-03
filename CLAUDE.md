@@ -42,9 +42,8 @@ devtools::document()    # after any roxygen change; man/ is committed
   per-country `<country>_monthly_summaries_map` files (hard-coded list: kenya, zanzibar,
   mozambique, timor) and pushes the combined `wio_gaul*`, `metrics_gaul*` and `pds_grids`
   collections. `export_pds_spatial` also pushes the coasts portal's effort cells and fishing
-  grounds, tagged by `country`, as `pds_effort` and `pds_fishing_grounds`; the rewritten
-  dashboard's effort map (`peskas.dashboard` branch `shadcn-migration`) reads them there,
-  filtered to its country.
+  grounds, tagged by `country`, as `pds_effort` and `pds_fishing_grounds`; the
+  dashboard's effort map (`peskas.dashboard`) reads them there, filtered to its country.
 - **`api.trips`** in `inst/conf.yml` (`peskas-api-dev` / `peskas-api-prod`) lists each
   country's `raw`/`validated` paths in the peskas-api bucket. `merge_survey_trips()`
   (`R/match-trips.R`) reads every country's validated trips from there, plus the
