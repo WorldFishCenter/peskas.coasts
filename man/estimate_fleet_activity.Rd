@@ -20,8 +20,8 @@ estimate_fleet_activity(monthly_stats, boat_registry)
 \item{boat_registry}{Data frame with columns:
 \itemize{
 \item gaul_2_name: District name (must match monthly_stats)
-\item total_boats: Number of boats registered. A district may span several
-rows (one per landing site); their boats are summed.
+\item total_boats: Number of boats in the census. A district may span several
+rows (one per census unit); their boats are summed.
 }}
 }
 \value{

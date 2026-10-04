@@ -1,3 +1,16 @@
+# coasts 4.20.0
+
+## FAO ARTFISH estimates by boat and gear together in Kenya and Zanzibar
+
+* **NEW** In Kenya and Zanzibar, the FAO ARTFISH method now raises catch and revenue for each kind of boat and main gear together, as FAO defines a fishing unit, using a new census that counts boats by both.
+* **FIXED** The boat census behind the Peskas Coasts portal counts foot fishers as fishers rather than boats, and no longer counts Kenya's boats twice.
+
+## The GPS tracker method uses the census as the FAO ARTFISH method does
+
+* **CHANGED** The GPS tracker method now takes each district's boats from the census the FAO ARTFISH method uses, no longer from the Airtable `districts` table, so both raise the same fleet. Only Mozambique's estimates change: Pemba gets estimates for the first time, and Cidade de Maputo and Xai-Xai rise with their census counts.
+* **CHANGED** In Kenya, Zanzibar and Mozambique the GPS tracker method now averages catch and revenue per trip as the FAO ARTFISH method does: each kind of boat and gear counts for its share of the boats in the census, not for how often it is surveyed. Estimates fall where the large boats are surveyed far more often than the canoes that make up most of the fleet (Kaskazini B and Beira roughly halve) and rise where it is the other way round. The two methods now differ mainly in how often boats fish: as the trackers record it, or as fishers report it.
+* **REMOVED** `prepare_boat_registry()` - Nothing called it: the boats come from the census.
+
 # coasts 4.19.0
 
 ## A second estimate of total catch and revenue, by FAO's ARTFISH method

@@ -8,11 +8,12 @@
 #' tracker method, so the two come from the same data and can be compared.
 #'
 #' @details
-#' - **Fishing unit**: what the census counts in each country (`category_kind`
-#'   of the Airtable `frame` table): vessel type in Mozambique, and in Kenya and
-#'   Zanzibar the gear, grouped into its FAO ISSCFG main group (`FAO_category`
-#'   in the Airtable `gears` table: gillnets, hooks and lines, seine nets, ...)
-#'   as the Toolkit advises, so each unit gets more samples.
+#' - **Fishing unit**: the Toolkit's boat type and main gear, as far as the census
+#'   (Airtable `frame_units`) counts them: both in Kenya and Zanzibar, boat type
+#'   alone in Mozambique. Each is grouped as the Toolkit advises, so units get
+#'   more samples: the boat into its `vessel_group` (Airtable `vessels`, set per
+#'   country; Mozambique's boat types stay apart) and the gear into its FAO
+#'   ISSCFG main group (`FAO_category` in Airtable `gears`).
 #' - **Catch per fishing day**: the trip's total catch (or value); one trip is
 #'   one fishing day. Trips recorded as catching nothing count as zero. A
 #'   district, unit and month with fewer than five trips takes the catch per
@@ -35,8 +36,8 @@
 #' @param conf Country configuration from [read_config()]. Its `fao.surveys` names
 #'   the validated survey file carrying the weekly fishing-days answer; without
 #'   it the country has no FAO raising.
-#' @param assets The Airtable assets snapshot, with its `frame` and `gear_groups`
-#'   tables.
+#' @param assets The Airtable assets snapshot, with its `frame_units`,
+#'   `gear_groups` and `vessel_groups` tables.
 #'
 #' @return One row per district, fishing unit and month (see
 #'   [estimate_catch_fao()]), or `NULL` when the country has no `fao.surveys` or
@@ -61,7 +62,13 @@ raise_catch_fao <- function(conf, assets) {
         options = conf$storage$google$options
       )
       trips <- fao_trips(landings, surveys)
-      out <- estimate_catch_fao(trips, assets$frame, assets$gear_groups)
+      out <- estimate_catch_fao(
+        trips,
+        assets$frame_units,
+        assets$gear_groups,
+        # Boat groups are set per country: Mozambique keeps its boat types apart.
+        dplyr::filter(assets$vessel_groups, tolower(.data$country) == tolower(conf$country))
+      )
       logger::log_info(
         "FAO ARTFISH raising: {sum(out$n_trips)} of {nrow(trips)} trips raised in {nrow(out)} district-unit-months"
       )
@@ -100,6 +107,33 @@ fao_portal_metrics <- function(fao) {
       estimated_fishing_trips_fao = stat_or_na(.data$trips, sum),
       estimated_catch_tn_fao = stat_or_na(.data$total_catch_kg, sum) / 1000,
       estimated_revenue_fao = stat_or_na(.data$total_revenue, sum),
+      .by = c("gaul_2_name", "date_month")
+    ) |>
+    dplyr::mutate(date = lubridate::as_datetime(.data$date_month), .keep = "unused")
+}
+
+#' Catch and revenue per trip of a district and month, by census boats
+#'
+#' Averages the fishing units of [raise_catch_fao()] by their boats in the
+#' census, so a kind of boat surveyed more often than its share of the fleet
+#' does not pull the district's mean. Fishers on foot are left out.
+#' [generate_fleet_analysis()] raises the GPS tracker method with it.
+#'
+#' @param fao Output of [raise_catch_fao()].
+#' @return One row per district and month with `unit_catch_kg`,
+#'   `unit_catch_price` and `date`.
+#' @keywords internal
+fao_catch_per_trip <- function(fao) {
+  fao |>
+    # The GPS tracker method raises boats only.
+    dplyr::filter(!.data$on_foot) |>
+    dplyr::summarise(
+      unit_catch_kg = stats::weighted.mean(
+        .data$catch_kg_per_trip, .data$boats, na.rm = TRUE
+      ),
+      unit_catch_price = stats::weighted.mean(
+        .data$revenue_per_trip, .data$boats, na.rm = TRUE
+      ),
       .by = c("gaul_2_name", "date_month")
     ) |>
     dplyr::mutate(date = lubridate::as_datetime(.data$date_month), .keep = "unused")
@@ -151,48 +185,56 @@ fao_trips <- function(landings, surveys) {
 #' Monthly totals per district and fishing unit from trips and the census
 #'
 #' @param trips Output of [fao_trips()] for one country.
-#' @param frame The Airtable `frame` table: boats per district (`gaul_2_code`)
-#'   and `standard_name`, counted by gear or by vessel (`category_kind`).
+#' @param census The Airtable `frame_units` table: boats per district
+#'   (`gaul_2_code`) by boat type (`vessel_standard_name`) and main gear
+#'   (`gear_standard_name`), either left empty where the country's census does
+#'   not count it.
 #' @param gear_groups The Airtable `gears` table's `standard_name` and
 #'   `fao_category`. A gear without a category stays its own unit.
+#' @param vessel_groups The country's rows of the Airtable `vessels` table:
+#'   `standard_name` and `vessel_group`. A boat type without a group stays its own.
 #' @param min_samples Trips (or weekly answers) a district, unit and month needs
 #'   to stand on its own; below it, it borrows as described in [raise_catch_fao()].
 #' @param min_district_trips Surveyed trips a district and month needs to be
 #'   raised at all.
 #'
 #' @return One row per district, fishing unit and month that has trips and a
-#'   census count.
+#'   census count; `on_foot` marks the units of fishers without a boat.
 #' @keywords internal
 estimate_catch_fao <- function(
   trips,
-  frame,
+  census,
   gear_groups,
+  vessel_groups,
   min_samples = 5,
   min_district_trips = 10
 ) {
-  frame <- dplyr::filter(frame, .data$gaul_2_code %in% trips$gaul_2_code)
-  kind <- unique(frame$category_kind)
-  if (length(kind) != 1) {
-    stop("The census must count one kind of unit per country, found: ", toString(kind))
+  census <- dplyr::filter(census, .data$gaul_2_code %in% trips$gaul_2_code)
+  if (!nrow(census)) {
+    stop("The census has no boats in these trips' districts")
   }
-  groups <- gear_groups |>
-    dplyr::filter(!is.na(.data$fao_category), .data$fao_category != "") |>
-    dplyr::distinct(.data$standard_name, .data$fao_category)
-  twice <- unique(groups$standard_name[duplicated(groups$standard_name)])
-  if (length(twice)) {
-    stop("Gears with more than one FAO_category in Airtable: ", toString(twice))
+  # The unit uses what the census counts: boat type, main gear or both.
+  by_boat <- any(!is.na(census$vessel_standard_name))
+  by_gear <- any(!is.na(census$gear_standard_name))
+  if ((by_boat && anyNA(census$vessel_standard_name)) ||
+    (by_gear && anyNA(census$gear_standard_name))) {
+    stop("The census must count the same things in every district")
   }
-  groups <- rlang::set_names(groups$fao_category, groups$standard_name)
-  to_unit <- if (kind == "gear") {
-    function(gear) dplyr::coalesce(unname(groups[gear]), gear)
-  } else {
-    identity
+  to_boat <- group_lookup(vessel_groups, "vessel_group", "Boat types")
+  to_gear <- group_lookup(gear_groups, "fao_category", "Gears")
+  unit_of <- function(boat, gear) {
+    parts <- list(if (by_boat) to_boat(boat), if (by_gear) to_gear(gear))
+    do.call(paste, c(parts[lengths(parts) > 0], sep = " | "))
   }
 
-  census <- frame |>
-    dplyr::mutate(fishing_unit = to_unit(.data$standard_name)) |>
+  census <- census |>
+    dplyr::mutate(
+      fishing_unit = unit_of(.data$vessel_standard_name, .data$gear_standard_name)
+    ) |>
     dplyr::summarise(
       boats = sum(.data$n_boats, na.rm = TRUE),
+      # Fishers on foot are a unit here, with fishers for boats.
+      on_foot = all(.data$vessel_standard_name %in% "Feet"),
       .by = c("gaul_2_code", "fishing_unit")
     ) |>
     dplyr::filter(.data$boats > 0)
@@ -206,7 +248,7 @@ estimate_catch_fao <- function(
 
   trips <- trips |>
     dplyr::mutate(
-      fishing_unit = to_unit(.data[[c(gear = "gear", vessel = "vessel_type")[[kind]]]]),
+      fishing_unit = unit_of(.data$vessel_type, .data$gear),
       days = .data$days_week / 7 * lubridate::days_in_month(.data$date_month)
     ) |>
     dplyr::inner_join(census, by = c("gaul_2_code", "fishing_unit"))
@@ -278,13 +320,35 @@ estimate_catch_fao <- function(
       quality_revenue = dplyr::if_else(.data$raised, fao_quality(.data$re_revenue), "too_few_trips")
     ) |>
     dplyr::select(
-      "gaul_2_code", "gaul_2_name", "fishing_unit", "date_month", "boats",
+      "gaul_2_code", "gaul_2_name", "fishing_unit", "on_foot", "date_month", "boats",
       n_trips = "catch_kg_n", "catch_source", catch_kg_per_trip = "catch_mean",
       "n_days", "days_fished", "effort_source",
       "total_catch_kg", "re_catch", "quality_catch",
       n_revenue = "revenue_n", "revenue_source", revenue_per_trip = "revenue_mean",
       "total_revenue", "re_revenue", "quality_revenue"
     )
+}
+
+#' Lookup from a standard name to its group
+#'
+#' @param table An Airtable table with `standard_name` and the `group` column.
+#' @param group Name of the group column, e.g. `"fao_category"`.
+#' @param what What the names are, for the error message.
+#'
+#' @return A function turning standard names into their group; a name without
+#'   a group is returned as it is.
+#' @keywords internal
+group_lookup <- function(table, group, what) {
+  g <- table |>
+    dplyr::select(dplyr::all_of(c("standard_name", group))) |>
+    dplyr::filter(!is.na(.data[[group]]), .data[[group]] != "") |>
+    dplyr::distinct()
+  twice <- unique(g$standard_name[duplicated(g$standard_name)])
+  if (length(twice)) {
+    stop(what, " with more than one group in Airtable: ", toString(twice))
+  }
+  groups <- rlang::set_names(g[[group]], g$standard_name)
+  function(x) dplyr::coalesce(unname(groups[x]), x)
 }
 
 #' Compound relative error of a raised total (OPEN ARTFISH, p. 9)

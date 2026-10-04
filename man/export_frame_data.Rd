@@ -22,7 +22,12 @@ country / region / gear summary of male and female fishers, and uploads
 the result as a versioned JSON file for portal consumption.
 }
 \details{
-The output JSON has one record per \verb{(country, gaul1_name, gaul2_name, gear_name)} combination with \code{fishers_male} and \code{fishers_female} totals.
+The census is the snapshot's \code{frame_units} table. The output JSON has one
+record per \verb{(country, gaul1_name, gaul2_name, gear_name)} combination with
+\code{fishers_male}, \code{fishers_female} and \code{n_boats} totals; foot fishers count as
+fishers but not as boats. Mozambique's census has no gear, so it has one
+record per district without \code{gear_name}. Timor-Leste's census counts boats
+only, so it is left out.
 Files follow the package's \code{add_version()} convention
 (\code{prefix__YYYYMMDDHHMMSS__extension}).
 }

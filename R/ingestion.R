@@ -252,8 +252,12 @@ get_kobo_data <- function(
 #' The function retrieves the following asset types from Airtable:
 #' - **Taxa**: Species information including scientific names, alpha3 codes, and English names
 #' - **Gear**: Fishing gear types with standardized names
-#' - **Gear groups**: Each standardized gear's FAO ISSCFG main group
-#'   (`fao_category`), used by the FAO raising in [generate_fleet_analysis()]
+#' - **Gear groups** and **vessel groups**: Each standardized gear's FAO ISSCFG
+#'   main group (`fao_category`) and each boat type's `vessel_group`, used by the
+#'   FAO ARTFISH raising in [generate_fleet_analysis()]
+#' - **Frame units**: The census by district, boat type and main gear, either
+#'   left empty where a country does not count it, read by the FAO ARTFISH
+#'   raising and [export_frame_data()]
 #' - **Vessels**: Vessel types with standardized classifications
 #' - **Landing Sites**: Site information with codes and names
 #' - **Forms**: Survey form metadata with form IDs and names
@@ -331,10 +335,32 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
         select_cols = c("country", "form_id", "survey_label", "standard_name"),
         conf = conf
       ),
-      # Its own table: the pipelines join `gear` whole into their surveys.
+      # Own tables, since the pipelines join `gear` and `vessels` whole.
       gear_groups = fetch_asset(
         table_name = "gears",
         select_cols = c("standard_name", "fao_category"),
+        conf = conf
+      ),
+      vessel_groups = fetch_asset(
+        table_name = "vessels",
+        select_cols = c("country", "standard_name", "vessel_group"),
+        conf = conf
+      ),
+      # `unit` keeps apart rows that share district, boat type and gear.
+      frame_units = fetch_asset(
+        table_name = "frame_units",
+        select_cols = c(
+          "unit",
+          "country",
+          "gaul_1_name",
+          "gaul_2_code",
+          "gaul_2_name",
+          "vessel_standard_name",
+          "gear_standard_name",
+          "n_boats",
+          "fishers_male",
+          "fishers_female"
+        ),
         conf = conf
       ),
       vessels = fetch_asset(
@@ -378,23 +404,6 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
           "community",
           "gear_class",
           "vessel_class"
-        ),
-        conf = conf
-      ),
-      frame = fetch_asset(
-        table_name = "frame",
-        select_cols = c(
-          "gaul_1_name",
-          "gaul_1_code",
-          "gaul_2_name",
-          "gaul_2_code",
-          "gear_or_boat_type",
-          "category_kind",
-          "standard_name",
-          "standard_code",
-          "n_boats",
-          "fishers_male",
-          "fishers_female"
         ),
         conf = conf
       )
