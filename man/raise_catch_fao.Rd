@@ -11,8 +11,8 @@ raise_catch_fao(conf, assets)
 the validated survey file carrying the weekly fishing-days answer; without
 it the country has no FAO raising.}
 
-\item{assets}{The Airtable assets snapshot, with its \code{frame} and \code{gear_groups}
-tables.}
+\item{assets}{The Airtable assets snapshot, with its \code{frame_units},
+\code{gear_groups} and \code{vessel_groups} tables.}
 }
 \value{
 One row per district, fishing unit and month (see
@@ -28,11 +28,12 @@ tracker method, so the two come from the same data and can be compared.
 }
 \details{
 \itemize{
-\item \strong{Fishing unit}: what the census counts in each country (\code{category_kind}
-of the Airtable \code{frame} table): vessel type in Mozambique, and in Kenya and
-Zanzibar the gear, grouped into its FAO ISSCFG main group (\code{FAO_category}
-in the Airtable \code{gears} table: gillnets, hooks and lines, seine nets, ...)
-as the Toolkit advises, so each unit gets more samples.
+\item \strong{Fishing unit}: the Toolkit's boat type and main gear, as far as the census
+(Airtable \code{frame_units}) counts them: both in Kenya and Zanzibar, boat type
+alone in Mozambique. Each is grouped as the Toolkit advises, so units get
+more samples: the boat into its \code{vessel_group} (Airtable \code{vessels}, set per
+country; Mozambique's boat types stay apart) and the gear into its FAO
+ISSCFG main group (\code{FAO_category} in Airtable \code{gears}).
 \item \strong{Catch per fishing day}: the trip's total catch (or value); one trip is
 one fishing day. Trips recorded as catching nothing count as zero. A
 district, unit and month with fewer than five trips takes the catch per

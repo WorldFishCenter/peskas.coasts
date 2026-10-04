@@ -31,12 +31,12 @@ including metadata retrieval, trip processing, fleet estimation, and results sto
 This function executes the complete analysis pipeline:
 \enumerate{
 \item Reads configuration parameters and retrieves metadata
-\item Prepares boat registry from metadata
+\item Counts the boats per district in the census (Airtable \code{frame_units})
 \item Processes trip data from PDS API using device IMEIs
 \item Downloads the districts summaries (surveyed trips, mean catch and revenue
 per trip by district and month) from cloud storage
 \item Calculates monthly trip statistics from GPS data
-\item Estimates fleet-wide activity using boat registry
+\item Estimates fleet-wide activity using the census boats
 \item Calculates district totals using catch/revenue data
 \item Generates annual summary statistics by district
 \item Saves aggregated results to RDS file and uploads to cloud storage
@@ -45,7 +45,11 @@ per trip by district and month) from cloud storage
 The function creates a comprehensive analysis that scales GPS-tracked boat data
 to estimate total fleet activity, catch, and revenue by district and time period:
 the GPS tracker method. A country whose config has \code{fao.surveys} also gets the
-FAO ARTFISH method's totals (\code{\link[=raise_catch_fao]{raise_catch_fao()}}).
+FAO ARTFISH method's totals (\code{\link[=raise_catch_fao]{raise_catch_fao()}}). Its catch and revenue per
+trip are then averaged as that method does (\code{\link[=fao_catch_per_trip]{fao_catch_per_trip()}}): each
+kind of boat and gear by its boats in the census, not by how often it is
+surveyed. A district and month without such an average keeps the plain mean
+of its surveyed trips.
 
 Where a tracker is depends on \code{pds.fleet_location}:
 \itemize{
@@ -99,7 +103,6 @@ generate_fleet_analysis(log_threshold = logger::INFO)
 }
 \seealso{
 \itemize{
-\item \code{\link[=prepare_boat_registry]{prepare_boat_registry()}} for boat registry preparation
 \item \code{\link[=process_trip_data]{process_trip_data()}} for trip data processing
 \item \code{\link[=calculate_monthly_trip_stats]{calculate_monthly_trip_stats()}} for monthly statistics
 \item \code{\link[=estimate_fleet_activity]{estimate_fleet_activity()}} for fleet estimates

@@ -26,12 +26,17 @@ devtools::document()    # after any roxygen change; man/ is committed
   Any exported function with a `package` argument is a cross-repo API.
 - **Where things live.** PDS ingestion (`ingest_pds_trips`, `ingest_pds_tracks`,
   `describe_pds_tracks`, `select_country_trips`, `backup_tracks`) is in `R/ingestion-pds.R`.
-  `generate_fleet_analysis` (the GPS tracker method) is in `R/model-fishery.R`; with `pds.fleet_location: landing` it
+  `generate_fleet_analysis` (the GPS tracker method, boats from the census `frame_units`; where
+  ARTFISH runs, its catch per trip is ARTFISH's units weighted by their census boats,
+  `fao_catch_per_trip`, without the on-foot units) is in `R/model-fishery.R`; with `pds.fleet_location: landing` it
   places trackers by where their trips land (`landing_trip_data`) instead of the Airtable link.
   It also raises the same totals with the FAO ARTFISH method (`raise_catch_fao`, `R/model-fao.R`) for a
   country whose config has `fao.surveys` (the validated survey file with the weekly fishing-days
-  answer), from the API trips, the snapshot's `frame` census and `gear_groups` (FAO
-  categories, its own table because the pipelines join `gear` whole into their surveys), and
+  answer), from the API trips and the snapshot's census `frame_units` (one row per district ×
+  boat type × main gear, a dimension left empty where a country's census does not count it:
+  gear in Mozambique). Boat types and gears are grouped by `vessel_groups` (set per country;
+  Mozambique's stay apart) and `gear_groups`, their own tables because the pipelines join `vessels`
+  and `gear` whole into their surveys. It
   stores them as `fao` in the same file; `export_portal` publishes them as `*_fao` metrics. `R/ingestion.R` holds
   `get_kobo_data` and `ingest_assets`. `export_portal`, `export_geos` and
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
@@ -83,6 +88,6 @@ devtools::document()    # after any roxygen change; man/ is committed
 - Stray `*.rds`/`*.parquet` files in the repo root are local downloads (gitignored); do not
   rely on them.
 - `export_frame_data()` is run by hand when a new census arrives (every few years), not in a
-  workflow. Its input is broken since Aug 2026: the `frame` table in the assets snapshot has no
-  `country` column (only GAUL codes; `geo$country` holds Airtable record ids). Fix that before
-  the next run; the coasts portal serves the May 2026 `frame-gears.json` until then.
+  workflow. It reads `frame_units`; foot fishers count as fishers, not boats, and Timor-Leste's
+  rows (boats only, no fishers) are left out. Mozambique's six "Unallocated" rows have no boats,
+  so no estimate uses them, but they hold fishers the portal counts: keep them.

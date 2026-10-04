@@ -6,8 +6,9 @@
 \usage{
 estimate_catch_fao(
   trips,
-  frame,
+  census,
   gear_groups,
+  vessel_groups,
   min_samples = 5,
   min_district_trips = 10
 )
@@ -15,11 +16,16 @@ estimate_catch_fao(
 \arguments{
 \item{trips}{Output of \code{\link[=fao_trips]{fao_trips()}} for one country.}
 
-\item{frame}{The Airtable \code{frame} table: boats per district (\code{gaul_2_code})
-and \code{standard_name}, counted by gear or by vessel (\code{category_kind}).}
+\item{census}{The Airtable \code{frame_units} table: boats per district
+(\code{gaul_2_code}) by boat type (\code{vessel_standard_name}) and main gear
+(\code{gear_standard_name}), either left empty where the country's census does
+not count it.}
 
 \item{gear_groups}{The Airtable \code{gears} table's \code{standard_name} and
 \code{fao_category}. A gear without a category stays its own unit.}
+
+\item{vessel_groups}{The country's rows of the Airtable \code{vessels} table:
+\code{standard_name} and \code{vessel_group}. A boat type without a group stays its own.}
 
 \item{min_samples}{Trips (or weekly answers) a district, unit and month needs
 to stand on its own; below it, it borrows as described in \code{\link[=raise_catch_fao]{raise_catch_fao()}}.}
@@ -29,7 +35,7 @@ raised at all.}
 }
 \value{
 One row per district, fishing unit and month that has trips and a
-census count.
+census count; \code{on_foot} marks the units of fishers without a boat.
 }
 \description{
 Monthly totals per district and fishing unit from trips and the census

@@ -1419,8 +1419,12 @@ export_effort_gear_shapefiles <- function(
 #' the result as a versioned JSON file for portal consumption.
 #'
 #' @details
-#' The output JSON has one record per `(country, gaul1_name, gaul2_name,
-#' gear_name)` combination with `fishers_male` and `fishers_female` totals.
+#' The census is the snapshot's `frame_units` table. The output JSON has one
+#' record per `(country, gaul1_name, gaul2_name, gear_name)` combination with
+#' `fishers_male`, `fishers_female` and `n_boats` totals; foot fishers count as
+#' fishers but not as boats. Mozambique's census has no gear, so it has one
+#' record per district without `gear_name`. Timor-Leste's census counts boats
+#' only, so it is left out.
 #' Files follow the package's `add_version()` convention
 #' (`prefix__YYYYMMDDHHMMSS__extension`).
 #'
@@ -1456,44 +1460,24 @@ export_frame_data <- function(
       options = coasts_opts
     ) |>
     readr::read_rds() |>
-    purrr::pluck("frame") |>
+    purrr::pluck("frame_units")
+
+  # Mozambique's census has no gear, so its rows sum to one per district.
+  # Timor-Leste's counts boats only, so it is left out.
+  gears <- frame |>
+    dplyr::filter(!is.na(.data$fishers_male)) |>
+    dplyr::summarise(
+      fishers_male = sum(.data$fishers_male, na.rm = TRUE),
+      fishers_female = sum(.data$fishers_female, na.rm = TRUE),
+      # Foot fishers are fishers but not boats.
+      n_boats = sum(.data$n_boats[!.data$vessel_standard_name %in% "Feet"]),
+      .by = c("country", "gaul_1_name", "gaul_2_name", "gear_standard_name")
+    ) |>
     dplyr::rename(
       gaul1_name = "gaul_1_name",
       gaul2_name = "gaul_2_name",
-      gear_name = "standard_name"
+      gear_name = "gear_standard_name"
     )
-
-  #treated differently as there is no gear data
-  moz_frame <-
-    frame |>
-    dplyr::filter(.data$country == "Mozambique") |>
-    dplyr::group_by(
-      .data$country,
-      .data$gaul1_name,
-      .data$gaul2_name
-    ) |>
-    dplyr::summarise(
-      fishers_male = sum(.data$fishers_male),
-      fishers_female = sum(.data$fishers_female),
-      n_boats = sum(.data$n_boats),
-      .groups = "drop"
-    )
-
-  gears <- frame |>
-    dplyr::filter(.data$category_kind == "gear") |>
-    dplyr::group_by(
-      .data$country,
-      .data$gaul1_name,
-      .data$gaul2_name,
-      .data$gear_name
-    ) |>
-    dplyr::summarise(
-      fishers_male = sum(.data$fishers_male),
-      fishers_female = sum(.data$fishers_female),
-      n_boats = sum(.data$n_boats),
-      .groups = "drop"
-    ) |>
-    dplyr::bind_rows(moz_frame)
 
   logger::log_info("Frame gears: {nrow(gears)} rows")
 

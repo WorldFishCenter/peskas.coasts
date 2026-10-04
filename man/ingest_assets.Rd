@@ -14,8 +14,12 @@ The function retrieves the following asset types from Airtable:
 \itemize{
 \item \strong{Taxa}: Species information including scientific names, alpha3 codes, and English names
 \item \strong{Gear}: Fishing gear types with standardized names
-\item \strong{Gear groups}: Each standardized gear's FAO ISSCFG main group
-(\code{fao_category}), used by the FAO raising in \code{\link[=generate_fleet_analysis]{generate_fleet_analysis()}}
+\item \strong{Gear groups} and \strong{vessel groups}: Each standardized gear's FAO ISSCFG
+main group (\code{fao_category}) and each boat type's \code{vessel_group}, used by the
+FAO ARTFISH raising in \code{\link[=generate_fleet_analysis]{generate_fleet_analysis()}}
+\item \strong{Frame units}: The census by district, boat type and main gear, either
+left empty where a country does not count it, read by the FAO ARTFISH
+raising and \code{\link[=export_frame_data]{export_frame_data()}}
 \item \strong{Vessels}: Vessel types with standardized classifications
 \item \strong{Landing Sites}: Site information with codes and names
 \item \strong{Forms}: Survey form metadata with form IDs and names

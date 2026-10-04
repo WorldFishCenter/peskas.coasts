@@ -71,7 +71,6 @@ reference:
       - estimate_fleet_activity
       - summarize_data
       - generate_fleet_analysis
-      - prepare_boat_registry
       - process_trip_data
       - create_usage_heatmap
       - create_usage_table
