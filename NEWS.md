@@ -1,3 +1,9 @@
+# coasts 4.20.2
+
+## The tracks backup runs again
+
+* **FIXED** The nightly tracks backup no longer stops on a trip PDS lists but holds no points for. Two such trips of one boat had stopped it every night since 10 September, so the backup held no track after 9 September.
+
 # coasts 4.20.1
 
 ## Tracker timezones come from the country

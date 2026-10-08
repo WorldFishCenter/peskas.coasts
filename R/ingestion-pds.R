@@ -824,8 +824,20 @@ backup_tracks <- function(package = "coasts") {
     .progress = TRUE
   )
 
+  future::plan(future::sequential)
+
+  # PDS lists some trips it holds no points for. Their empty table reads as
+  # text in every column and cannot be bound with the rest.
+  # ponytail: these trips are asked for again on every run until they leave
+  # the 90-day window; remember their ids if that ever gets slow.
+  tracks_list <- purrr::keep(tracks_list, ~ NROW(.x) > 0)
+
+  if (length(tracks_list) == 0) {
+    logger::log_info("No new tracks to download")
+    return(invisible())
+  }
+
   tracks_df <- tracks_list |>
-    purrr::compact() |>
     dplyr::bind_rows() |>
     dplyr::select("Time", "Trip", "Lat", "Lng") |>
     dplyr::mutate(
@@ -837,8 +849,6 @@ backup_tracks <- function(package = "coasts") {
       Lng = stats::median(.data$Lng),
       .groups = "drop"
     )
-
-  future::plan(future::sequential)
 
   tracks_df <-
     boats_trips |>
