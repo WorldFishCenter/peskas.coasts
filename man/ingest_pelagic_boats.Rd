@@ -26,13 +26,18 @@ The function performs the following steps:
 \item Authenticates with Pelagic Data Systems API
 \item Retrieves boat data with device and vessel characteristics
 \item Cleans and standardizes the data format
-\item Maps customer names to standardized country names
+\item Maps customer names to standardized country names, and each country to
+its timezone
 \item Retrieves country IDs from Airtable Countries table
 \item Syncs the processed data to the pds_devices Airtable table
 }
 
 Country mapping includes: Egypt, Timor-Leste, Mozambique, Zanzibar, Kenya,
 Malaysia, Malawi, Tanzania, Bangladesh, and India.
+
+\code{device_timezone} comes from the country, not from the timezone PDS holds
+for each tracker: PDS has reset trackers in the field to
+\code{America/Los_Angeles}, a value the Airtable field does not accept.
 }
 \examples{
 \dontrun{

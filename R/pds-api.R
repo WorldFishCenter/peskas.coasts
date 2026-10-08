@@ -486,12 +486,17 @@ get_pelagic_devices <- function(
 #' 1. Authenticates with Pelagic Data Systems API
 #' 2. Retrieves boat data with device and vessel characteristics
 #' 3. Cleans and standardizes the data format
-#' 4. Maps customer names to standardized country names
+#' 4. Maps customer names to standardized country names, and each country to
+#'    its timezone
 #' 5. Retrieves country IDs from Airtable Countries table
 #' 6. Syncs the processed data to the pds_devices Airtable table
 #'
 #' Country mapping includes: Egypt, Timor-Leste, Mozambique, Zanzibar, Kenya,
 #' Malaysia, Malawi, Tanzania, Bangladesh, and India.
+#'
+#' `device_timezone` comes from the country, not from the timezone PDS holds
+#' for each tracker: PDS has reset trackers in the field to
+#' `America/Los_Angeles`, a value the Airtable field does not accept.
 #'
 #' @examples
 #' \dontrun{
@@ -519,6 +524,22 @@ ingest_pelagic_boats <- function(conf = NULL) {
 
   logger::log_info("Retrieved PDS authentication token")
 
+  # PDS keeps a timezone on each tracker, but resets some to its own default
+  # (America/Los_Angeles), so the country decides it instead. Each value must
+  # be an option of the `device_timezone` field in Airtable.
+  country_timezones <- c(
+    "Egypt" = "Africa/Cairo",
+    "Timor-Leste" = "Asia/Dili",
+    "Mozambique" = "Africa/Maputo",
+    "Zanzibar" = "Africa/Nairobi",
+    "Kenya" = "Africa/Nairobi",
+    "Malaysia" = "Asia/Kuala_Lumpur",
+    "Malawi" = "Africa/Harare",
+    "Tanzania" = "Africa/Dar_es_Salaam",
+    "Bangladesh" = "Asia/Dhaka",
+    "India" = "Asia/Calcutta"
+  )
+
   # Get boats data from PDS API
   boats <- get_pelagic_boats(
     token = auth_response$token,
@@ -535,7 +556,6 @@ ingest_pelagic_boats <- function(conf = NULL) {
       "device.directCustomer.name",
       "region",
       "community",
-      "device.timezone",
       # Vessel characteristics
       "vesselType",
       "vesselSize",
@@ -567,7 +587,6 @@ ingest_pelagic_boats <- function(conf = NULL) {
       customer_name = "device_direct_customer_name",
       "region",
       "community",
-      "device_timezone",
       # Vessel characteristics
       "vessel_type",
       "vessel_size",
@@ -606,7 +625,8 @@ ingest_pelagic_boats <- function(conf = NULL) {
           "Totalenergies Mozambique TEPMA1 (formerly Syberintel)" ~ "mozambique",
         TRUE ~ NA
       ),
-      country = stringr::str_to_title(.data$country)
+      country = stringr::str_to_title(.data$country),
+      device_timezone = unname(country_timezones[.data$country])
     ) |>
     dplyr::relocate(country = "country", .after = "customer_name")
 
@@ -614,13 +634,14 @@ ingest_pelagic_boats <- function(conf = NULL) {
     "Retrieved and processed {nrow(boats)} boat records from PDS"
   )
 
-  # A customer that is new or renamed in PDS gets no country in Airtable until
-  # it is added to the mapping above.
-  unmapped <- unique(boats$customer_name[is.na(boats$country)])
+  # A customer that is new or renamed in PDS gets no country or timezone in
+  # Airtable until it is added to the mappings above.
+  unmapped <- unique(boats$customer_name[is.na(boats$device_timezone)])
   if (length(unmapped) > 0) {
     logger::log_warn(
-      "No country for PDS customer(s) {paste(unmapped, collapse = ', ')}; ",
-      "add them to the mapping in ingest_pelagic_boats()."
+      "No country or timezone for PDS customer(s) ",
+      "{paste(unmapped, collapse = ', ')}; ",
+      "add them to the mappings in ingest_pelagic_boats()."
     )
   }
 

@@ -1,3 +1,9 @@
+# coasts 4.20.1
+
+## Tracker timezones come from the country
+
+* **FIXED** The tracker sync to Airtable no longer stops when PDS reports a timezone the Airtable `device_timezone` field does not have. Each tracker's timezone now comes from its country, not from PDS, which had reset four trackers in Timor-Leste and Malawi to `America/Los_Angeles`.
+
 # coasts 4.20.0
 
 ## FAO ARTFISH estimates by boat and gear together in Kenya and Zanzibar
