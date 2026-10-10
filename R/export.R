@@ -1499,3 +1499,294 @@ export_frame_data <- function(
 
   invisible(NULL)
 }
+
+#' Export Data Collection Statistics to Airtable
+#'
+#' @description
+#' Counts what Peskas has collected in each country and district (survey
+#' submissions, enumerators, landing sites, the dates covered and GPS-tracked
+#' trips) and writes the numbers as of today to the `collection_stats` table of
+#' the Airtable frame base, one row per country and one per district.
+#'
+#' @details
+#' Every number comes from an output that already exists:
+#' * Submissions, landing sites and dates: each country's `trips-raw` and
+#'   `trips-validated` files in the peskas-api bucket (`api.trips`), so survey
+#'   programmes the API does not publish are not counted.
+#' * Enumerators: the `surveys_flags-<form id>` collections of the validation
+#'   database, for the forms in those files. Kenya's WCS form records no
+#'   enumerator, so its submissions add none. Timor-Leste's enumerators share
+#'   logins and its flags name the reporting region instead, one enumerator
+#'   each, so there regions are counted.
+#' * GPS trips: the country's `pds-trips` file for the country row; for a
+#'   district row, the trips [generate_fleet_analysis()] places in it
+#'   (`<country>-aggregated`).
+#'
+#' Rows are matched on `key` (`kenya`, `kenya-103651`), so each run overwrites
+#' the previous numbers; a district that drops out keeps its last ones.
+#'
+#' @param log_threshold Logging threshold.
+#' @param package Name of the package whose `inst/conf.yml` to read.
+#'
+#' @return Invisibly, the tibble written to Airtable.
+#' @seealso [device_sync()]
+#' @keywords export
+#' @export
+export_collection_stats <- function(
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+  provider <- conf$storage$google$key
+  opts <- conf$storage$google$options
+  validation <- conf$storage$mongodb$validation
+
+  geo <- read_latest_rds(conf$metadata$airtable$name, provider, opts)$geo
+
+  stats <- purrr::map(names(conf$storage$google$buckets), function(country) {
+    logger::log_info("Collection stats for {country}")
+    country_opts <- opts
+    country_opts$bucket <- conf$storage$google$buckets[[country]]
+    read_api_trips <- function(type) {
+      download_parquet_from_cloud(
+        prefix = paste0(
+          conf$api$trips[[country]][[type]]$cloud_path,
+          "/",
+          conf$api$trips[[country]][[type]]$file_prefix
+        ),
+        provider = provider,
+        options = opts,
+        bucket_name = conf$api$trips$bucket
+      )
+    }
+    raw <- read_api_trips("raw")
+
+    # Only the forms this country publishes: submission ids repeat across
+    # KoBo servers, so another country's form could match by chance.
+    flags <- paste0(validation$collection$flags, "-", unique(raw$survey_id)) |>
+      purrr::map(
+        ~ mdb_collection_pull(
+          connection_string = validation$connection_string,
+          collection_name = .x,
+          db_name = validation$database_name
+        )
+      ) |>
+      purrr::keep(~ all(c("submission_id", "submitted_by") %in% names(.x))) |>
+      purrr::map(
+        ~ dplyr::transmute(
+          .x,
+          submission_id = as.character(.data$submission_id),
+          submitted_by = as.character(.data$submitted_by)
+        )
+      ) |>
+      dplyr::bind_rows(
+        dplyr::tibble(submission_id = character(), submitted_by = character())
+      )
+
+    summarise_collection(
+      country = country,
+      raw = raw,
+      validated_ids = unique(read_api_trips("validated")$trip_id),
+      flags = flags,
+      pds_trips = download_parquet_from_cloud(
+        prefix = conf$pds$pds_trips$file_prefix,
+        provider = provider,
+        options = country_opts
+      ),
+      fleet = read_latest_rds(
+        paste0(country, "-aggregated"),
+        provider,
+        country_opts
+      )$fleet_estimates,
+      geo = geo
+    )
+  }) |>
+    dplyr::bind_rows()
+
+  countries <- airtable_to_df(
+    base_id = conf$airtable$frame$base_id,
+    table_name = conf$airtable$frame$tables$countries,
+    token = conf$airtable$token
+  )
+  airtable_names <- c(
+    kenya = "Kenya",
+    zanzibar = "Zanzibar",
+    mozambique = "Mozambique",
+    timor = "Timor-Leste"
+  )
+  country_ids <- rlang::set_names(countries$airtable_id, countries$Country)
+
+  # `districts` holds one row per form and district, so a code can link to
+  # several of them.
+  # Country rows have no code; a district row without one must not match them.
+  district_ids <- geo |>
+    dplyr::filter(!is.na(.data$airtable_id), !is.na(.data$gaul_2_code)) |>
+    dplyr::group_by(.data$gaul_2_code) |>
+    dplyr::summarise(
+      districts = list(as.list(unique(.data$airtable_id))),
+      .groups = "drop"
+    )
+
+  stats <- stats |>
+    dplyr::left_join(district_ids, by = "gaul_2_code") |>
+    dplyr::mutate(
+      country = purrr::map(
+        .data$country,
+        ~ list(country_ids[[airtable_names[[.x]]]])
+      ),
+      # An empty link must be an empty list: a NULL would not serialise.
+      districts = purrr::map(.data$districts, ~ .x %||% list()),
+      updated = Sys.Date()
+    )
+
+  logger::log_info("Writing {nrow(stats)} rows to Airtable")
+  device_sync(
+    boats_df = stats,
+    base_id = conf$airtable$frame$base_id,
+    table_name = conf$airtable$frame$tables$collection_stats,
+    token = conf$airtable$token,
+    key_field = "key"
+  )
+
+  invisible(stats)
+}
+
+# One country's collection numbers, a row for the country and one per district.
+summarise_collection <- function(
+  country,
+  raw,
+  validated_ids,
+  flags,
+  pds_trips,
+  fleet,
+  geo
+) {
+  submissions <- raw |>
+    dplyr::filter(!duplicated(.data$trip_id)) |>
+    dplyr::mutate(landing_date = as.Date(.data$landing_date)) |>
+    # A landing with no date or one in the future is a typing error.
+    dplyr::filter(
+      !is.na(.data$landing_date),
+      .data$landing_date <= Sys.Date()
+    ) |>
+    dplyr::mutate(
+      validated = .data$trip_id %in% validated_ids,
+      submission_id = sub("^TRIP_", "", .data$trip_id)
+    ) |>
+    dplyr::left_join(
+      dplyr::filter(flags, !duplicated(.data$submission_id)),
+      by = "submission_id"
+    )
+
+  survey_stats <- function(x) {
+    dplyr::summarise(
+      x,
+      programmes = paste(
+        sort(unique(.data$survey_organization)),
+        collapse = ", "
+      ),
+      submissions = dplyr::n(),
+      submissions_validated = sum(.data$validated),
+      # Zero means no form recorded who collected, not that nobody did.
+      enumerators = dplyr::na_if(
+        dplyr::n_distinct(.data$submitted_by, na.rm = TRUE),
+        0L
+      ),
+      landing_sites = dplyr::n_distinct(.data$landing_site, na.rm = TRUE),
+      first_landing = min(.data$landing_date),
+      last_landing = max(.data$landing_date),
+      .groups = "drop"
+    ) |>
+      dplyr::mutate(
+        months = 12 *
+          (lubridate::year(.data$last_landing) -
+            lubridate::year(.data$first_landing)) +
+          lubridate::month(.data$last_landing) -
+          lubridate::month(.data$first_landing) +
+          1,
+        submissions_per_month = round(.data$submissions / .data$months, 1)
+      ) |>
+      dplyr::select(-"months")
+  }
+
+  # Monthly trips and boats, as generate_fleet_analysis() stores them.
+  gps_stats <- function(x) {
+    x |>
+      dplyr::filter(.data$sample_total_trips > 0) |>
+      # Timor-Leste stores months as date-times.
+      dplyr::mutate(date_month = as.Date(.data$date_month)) |>
+      dplyr::summarise(
+        gps_trips = sum(.data$sample_total_trips),
+        trackers_per_month = round(mean(.data$sample_boats_tracked), 1),
+        # first()/last() give NA on no rows, where min()/max() warn.
+        gps_first_month = dplyr::first(
+          .data$date_month,
+          order_by = .data$date_month
+        ),
+        gps_last_month = dplyr::last(
+          .data$date_month,
+          order_by = .data$date_month
+        ),
+        .groups = "drop"
+      )
+  }
+
+  country_gps <- pds_trips |>
+    dplyr::mutate(
+      date_month = lubridate::floor_date(as.Date(.data$Ended), "month")
+    ) |>
+    dplyr::group_by(.data$date_month) |>
+    dplyr::summarise(
+      sample_total_trips = dplyr::n_distinct(.data$Trip),
+      sample_boats_tracked = dplyr::n_distinct(.data$Boat),
+      .groups = "drop"
+    )
+
+  district_names <- geo |>
+    dplyr::select("gaul_2_code", "gaul_2_name") |>
+    dplyr::filter(!is.na(.data$gaul_2_code), !duplicated(.data$gaul_2_code))
+
+  districts <- dplyr::full_join(
+    submissions |>
+      dplyr::filter(!is.na(.data$gaul_2_code)) |>
+      dplyr::group_by(.data$gaul_2_code) |>
+      survey_stats(),
+    fleet |>
+      dplyr::inner_join(district_names, by = "gaul_2_name") |>
+      dplyr::group_by(.data$gaul_2_code) |>
+      gps_stats(),
+    by = "gaul_2_code"
+  ) |>
+    dplyr::left_join(district_names, by = "gaul_2_code") |>
+    dplyr::mutate(
+      key = paste0(country, "-", .data$gaul_2_code),
+      level = "district"
+    )
+
+  dplyr::bind_cols(survey_stats(submissions), gps_stats(country_gps)) |>
+    dplyr::mutate(key = country, level = "country") |>
+    dplyr::bind_rows(districts) |>
+    dplyr::mutate(country = country) |>
+    dplyr::relocate(
+      "key",
+      "level",
+      "country",
+      "gaul_2_code",
+      "gaul_2_name"
+    )
+}
+
+# Reads the latest version of an rds file and removes the local copy.
+read_latest_rds <- function(prefix, provider, options) {
+  file <- cloud_object_name(
+    prefix = prefix,
+    provider = provider,
+    version = "latest",
+    extension = "rds",
+    options = options
+  ) |>
+    download_cloud_file(provider = provider, options = options)
+  on.exit(unlink(file))
+  readr::read_rds(file)
+}

@@ -120,7 +120,14 @@ default:
         kenya: kenya-dev
         mozambique: mozambique-dev
         zanzibar: zanzibar-dev
+        timor: timor-dev
     mongodb:
+      # Every country's validation flags, read by export_collection_stats().
+      validation:
+        connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_VALIDATION')
+        database_name: validation-dev
+        collection:
+          flags: surveys_flags
       coasts_portal:
         connection_string: !expr Sys.getenv('MONGODB_CONNECTION_STRING_COASTS')
         database_name: portal-dev
@@ -201,6 +208,9 @@ default:
       tables:
         countries: Countries
         pds_devices: pds_devices
+        # Airtable has no dev copy: a dev run must fail, not overwrite the
+        # production numbers, so only production names the real table.
+        collection_stats: collection_stats_dev
     tracks_app:
       base_id: !expr Sys.getenv('AIRTABLE_BASE_ID_TRACKS_APP')
       tables:
@@ -218,12 +228,19 @@ production:
         kenya: kenya-prod
         mozambique: mozambique-prod
         zanzibar: zanzibar-prod
+        timor: timor
     mongodb:
       coasts_portal:
         database_name: portal
       tracks_app:
         database_name: portal-prod
+      validation:
+        database_name: validation-prod
   pds_storage:
     google:
       options:
         bucket: pds-peskas-coasts
+  airtable:
+    frame:
+      tables:
+        collection_stats: collection_stats

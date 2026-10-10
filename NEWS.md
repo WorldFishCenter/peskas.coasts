@@ -1,3 +1,9 @@
+# coasts 4.21.0
+
+## Data collection numbers in Airtable
+
+* **NEW** Airtable now shows, for each country and district, the surveys submitted and validated, enumerators, landing sites, dates covered and GPS-tracked trips, refreshed daily.
+
 # coasts 4.20.2
 
 ## The tracks backup runs again

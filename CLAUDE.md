@@ -60,6 +60,12 @@ devtools::document()    # after any roxygen change; man/ is committed
   `fishers-stats`, `fishers-performance`) are read by `tracks-explorer` (`api/fisher-stats/`,
   `api/waypoints.js`). `sync_device_users` writes `users` (with the generated login
   passwords); `export_fishers_stats` writes stats and performance.
+- **Collection stats.** `export_collection_stats` (coasts pipeline, `main` only) writes one
+  row per country and district to the Airtable frame table `collection_stats`, upserted on
+  `key`. It reads every country's API trips, the validation database's `surveys_flags-<form>`
+  for enumerators, and from each country bucket `pds-trips` and `<country>-aggregated`. The
+  default profile names the table `collection_stats_dev`, which does not exist, so a dev run
+  fails rather than overwriting production numbers.
 - **Currency.** `export_geos` converts RPUE and price per kg to USD with hard-coded rates in
   `R/export.R`, one per currency: TZS 0.00038, KES 0.0077, MZN 0.016.
 - `mdb_collection_push(geo = TRUE)` drops the collection, reinserts, and builds a
