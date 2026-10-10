@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# Peskas Coasts data pipeline
+# Peskas Coasts data pipeline <img src="man/figures/logo.png" align="right" height="139" alt="" />
 
 [![pkgdown](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/WorldFishCenter/peskas.coasts/actions/workflows/pkgdown.yaml)
 
