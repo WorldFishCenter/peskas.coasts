@@ -355,6 +355,11 @@ device_sync <- function(
 
   # Get existing records
   existing_df <- airtable_to_df(base_id, table_name, token)
+  # A table with no records yet comes back without columns.
+  if (nrow(existing_df) == 0) {
+    existing_df <- dplyr::tibble(airtable_id = character())
+    existing_df[[key_field]] <- character()
+  }
 
   # Filter to writable fields only
   tryCatch(

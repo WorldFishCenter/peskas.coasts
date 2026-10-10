@@ -18,6 +18,7 @@ env:
   # MongoDB Connections
   MONGODB_CONNECTION_STRING_COASTS: ${{ secrets.MONGODB_CONNECTION_STRING_COASTS }}
   MONGODB_CONNECTION_STRING_TRACKS: ${{ secrets.MONGODB_CONNECTION_STRING_TRACKS }}
+  MONGODB_CONNECTION_STRING_VALIDATION: ${{ secrets.MONGODB_CONNECTION_STRING_VALIDATION }}
   # Metadata Services
   GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
   AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
@@ -229,3 +230,21 @@ jobs:
       - name: Call export_effort_gear_shapefiles()
         run: Rscript -e 'coasts::export_effort_gear_shapefiles()'
 
+
+  export-collection-stats:
+    name: Export collection stats to Airtable
+    needs: ingest-static-assets
+    # Airtable has no dev copy, so only main writes there.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/worldfishcenter/peskas.coasts/r-runner-peskas-coasts:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Set env to production
+        if: endsWith(github.ref, '/main')
+        run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
+      - name: Call export_collection_stats()
+        run: Rscript -e 'coasts::export_collection_stats(log_threshold = logger::INFO)'

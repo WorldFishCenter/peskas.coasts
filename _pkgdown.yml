@@ -53,6 +53,7 @@ reference:
       - export_fishers_stats
       - export_portal
       - export_pds_spatial
+      - export_collection_stats
   - title: "Spatial Utilities"
     desc: "Under-the-hood tools for gridding, mapping, and metric conversion."
     contents:
