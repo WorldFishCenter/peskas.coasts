@@ -1,3 +1,9 @@
+# coasts 4.21.1
+
+## Boat counts come only from the census
+
+* **FIXED** The daily Airtable snapshot no longer asks the `districts` table for `total_boats`, which has been removed from Airtable. Without this, `ingest_assets()` stopped and the snapshot stayed at 10 October 2026. Boat counts come from `frame_units`, as they already did for the GPS tracker method.
+
 # coasts 4.21.0
 
 ## Data collection numbers in Airtable

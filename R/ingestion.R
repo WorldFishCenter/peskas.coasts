@@ -312,7 +312,6 @@ ingest_assets <- function(log_threshold = logger::DEBUG, package = "coasts") {
           "gaul_1_code",
           "gaul_2_name",
           "gaul_2_code",
-          "total_boats",
           "country",
           "airtable_id"
         ),
