@@ -15,7 +15,7 @@ devtools::document()    # after any roxygen change; man/ is committed
 ```
 - Pipeline steps: read `.github/workflows/data-pipeline.yaml` (one `Rscript -e 'coasts::fn()'` per job).
 - Other workflows: `sync-devices-users.yaml` (Airtable devices to tracks-app users),
-  `tracks-backup.yaml`, `app-usage-report.yaml`, `release.yaml` (GitHub release from the
+  `collection-stats.yaml` (weekly Airtable `collection_stats`), `tracks-backup.yaml`, `app-usage-report.yaml`, `release.yaml` (GitHub release from the
   top block of `NEWS.md` on push to `main`).
 - CI image: `Dockerfile.prod` (rocker/geospatial base).
 
@@ -60,7 +60,7 @@ devtools::document()    # after any roxygen change; man/ is committed
   `fishers-stats`, `fishers-performance`) are read by `tracks-explorer` (`api/fisher-stats/`,
   `api/waypoints.js`). `sync_device_users` writes `users` (with the generated login
   passwords); `export_fishers_stats` writes stats and performance.
-- **Collection stats.** `export_collection_stats` (coasts pipeline, `main` only) writes one
+- **Collection stats.** `export_collection_stats` (weekly, `collection-stats.yaml`, `main` only) writes one
   row per country and district to the Airtable frame table `collection_stats`, upserted on
   `key`. It reads every country's API trips, the validation database's `surveys_flags-<form>`
   for enumerators, and from each country bucket `pds-trips` and `<country>-aggregated`. The
