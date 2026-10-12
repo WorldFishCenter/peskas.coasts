@@ -582,6 +582,8 @@ calculate_district_totals <- function(
 #' - **fao**: The same totals raised with the FAO ARTFISH method, per district, fishing
 #'   unit and month (see [raise_catch_fao()]); `NULL` for a country whose config
 #'   has no `fao.surveys`
+#' - **fao_species**: The FAO ARTFISH method's catch by species, per district,
+#'   fishing unit and month (see [estimate_species_fao()]); `NULL` like `fao`
 #'
 #' @examples
 #' \dontrun{
@@ -669,7 +671,7 @@ generate_fleet_analysis <- function(
     # each kind of boat by its census boats, not by how often it is surveyed.
     districts_summaries <- districts_summaries |>
       dplyr::left_join(
-        fao_catch_per_trip(fao),
+        fao_catch_per_trip(fao$units),
         by = c("gaul_2_name", "date")
       ) |>
       dplyr::mutate(
@@ -755,7 +757,8 @@ generate_fleet_analysis <- function(
       fleet_estimates = fleet_estimates,
       district_totals = district_totals,
       annual_summary = annual_summary,
-      fao = fao
+      fao = fao$units,
+      fao_species = fao$species
     )
 
   # Save aggregated results

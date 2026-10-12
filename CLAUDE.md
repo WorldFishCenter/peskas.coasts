@@ -37,7 +37,10 @@ devtools::document()    # after any roxygen change; man/ is committed
   gear in Mozambique). Boat types and gears are grouped by `vessel_groups` (set per country;
   Mozambique's stay apart) and `gear_groups`, their own tables because the pipelines join `vessels`
   and `gear` whole into their surveys. It
-  stores them as `fao` in the same file; `export_portal` publishes them as `*_fao` metrics. `R/ingestion.R` holds
+  stores them as `fao` in the same file; `export_portal` publishes them as `*_fao` metrics. The catch
+  by species (`estimate_species_fao`: each unit's raised catch split by the species mix of the trips
+  its catch per trip came from, a trip's species rows scaled to its total) is stored beside it as
+  `fao_species` and not published yet. `R/ingestion.R` holds
   `get_kobo_data` and `ingest_assets`. `export_portal`, `export_geos` and
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
 - **Portal.** `export_portal` runs once per country, called from each country pipeline with

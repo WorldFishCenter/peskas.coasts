@@ -1,3 +1,10 @@
+# coasts 4.22.0
+
+## FAO ARTFISH estimates of catch by species
+
+* **NEW** In Kenya, Zanzibar and Mozambique, the FAO ARTFISH method now also estimates the total catch of each species, as FAO's Toolkit sets out: each kind of boat and gear's catch is split by the species its sampled trips landed. The estimates are stored with the other totals and are not on the dashboards yet.
+* **NEW** In Kenya, where enumerators identify the species in a sample of each catch, the sample's mix is applied to the whole catch of the trip.
+
 # coasts 4.21.1
 
 ## Boat counts come only from the census
