@@ -223,3 +223,70 @@ test_that("fao_catch_per_trip weights each unit by its census boats, leaving out
 test_that("a country without fao.surveys has no FAO raising", {
   expect_null(raise_catch_fao(list(fao = NULL), assets = list()))
 })
+
+# Catch rows of the API landings: one per trip and species.
+item <- function(id, taxon, kg) data.frame(trip_id = id, catch_taxon = taxon, catch_kg = kg)
+species_of <- function(trips, landings, census, ...) {
+  fao <- estimate_catch_fao(trips, census, groups, boats, ...)
+  out <- estimate_species_fao(fao, fao_units(trips, census, groups, boats)$trips, landings)
+  list(fao = fao, species = out[order(out$fishing_unit, out$catch_taxon), ])
+}
+
+test_that("a unit's raised catch is split by the species mix of its trips", {
+  trips <- rbind(
+    trip("a", "Gill Net", "2026-06-01", 10, 100, 7),
+    trip("b", "Gill Net", "2026-06-01", 20, 200, 7)
+  )
+  landings <- rbind(item("a", "SKJ", 10), item("b", "SKJ", 5), item("b", "YFT", 15))
+  out <- species_of(trips, landings, census, min_samples = 2, min_district_trips = 1)
+
+  expect_equal(out$species$catch_taxon, c("SKJ", "YFT"))
+  expect_equal(out$species$total_catch_kg, c(22500, 22500)) # 100 boats x 30 days x 15 kg, half each
+  expect_equal(sum(out$species$total_catch_kg), out$fao$total_catch_kg)
+})
+
+test_that("species rows that are a sample of the trip set its mix, not its weight", {
+  trips <- rbind(
+    trip("a", "Gill Net", "2026-06-01", 10, 100, 7),
+    trip("b", "Gill Net", "2026-06-01", 20, 200, 7)
+  )
+  # Trip b weighed a 4 kg sample of its 20 kg: half SKJ, half YFT.
+  landings <- rbind(item("a", "SKJ", 1), item("b", "SKJ", 2), item("b", "YFT", 2))
+  out <- species_of(trips, landings, census, min_samples = 2, min_district_trips = 1)
+
+  expect_equal(out$species$total_catch_kg, c(30000, 15000)) # 20 of the 30 sampled kg are SKJ
+})
+
+test_that("a unit that borrows its catch per trip borrows the district's species mix", {
+  two_gears <- units(c("Gill Net", "Hand Line"), c(60L, 40L))
+  trips <- rbind(
+    trip("a", "Gill Net", "2026-06-01", 10, 100, 7),
+    trip("b", "Gill Net", "2026-06-01", 20, 200, 7),
+    trip("c", "Hand Line", "2026-06-01", 30, 300, 7)
+  )
+  landings <- rbind(item("a", "SKJ", 10), item("b", "SKJ", 20), item("c", "YFT", 30))
+  out <- species_of(trips, landings, two_gears, min_samples = 2, min_district_trips = 1)
+  lines <- out$species[out$species$fishing_unit == "Hooks and lines", ]
+  nets <- out$species[out$species$fishing_unit == "Gillnets and entangling nets", ]
+
+  expect_equal(lines$catch_source, c("district", "district"))
+  expect_equal(lines$catch_taxon, c("SKJ", "YFT"))
+  expect_equal(lines$total_catch_kg, rep(40 * 30 * 20 / 2, 2)) # the district's trips are half SKJ
+  expect_equal(nets$catch_taxon, "SKJ") # enough trips of its own
+  expect_equal(sum(out$species$total_catch_kg), sum(out$fao$total_catch_kg))
+})
+
+test_that("catch with no weighed species row stays unidentified, and no catch adds nothing", {
+  trips <- rbind(
+    trip("a", "Gill Net", "2026-06-01", 10, 100, 7),
+    trip("b", "Gill Net", "2026-06-01", 0, 0, 7),
+    trip("c", "Gill Net", "2026-06-01", 10, 100, 7)
+  )
+  landings <- rbind(item("a", NA, NA), item("b", NA, NA), item("c", "SKJ", 10))
+  out <- species_of(trips, landings, census, min_samples = 2, min_district_trips = 1)
+
+  expect_equal(out$species$catch_taxon, c("SKJ", NA))
+  expect_equal(out$species$total_catch_kg, rep(out$fao$total_catch_kg / 2, 2))
+  # A district and month too thin to raise has no species either.
+  expect_equal(nrow(species_of(trips, landings, census)$species), 0)
+})

@@ -15,9 +15,10 @@ it the country has no FAO raising.}
 \code{gear_groups} and \code{vessel_groups} tables.}
 }
 \value{
-One row per district, fishing unit and month (see
-\code{\link[=estimate_catch_fao]{estimate_catch_fao()}}), or \code{NULL} when the country has no \code{fao.surveys} or
-the raising fails.
+A list, or \code{NULL} when the country has no \code{fao.surveys} or the raising
+fails: \code{units}, one row per district, fishing unit and month (see
+\code{\link[=estimate_catch_fao]{estimate_catch_fao()}}), and \code{species}, the same catch by species (see
+\code{\link[=estimate_species_fao]{estimate_species_fao()}}; \code{NULL} if that split fails).
 }
 \description{
 Estimates monthly total catch and revenue per district and fishing unit with
@@ -47,6 +48,8 @@ is not raised (totals \code{NA}, quality \code{too_few_trips}), as in
 \code{\link[=calculate_district_totals]{calculate_district_totals()}}.
 \item \strong{Error}: the Toolkit's compound relative error at 90\%, flagged \code{pass}
 (up to 15\%), \code{warn} (up to 20\%), \code{fail} or \code{unknown}.
+\item \strong{Species}: each unit's raised catch is split by the species mix of the
+trips its catch per trip came from (\code{\link[=estimate_species_fao]{estimate_species_fao()}}).
 \item Only trips from the survey named in \code{fao.surveys} are used, the one that
 asks the weekly question: KEFS in Kenya, WF in Zanzibar and DINAPA in
 Mozambique.

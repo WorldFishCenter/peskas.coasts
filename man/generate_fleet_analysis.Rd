@@ -88,6 +88,8 @@ The function creates an RDS file containing a list with three components:
 \item \strong{fao}: The same totals raised with the FAO ARTFISH method, per district, fishing
 unit and month (see \code{\link[=raise_catch_fao]{raise_catch_fao()}}); \code{NULL} for a country whose config
 has no \code{fao.surveys}
+\item \strong{fao_species}: The FAO ARTFISH method's catch by species, per district,
+fishing unit and month (see \code{\link[=estimate_species_fao]{estimate_species_fao()}}); \code{NULL} like \code{fao}
 }
 }
 

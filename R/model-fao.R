@@ -27,6 +27,8 @@
 #'   [calculate_district_totals()].
 #' - **Error**: the Toolkit's compound relative error at 90%, flagged `pass`
 #'   (up to 15%), `warn` (up to 20%), `fail` or `unknown`.
+#' - **Species**: each unit's raised catch is split by the species mix of the
+#'   trips its catch per trip came from ([estimate_species_fao()]).
 #' - Only trips from the survey named in `fao.surveys` are used, the one that
 #'   asks the weekly question: KEFS in Kenya, WF in Zanzibar and DINAPA in
 #'   Mozambique.
@@ -39,9 +41,10 @@
 #' @param assets The Airtable assets snapshot, with its `frame_units`,
 #'   `gear_groups` and `vessel_groups` tables.
 #'
-#' @return One row per district, fishing unit and month (see
-#'   [estimate_catch_fao()]), or `NULL` when the country has no `fao.surveys` or
-#'   the raising fails.
+#' @return A list, or `NULL` when the country has no `fao.surveys` or the raising
+#'   fails: `units`, one row per district, fishing unit and month (see
+#'   [estimate_catch_fao()]), and `species`, the same catch by species (see
+#'   [estimate_species_fao()]; `NULL` if that split fails).
 #' @keywords internal
 raise_catch_fao <- function(conf, assets) {
   if (is.null(conf$fao$surveys)) {
@@ -62,17 +65,31 @@ raise_catch_fao <- function(conf, assets) {
         options = conf$storage$google$options
       )
       trips <- fao_trips(landings, surveys)
+      # Boat groups are set per country: Mozambique keeps its boat types apart.
+      vessel_groups <- dplyr::filter(
+        assets$vessel_groups, tolower(.data$country) == tolower(conf$country)
+      )
       out <- estimate_catch_fao(
-        trips,
-        assets$frame_units,
-        assets$gear_groups,
-        # Boat groups are set per country: Mozambique keeps its boat types apart.
-        dplyr::filter(assets$vessel_groups, tolower(.data$country) == tolower(conf$country))
+        trips, assets$frame_units, assets$gear_groups, vessel_groups
       )
       logger::log_info(
         "FAO ARTFISH raising: {sum(out$n_trips)} of {nrow(trips)} trips raised in {nrow(out)} district-unit-months"
       )
-      out
+      # A failure in the species split must not stop the totals from going out.
+      species <- tryCatch(
+        estimate_species_fao(
+          out,
+          fao_units(trips, assets$frame_units, assets$gear_groups, vessel_groups)$trips,
+          landings
+        ),
+        error = function(e) {
+          logger::log_error(
+            "FAO ARTFISH species split failed, the totals go out without it: {conditionMessage(e)}"
+          )
+          NULL
+        }
+      )
+      list(units = out, species = species)
     },
     error = function(e) {
       logger::log_error(
@@ -209,49 +226,15 @@ estimate_catch_fao <- function(
   min_samples = 5,
   min_district_trips = 10
 ) {
-  census <- dplyr::filter(census, .data$gaul_2_code %in% trips$gaul_2_code)
-  if (!nrow(census)) {
-    stop("The census has no boats in these trips' districts")
-  }
-  # The unit uses what the census counts: boat type, main gear or both.
-  by_boat <- any(!is.na(census$vessel_standard_name))
-  by_gear <- any(!is.na(census$gear_standard_name))
-  if ((by_boat && anyNA(census$vessel_standard_name)) ||
-    (by_gear && anyNA(census$gear_standard_name))) {
-    stop("The census must count the same things in every district")
-  }
-  to_boat <- group_lookup(vessel_groups, "vessel_group", "Boat types")
-  to_gear <- group_lookup(gear_groups, "fao_category", "Gears")
-  unit_of <- function(boat, gear) {
-    parts <- list(if (by_boat) to_boat(boat), if (by_gear) to_gear(gear))
-    do.call(paste, c(parts[lengths(parts) > 0], sep = " | "))
-  }
-
-  census <- census |>
-    dplyr::mutate(
-      fishing_unit = unit_of(.data$vessel_standard_name, .data$gear_standard_name)
-    ) |>
-    dplyr::summarise(
-      boats = sum(.data$n_boats, na.rm = TRUE),
-      # Fishers on foot are a unit here, with fishers for boats.
-      on_foot = all(.data$vessel_standard_name %in% "Feet"),
-      .by = c("gaul_2_code", "fishing_unit")
-    ) |>
-    dplyr::filter(.data$boats > 0)
-
   # Every surveyed trip counts, as `n_submissions` does for generate_fleet_analysis().
   district_trips <- dplyr::summarise(
     trips,
     district_trips = dplyr::n(),
     .by = c("gaul_2_code", "date_month")
   )
-
-  trips <- trips |>
-    dplyr::mutate(
-      fishing_unit = unit_of(.data$vessel_type, .data$gear),
-      days = .data$days_week / 7 * lubridate::days_in_month(.data$date_month)
-    ) |>
-    dplyr::inner_join(census, by = c("gaul_2_code", "fishing_unit"))
+  units <- fao_units(trips, census, gear_groups, vessel_groups)
+  census <- units$census
+  trips <- units$trips
 
   # Sample size, mean and sd of catch, revenue and days, e.g. `catch_kg_mean`.
   stats_by <- function(by) {
@@ -326,6 +309,121 @@ estimate_catch_fao <- function(
       "total_catch_kg", "re_catch", "quality_catch",
       n_revenue = "revenue_n", "revenue_source", revenue_per_trip = "revenue_mean",
       "total_revenue", "re_revenue", "quality_revenue"
+    )
+}
+
+#' Trips and census boats labelled by fishing unit
+#'
+#' @inheritParams estimate_catch_fao
+#'
+#' @return A list: `census`, the boats per district and fishing unit, and
+#'   `trips`, the trips of the units the census counts, each with its
+#'   `fishing_unit`, census `boats` and `days` fished in the month.
+#' @keywords internal
+fao_units <- function(trips, census, gear_groups, vessel_groups) {
+  census <- dplyr::filter(census, .data$gaul_2_code %in% trips$gaul_2_code)
+  if (!nrow(census)) {
+    stop("The census has no boats in these trips' districts")
+  }
+  # The unit uses what the census counts: boat type, main gear or both.
+  by_boat <- any(!is.na(census$vessel_standard_name))
+  by_gear <- any(!is.na(census$gear_standard_name))
+  if ((by_boat && anyNA(census$vessel_standard_name)) ||
+    (by_gear && anyNA(census$gear_standard_name))) {
+    stop("The census must count the same things in every district")
+  }
+  to_boat <- group_lookup(vessel_groups, "vessel_group", "Boat types")
+  to_gear <- group_lookup(gear_groups, "fao_category", "Gears")
+  unit_of <- function(boat, gear) {
+    parts <- list(if (by_boat) to_boat(boat), if (by_gear) to_gear(gear))
+    do.call(paste, c(parts[lengths(parts) > 0], sep = " | "))
+  }
+
+  census <- census |>
+    dplyr::mutate(
+      fishing_unit = unit_of(.data$vessel_standard_name, .data$gear_standard_name)
+    ) |>
+    dplyr::summarise(
+      boats = sum(.data$n_boats, na.rm = TRUE),
+      # Fishers on foot are a unit here, with fishers for boats.
+      on_foot = all(.data$vessel_standard_name %in% "Feet"),
+      .by = c("gaul_2_code", "fishing_unit")
+    ) |>
+    dplyr::filter(.data$boats > 0)
+
+  trips <- trips |>
+    dplyr::mutate(
+      fishing_unit = unit_of(.data$vessel_type, .data$gear),
+      days = .data$days_week / 7 * lubridate::days_in_month(.data$date_month)
+    ) |>
+    dplyr::inner_join(census, by = c("gaul_2_code", "fishing_unit"))
+
+  list(census = census, trips = trips)
+}
+
+#' Raised catch per species (OPEN ARTFISH, p. 7)
+#'
+#' Splits each fishing unit's raised catch by the species mix of the trips its
+#' catch per trip came from: its own, or all trips of the district and month
+#' where it borrowed (`catch_source`).
+#'
+#' A trip's species rows can be a sample of its catch (Kenya's KEFS), so they
+#' set the trip's mix, which is applied to the trip's total catch. Catch with no
+#' weighed species row keeps `catch_taxon` `NA`, so species add up to the total.
+#'
+#' @param fao Output of [estimate_catch_fao()].
+#' @param trips The `trips` of [fao_units()].
+#' @param landings Validated API landings, one row per catch item.
+#'
+#' @return One row per district, fishing unit, month and `catch_taxon` with its
+#'   raised `total_catch_kg`, for the units that were raised.
+#' @keywords internal
+estimate_species_fao <- function(fao, trips, landings) {
+  items <- landings |>
+    dplyr::summarise(
+      item_kg = sum(.data$catch_kg, na.rm = TRUE),
+      .by = c("trip_id", "catch_taxon")
+    ) |>
+    dplyr::filter(.data$item_kg > 0)
+
+  species <- trips |>
+    dplyr::filter(.data$catch_kg > 0) |>
+    dplyr::select(
+      "trip_id", "gaul_2_code", "gaul_2_name", "fishing_unit", "date_month",
+      trip_kg = "catch_kg"
+    ) |>
+    dplyr::left_join(items, by = "trip_id") |>
+    dplyr::mutate(
+      # A trip with no weighed species row is all unidentified.
+      item_kg = dplyr::coalesce(.data$item_kg, 1),
+      kg = .data$trip_kg * .data$item_kg / sum(.data$item_kg),
+      .by = "trip_id"
+    )
+
+  mix <- function(by) {
+    species |>
+      dplyr::summarise(
+        kg = sum(.data$kg),
+        .by = dplyr::all_of(c(by, "catch_taxon"))
+      ) |>
+      dplyr::mutate(share = .data$kg / sum(.data$kg), .by = dplyr::all_of(by)) |>
+      dplyr::select(-"kg")
+  }
+  unit <- c("gaul_2_code", "gaul_2_name", "fishing_unit", "date_month")
+  district <- c("gaul_2_code", "date_month")
+  fao <- dplyr::filter(fao, !is.na(.data$total_catch_kg))
+
+  dplyr::bind_rows(
+    fao |>
+      dplyr::filter(.data$catch_source == "unit") |>
+      dplyr::inner_join(mix(unit), by = unit),
+    fao |>
+      dplyr::filter(.data$catch_source == "district") |>
+      dplyr::inner_join(mix(district), by = district)
+  ) |>
+    dplyr::mutate(total_catch_kg = .data$total_catch_kg * .data$share) |>
+    dplyr::select(
+      dplyr::all_of(unit), "catch_taxon", "catch_source", "total_catch_kg"
     )
 }
 
