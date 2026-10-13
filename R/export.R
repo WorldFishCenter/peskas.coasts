@@ -518,6 +518,9 @@ export_fishers_stats <- function(package = "coasts") {
 #'   share of the fleet tracked behind them (`sampling_rate`) to the monthly
 #'   and district summaries
 #' - Transforms monthly summaries to long format for portal consumption
+#' - Adds the FAO ARTFISH catch by species to the taxa summaries, as the
+#'   metric `estimated_catch_tn_fao`, for a country that has it
+#'   ([fao_portal_taxa()])
 #' - Uploads all datasets to specified MongoDB collections
 #'
 #' The function expects the summary files to be named with the pattern:
@@ -697,6 +700,12 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
   taxa_summaries_filtered <-
     data_summaries$taxa_summaries |>
     dplyr::filter(!is.na(.data$value))
+  if (!is.null(aggregated_data$fao_species)) {
+    taxa_summaries_filtered <- dplyr::bind_rows(
+      taxa_summaries_filtered,
+      fao_portal_taxa(aggregated_data$fao_species, data_summaries$taxa_traits)
+    )
+  }
 
   # Dataframes to upload
   dataframes_to_upload <- list(

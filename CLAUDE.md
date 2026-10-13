@@ -40,7 +40,9 @@ devtools::document()    # after any roxygen change; man/ is committed
   stores them as `fao` in the same file; `export_portal` publishes them as `*_fao` metrics. The catch
   by species (`estimate_species_fao`: each unit's raised catch split by the species mix of the trips
   its catch per trip came from, a trip's species rows scaled to its total) is stored beside it as
-  `fao_species` and not published yet. `R/ingestion.R` holds
+  `fao_species`; `export_portal` publishes it per district, month and species as the
+  `estimated_catch_tn_fao` metric of `taxa_summaries` (`fao_portal_taxa`), which no dashboard
+  reads yet. `R/ingestion.R` holds
   `get_kobo_data` and `ingest_assets`. `export_portal`, `export_geos` and
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
 - **Portal.** `export_portal` runs once per country, called from each country pipeline with

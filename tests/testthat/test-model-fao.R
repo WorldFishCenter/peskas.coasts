@@ -290,3 +290,29 @@ test_that("catch with no weighed species row stays unidentified, and no catch ad
   # A district and month too thin to raise has no species either.
   expect_equal(nrow(species_of(trips, landings, census)$species), 0)
 })
+
+test_that("fao_portal_taxa adds up a district's units per species, in tonnes, under the summaries' names", {
+  species <- data.frame(
+    gaul_2_name = c("D1", "D1", "D1", "D1", "D2"),
+    fishing_unit = c("Canoes | Nets", "Dhows | Nets", "Canoes | Nets", "Canoes | Nets", "Canoes | Nets"),
+    date_month = as.Date("2026-06-01"),
+    catch_taxon = c("SKJ", "SKJ", "XXX", NA, "YFT"),
+    total_catch_kg = c(1000, 500, 200, 300, 4000)
+  )
+  # `taxa_traits`: the summaries' label for each code. YFT is listed twice, as one code is in Timor.
+  names <- data.frame(
+    alpha3_code = c("SKJ", "YFT", "YFT"),
+    catch_taxon = c("Katsuwonus pelamis", "Thunnus albacares", "Thunnus albacares")
+  )
+
+  out <- fao_portal_taxa(species, names)
+  out <- out[order(out$gaul_2_name, out$catch_taxon), ]
+
+  expect_named(out, c("gaul_2_name", "date", "catch_taxon", "metric", "value"))
+  expect_equal(unique(out$metric), "estimated_catch_tn_fao")
+  expect_s3_class(out$date, "POSIXct")
+  # D1: both units' skipjack together; the unnamed code and the unidentified catch share the empty label.
+  expect_equal(out$catch_taxon, c("Katsuwonus pelamis", NA, "Thunnus albacares"))
+  expect_equal(out$value, c(1.5, 0.5, 4)) # a code listed twice is not counted twice
+  expect_equal(sum(out$value), sum(species$total_catch_kg) / 1000)
+})

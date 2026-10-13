@@ -45,6 +45,9 @@ while the MongoDB \code{dashboard} collections keep the filtered ones
 share of the fleet tracked behind them (\code{sampling_rate}) to the monthly
 and district summaries
 \item Transforms monthly summaries to long format for portal consumption
+\item Adds the FAO ARTFISH catch by species to the taxa summaries, as the
+metric \code{estimated_catch_tn_fao}, for a country that has it
+(\code{\link[=fao_portal_taxa]{fao_portal_taxa()}})
 \item Uploads all datasets to specified MongoDB collections
 }
 

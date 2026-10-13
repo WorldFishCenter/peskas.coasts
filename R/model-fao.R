@@ -129,6 +129,42 @@ fao_portal_metrics <- function(fao) {
     dplyr::mutate(date = lubridate::as_datetime(.data$date_month), .keep = "unused")
 }
 
+#' FAO ARTFISH catch by species, as a portal taxa metric
+#'
+#' Adds up the fishing units of [estimate_species_fao()] per district, month and
+#' species into the metric [export_portal()] publishes in `taxa_summaries`,
+#' in tonnes. A species carries the label the other taxa metrics use, its
+#' scientific name; a code without one, and unidentified catch, share the empty
+#' label, as they do there.
+#'
+#' @param species The `species` table of [raise_catch_fao()].
+#' @param taxa_names The summaries' `taxa_traits`: each `alpha3_code` and its
+#'   `catch_taxon` label.
+#'
+#' @return Long rows as in `taxa_summaries`: `gaul_2_name`, `date`,
+#'   `catch_taxon`, `metric` (`estimated_catch_tn_fao`) and `value`.
+#' @keywords internal
+fao_portal_taxa <- function(species, taxa_names) {
+  labels <- taxa_names |>
+    # One label per code: a code listed twice would count its catch twice.
+    dplyr::distinct(.data$alpha3_code, .keep_all = TRUE) |>
+    dplyr::select("alpha3_code", label = "catch_taxon")
+
+  species |>
+    dplyr::left_join(labels, by = c("catch_taxon" = "alpha3_code")) |>
+    dplyr::summarise(
+      value = sum(.data$total_catch_kg) / 1000,
+      .by = c("gaul_2_name", "date_month", "label")
+    ) |>
+    dplyr::transmute(
+      gaul_2_name = .data$gaul_2_name,
+      date = lubridate::as_datetime(.data$date_month),
+      catch_taxon = .data$label,
+      metric = "estimated_catch_tn_fao",
+      value = .data$value
+    )
+}
+
 #' Catch and revenue per trip of a district and month, by census boats
 #'
 #' Averages the fishing units of [raise_catch_fao()] by their boats in the
