@@ -189,7 +189,9 @@ test_that("fao_portal_metrics adds a district's units into the portal metrics", 
     boats = c(10, 5, 8),
     days_fished = c(20, 10, 15),
     total_catch_kg = c(3000, 1000, NA),
-    total_revenue = c(30000, 5000, NA)
+    total_revenue = c(30000, 5000, NA),
+    re_catch = c(0.1, 0.5, NA),
+    re_revenue = c(0.2, NA, NA)
   )
   out <- fao_portal_metrics(fao)
   d1 <- out[out$gaul_2_name == "D1", ]
@@ -198,8 +200,12 @@ test_that("fao_portal_metrics adds a district's units into the portal metrics", 
   expect_equal(d1$estimated_catch_tn_fao, 4)
   expect_equal(d1$estimated_revenue_fao, 35000)
   expect_equal(d1$date, lubridate::as_datetime("2026-06-01"))
+  # The units' upper limits added: (3000 * 0.1 + 1000 * 0.5) / 4000.
+  expect_equal(d1$relative_error_catch_fao, 0.2)
+  # A unit with no known error is left out of it.
+  expect_equal(d1$relative_error_revenue_fao, 0.2)
   # A district-month too thin to raise stays empty rather than zero.
-  expect_true(all(is.na(unlist(out[out$gaul_2_name == "D2", 2:4]))))
+  expect_true(all(is.na(unlist(out[out$gaul_2_name == "D2", 2:6]))))
 })
 
 test_that("fao_catch_per_trip weights each unit by its census boats, leaving out fishers on foot", {

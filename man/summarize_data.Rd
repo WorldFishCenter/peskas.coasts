@@ -48,6 +48,8 @@ The function performs the following operations:
 \itemize{
 \item Retrieves validated WF survey data
 \item Filters for approved validation status
+\item Stops if a district name and its GAUL code do not match one to one, since
+the summaries and the GPS tracker method join districts by name
 \item Creates multiple summary datasets:
 \itemize{
 \item Monthly summaries: Average catch, price, CPUE, and RPUE by district and month
@@ -56,7 +58,7 @@ The function performs the following operations:
 \item Taxa summaries: Catch, catch-weighted mean length and price by species,
 district, and month
 \item District summaries: Submission counts, effort, and catch and revenue per
-trip by district
+trip by district (with its GAUL level 1 and 2 codes and names)
 \item Gear summaries: Performance metrics by gear type
 \item Grid summaries: Downloaded from cloud storage
 \item Taxa traits: one row per landed taxon with its FishBase traits (from

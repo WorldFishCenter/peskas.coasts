@@ -1,3 +1,11 @@
+# coasts 4.24.0
+
+## Monthly district figures for the Peskas Fishery Data API
+
+* **NEW** Each country's pipeline now writes one row per district and month to the API bucket (`<country>/aggregated/district-months`), for the API's planned `/data/district-months` endpoint: the dashboard's district figures, both methods' estimates of the whole fleet, and the GAUL codes of each district. Months a district recorded nothing in are kept, and landings with no district are left out. The dashboard collections do not change.
+* **NEW** The FAO ARTFISH estimates get a relative error per district and month, for catch and for revenue, in the API rows only. The Toolkit gives an error for each kind of boat and gear but none for a district total, so the district's error adds up theirs, the cautious way. In October 2026 most district-months are well above the Toolkit's 15 to 20%, because a kind of boat and gear gets 3 to 5 surveyed trips a month where the Toolkit asks for 50 to 75.
+* **CHANGED** `summarize_data()` stops if two districts share a name, or one district has two names: the summaries and the GPS tracker method join districts by name, so their numbers would be merged. No country has such a district.
+
 # coasts 4.23.0
 
 ## FAO ARTFISH catch by species reaches the portal data
