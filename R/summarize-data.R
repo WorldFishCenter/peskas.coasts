@@ -13,6 +13,8 @@
 #' The function performs the following operations:
 #' - Retrieves validated WF survey data
 #' - Filters for approved validation status
+#' - Stops if a district name and its GAUL code do not match one to one, since
+#'   the summaries and the GPS tracker method join districts by name
 #' - Creates multiple summary datasets:
 #'   - Monthly summaries: Average catch, price, CPUE, and RPUE by district and month
 #'   - All monthly summaries: the same recipe over every survey form, ignoring
@@ -20,7 +22,7 @@
 #'   - Taxa summaries: Catch, catch-weighted mean length and price by species,
 #'     district, and month
 #'   - District summaries: Submission counts, effort, and catch and revenue per
-#'     trip by district
+#'     trip by district (with its GAUL level 1 and 2 codes and names)
 #'   - Gear summaries: Performance metrics by gear type
 #'   - Grid summaries: Downloaded from cloud storage
 #'   - Taxa traits: one row per landed taxon with its FishBase traits (from
@@ -159,6 +161,25 @@ summarize_data <- function(
   if (undated > 0) {
     logger::log_warn("Dropping {undated} row(s) with no landing_date")
     all_data <- dplyr::filter(all_data, !is.na(.data$landing_date))
+  }
+
+  # The summaries and the GPS tracker method join districts by name, so two
+  # GAUL codes sharing one would merge their numbers, and the API's
+  # district-months (keyed by code) would repeat a district. None does (all four
+  # countries, 2026-10-13).
+  # ponytail: key the fleet joins by code if a country ever needs a shared name.
+  shared <- all_data |>
+    dplyr::distinct(.data$gaul_2_code, .data$gaul_2_name) |>
+    dplyr::filter(
+      .data$gaul_2_code %in% .data$gaul_2_code[duplicated(.data$gaul_2_code)] |
+        .data$gaul_2_name %in% .data$gaul_2_name[duplicated(.data$gaul_2_name)]
+    )
+  if (nrow(shared) > 0) {
+    stop(
+      "District names and GAUL codes must match one to one: ",
+      toString(paste(shared$gaul_2_name, shared$gaul_2_code)),
+      call. = FALSE
+    )
   }
 
   # The exclusion is dashboard-only. `all_data` keeps every form and feeds the
@@ -329,11 +350,19 @@ summarize_data <- function(
     dplyr::distinct()
 
   # Districts summaries: submission counts and effort metrics per district x month.
-  # Stored wide; export_wf_data() joins modeled estimates then pivots to long.
+  # Stored wide; export_portal() joins modeled estimates then pivots to long for
+  # the dashboard, and writes them with their GAUL codes as the API's
+  # district-months.
   districts_summaries <-
     indicators_df |>
     dplyr::mutate(date = lubridate::floor_date(.data$landing_date, "month")) |>
-    dplyr::group_by(.data$gaul_2_name, .data$date) |>
+    dplyr::group_by(
+      .data$gaul_1_code,
+      .data$gaul_1_name,
+      .data$gaul_2_code,
+      .data$gaul_2_name,
+      .data$date
+    ) |>
     dplyr::summarise(
       n_submissions = dplyr::n(),
       n_fishers = mean(.data$n_fishers),
@@ -346,7 +375,13 @@ summarize_data <- function(
       .groups = "drop"
     ) |>
     tidyr::complete(
-      .data$gaul_2_name,
+      # nesting() takes no `.data$`; symbols keep R CMD check quiet.
+      tidyr::nesting(!!!syms(c(
+        "gaul_1_code",
+        "gaul_1_name",
+        "gaul_2_code",
+        "gaul_2_name"
+      ))),
       date = seq(min(.data$date), max(.data$date), by = "month")
     ) |>
     dplyr::mutate(date = lubridate::as_datetime(.data$date))

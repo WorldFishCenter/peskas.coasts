@@ -41,10 +41,15 @@ devtools::document()    # after any roxygen change; man/ is committed
   by species (`estimate_species_fao`: each unit's raised catch split by the species mix of the trips
   its catch per trip came from, a trip's species rows scaled to its total) is stored beside it as
   `fao_species`; `export_portal` publishes it per district, month and species as the
-  `estimated_catch_tn_fao` metric of `taxa_summaries` (`fao_portal_taxa`), which no dashboard
-  reads yet. `R/ingestion.R` holds
+  `estimated_catch_tn_fao` metric of `taxa_summaries` (`fao_portal_taxa`), which `peskas.dashboard`
+  shows from release 2.4.0. `R/ingestion.R` holds
   `get_kobo_data` and `ingest_assets`. `export_portal`, `export_geos` and
   `export_fishers_stats` are in `R/export.R`; `sync_device_users` is in `R/airtable.R`.
+- **API district-months.** `export_portal` also writes `district-months__*.parquet` to
+  `<country>/aggregated/` in the peskas-api bucket (`api_district_months`): `districts_summaries`
+  keyed by GAUL code plus both methods' estimates and the ARTFISH relative errors
+  (`fao_district_error`). Its 23 columns are a contract with peskas-api's `field_metadata.py`
+  (`tests/testthat/test-api-district-months.R` pins them).
 - **Portal.** `export_portal` runs once per country, called from each country pipeline with
   that country's config (`conf$country`), and pushes the `summarize_data()` tables to the
   country's `portal-*` database (collections and the FishBase-traits dependency: the Peskas context

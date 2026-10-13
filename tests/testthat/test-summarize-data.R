@@ -13,6 +13,9 @@ fake_validated <- function() {
     month = c(1L, 2L)
   ) |>
     dplyr::mutate(
+      gaul_1_code = "51318",
+      gaul_1_name = "Coast",
+      gaul_2_code = dplyr::if_else(.data$gaul_2_name == "Kilifi", "51322", "51326"),
       trip_id = paste(.data$survey_id, .data$gaul_2_name, .data$month),
       landing_date = lubridate::ymd(paste0("2024-0", .data$month, "-15")),
       gear = "gillnet",
@@ -168,11 +171,42 @@ test_that("the new table cannot be confused with the old one by prefix", {
   expect_false(startsWith("all_monthly_summaries", "monthly_summaries"))
 })
 
+test_that("district summaries carry each district's GAUL codes, months without landings too", {
+  # Kwale lands nothing in February: the row stays, with its codes, for the
+  # API's district-months to show the gap.
+  gap <- dplyr::filter(
+    fake_validated(),
+    !(.data$gaul_2_name == "Kwale" & lubridate::month(.data$landing_date) == 2)
+  )
+  d <- run_summarize(NULL, validated = gap)$districts_summaries
+
+  expect_equal(nrow(d), 4)
+  kwale <- dplyr::filter(d, .data$gaul_2_name == "Kwale") |> dplyr::arrange(.data$date)
+  expect_equal(unique(kwale$gaul_2_code), "51326")
+  expect_equal(unique(kwale$gaul_1_name), "Coast")
+  expect_equal(kwale$n_submissions, c(2L, NA))
+})
+
+test_that("a district name shared by two GAUL codes stops the summaries", {
+  # Joined by name downstream, the two districts' numbers would be merged.
+  shared <- dplyr::mutate(
+    fake_validated(),
+    gaul_2_name = "Kilifi"
+  )
+  expect_error(
+    run_summarize(NULL, validated = shared),
+    "Kilifi 51322, Kilifi 51326"
+  )
+})
+
 # One trip landing a species in two length classes (Zanzibar and Mozambique
 # store a class per row), plus a trip landing two species.
 fake_length_classes <- function() {
   data.frame(
     survey_id = "keep",
+    gaul_1_code = "51318",
+    gaul_1_name = "Coast",
+    gaul_2_code = "51322",
     gaul_2_name = "Kilifi",
     trip_id = c("a", "a", "b", "b"),
     landing_date = lubridate::ymd("2024-01-15"),

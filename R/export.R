@@ -522,6 +522,9 @@ export_fishers_stats <- function(package = "coasts") {
 #'   metric `estimated_catch_tn_fao`, for a country that has it
 #'   ([fao_portal_taxa()])
 #' - Uploads all datasets to specified MongoDB collections
+#' - Writes the district summaries with both methods' estimates and their
+#'   GAUL codes to the API bucket as `<country>/aggregated/district-months`,
+#'   served by peskas-api's `/data/district-months` ([api_district_months()])
 #'
 #' The function expects the summary files to be named with the pattern:
 #' `{file_prefix}_{table_name}.parquet` where table_name is one of:
@@ -671,10 +674,17 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
     )
   }
 
+  # The ARTFISH errors go to the API only: the dashboard collections keep the
+  # metrics they had.
+  dashboard_aggregated <- dplyr::select(
+    monthly_aggregated,
+    -dplyr::starts_with("relative_error_")
+  )
+
   # Transform monthly summaries to long format for portal
   monthly_summaries <-
     data_summaries$monthly_summaries |>
-    dplyr::left_join(monthly_aggregated, by = c("gaul_2_name", "date")) |>
+    dplyr::left_join(dashboard_aggregated, by = c("gaul_2_name", "date")) |>
     dplyr::relocate(
       "estimated_fishing_trips",
       .after = "date"
@@ -688,7 +698,9 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 
   districts_summaries <-
     data_summaries$districts_summaries |>
-    dplyr::full_join(monthly_aggregated, by = c("gaul_2_name", "date")) |>
+    # The dashboard keys districts by name; the codes are for the API.
+    dplyr::select(-dplyr::any_of(c("gaul_1_code", "gaul_1_name", "gaul_2_code"))) |>
+    dplyr::full_join(dashboard_aggregated, by = c("gaul_2_name", "date")) |>
     dplyr::select(dplyr::where(~ !all(is.na(.)))) |>
     tidyr::pivot_longer(
       -c("date", "gaul_2_name"),
@@ -747,6 +759,101 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
       )
     }
   )
+
+  # The API's district-months, in the API bucket beside the country's trips
+  # (`<country>/aggregated/` next to `<country>/validated/`). Written last, so
+  # a failure here leaves the dashboard updated.
+  district_months <- api_district_months(
+    data_summaries$districts_summaries,
+    monthly_aggregated,
+    conf$country
+  )
+  filename <- add_version("district-months", extension = "parquet")
+  arrow::write_parquet(
+    district_months,
+    sink = filename,
+    compression = "lz4",
+    compression_level = 12
+  )
+  cloud_name <- file.path(
+    dirname(conf$api$trips$validated$cloud_path),
+    "aggregated",
+    filename
+  )
+  logger::log_info("Uploading {cloud_name} to the API bucket")
+  upload_cloud_file(
+    file = filename,
+    provider = conf$storage$google$key,
+    options = resolve_storage_opts(conf, "api", error_if_missing = TRUE),
+    name = cloud_name
+  )
+  file.remove(filename)
+}
+
+#' The API's district-months
+#'
+#' One row per district (by GAUL code) and month, for the peskas-api
+#' `/data/district-months` endpoint: the dashboard's district figures under the
+#' API's names, then both methods' estimates for the whole fleet. Months a
+#' district recorded nothing in are kept, with `n_submissions` 0, so gaps in
+#' data collection show. Landings with no district are left out. A country
+#' without the FAO ARTFISH method keeps its columns, empty, so every country
+#' has the same 23.
+#'
+#' @param districts_summaries The `districts_summaries` table of
+#'   [summarize_data()].
+#' @param aggregated The estimates per `gaul_2_name` and `date` that
+#'   [export_portal()] joins to the dashboard summaries.
+#' @param country The country as the API names it (`conf$country`).
+#' @return One row per district and month; the peskas-api field descriptions
+#'   (`/metadata/district-months`) say what each column means.
+#' @keywords internal
+api_district_months <- function(districts_summaries, aggregated, country) {
+  fao <- c(
+    "estimated_fishing_trips_fao",
+    "estimated_catch_tn_fao",
+    "estimated_revenue_fao",
+    "relative_error_catch_fao",
+    "relative_error_revenue_fao"
+  )
+  aggregated[setdiff(fao, names(aggregated))] <- NA_real_
+
+  districts_summaries |>
+    dplyr::filter(!is.na(.data$gaul_2_code)) |>
+    dplyr::left_join(
+      aggregated,
+      by = c("gaul_2_name", "date"),
+      relationship = "many-to-one"
+    ) |>
+    dplyr::mutate(
+      # A mean over no values is NaN; the API reads it as empty.
+      dplyr::across(dplyr::where(is.numeric), ~ replace(.x, is.nan(.x), NA)),
+      country = .env$country,
+      month = as.Date(.data$date),
+      n_submissions = dplyr::coalesce(.data$n_submissions, 0L)
+    ) |>
+    dplyr::select(
+      "country",
+      "month",
+      "gaul_1_code",
+      "gaul_1_name",
+      "gaul_2_code",
+      "gaul_2_name",
+      "n_submissions",
+      mean_n_fishers = "n_fishers",
+      mean_trip_duration_hrs = "trip_duration_hrs",
+      "mean_catch_kg",
+      "mean_catch_price",
+      "mean_price_kg",
+      "mean_cpue",
+      "mean_rpue",
+      "estimated_fishing_trips",
+      "estimated_catch_tn",
+      "estimated_revenue",
+      "sampling_rate",
+      dplyr::all_of(fao)
+    ) |>
+    dplyr::arrange(.data$gaul_2_code, .data$month)
 }
 
 

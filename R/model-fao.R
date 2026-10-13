@@ -105,11 +105,14 @@ raise_catch_fao <- function(conf, assets) {
 #' Adds up the fishing units of [raise_catch_fao()] into the three metrics
 #' [export_portal()] publishes beside the GPS tracker method's: catch in tonnes,
 #' revenue, and fishing trips (boats × days fished, one trip a day), each only
-#' where the catch was raised.
+#' where the catch was raised. It also gives the district total's relative
+#' error for catch and revenue ([fao_district_error()]), which only the API's
+#' district-months carry.
 #'
-#' @param fao Output of [raise_catch_fao()].
+#' @param fao The `units` table of [raise_catch_fao()].
 #' @return One row per district and month with `estimated_fishing_trips_fao`,
-#'   `estimated_catch_tn_fao`, `estimated_revenue_fao` and `date`.
+#'   `estimated_catch_tn_fao`, `estimated_revenue_fao`,
+#'   `relative_error_catch_fao`, `relative_error_revenue_fao` and `date`.
 #' @keywords internal
 fao_portal_metrics <- function(fao) {
   fao |>
@@ -124,9 +127,34 @@ fao_portal_metrics <- function(fao) {
       estimated_fishing_trips_fao = stat_or_na(.data$trips, sum),
       estimated_catch_tn_fao = stat_or_na(.data$total_catch_kg, sum) / 1000,
       estimated_revenue_fao = stat_or_na(.data$total_revenue, sum),
+      relative_error_catch_fao = fao_district_error(.data$re_catch, .data$total_catch_kg),
+      relative_error_revenue_fao = fao_district_error(.data$re_revenue, .data$total_revenue),
       .by = c("gaul_2_name", "date_month")
     ) |>
     dplyr::mutate(date = lubridate::as_datetime(.data$date_month), .keep = "unused")
+}
+
+#' Relative error of a district total, from its fishing units' errors
+#'
+#' The Toolkit gives the compound relative error of each fishing unit (p. 9)
+#' and no rule for a total over several units. This adds up the units' upper
+#' limits, as the Toolkit's own steps 5 to 7 do within a unit, so the result
+#' is the units' errors weighted by their totals. It assumes the units' errors
+#' move together, which is the cautious choice: a unit with few trips borrows
+#' the district's, so units are not independent. Units whose error is unknown
+#' are left out.
+#'
+#' @param re Each unit's relative error (`re_catch` or `re_revenue`).
+#' @param total Each unit's raised total (`total_catch_kg` or `total_revenue`).
+#' @return One relative error (0.44 is 44%), or `NA` when no unit with a
+#'   total has a known error.
+#' @keywords internal
+fao_district_error <- function(re, total) {
+  ok <- !is.na(re) & !is.na(total)
+  if (sum(total[ok]) <= 0) {
+    return(NA_real_)
+  }
+  sum(re[ok] * total[ok]) / sum(total[ok])
 }
 
 #' FAO ARTFISH catch by species, as a portal taxa metric

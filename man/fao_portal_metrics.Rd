@@ -7,16 +7,19 @@
 fao_portal_metrics(fao)
 }
 \arguments{
-\item{fao}{Output of \code{\link[=raise_catch_fao]{raise_catch_fao()}}.}
+\item{fao}{The \code{units} table of \code{\link[=raise_catch_fao]{raise_catch_fao()}}.}
 }
 \value{
 One row per district and month with \code{estimated_fishing_trips_fao},
-\code{estimated_catch_tn_fao}, \code{estimated_revenue_fao} and \code{date}.
+\code{estimated_catch_tn_fao}, \code{estimated_revenue_fao},
+\code{relative_error_catch_fao}, \code{relative_error_revenue_fao} and \code{date}.
 }
 \description{
 Adds up the fishing units of \code{\link[=raise_catch_fao]{raise_catch_fao()}} into the three metrics
 \code{\link[=export_portal]{export_portal()}} publishes beside the GPS tracker method's: catch in tonnes,
 revenue, and fishing trips (boats × days fished, one trip a day), each only
-where the catch was raised.
+where the catch was raised. It also gives the district total's relative
+error for catch and revenue (\code{\link[=fao_district_error]{fao_district_error()}}), which only the API's
+district-months carry.
 }
 \keyword{internal}

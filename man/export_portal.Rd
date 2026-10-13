@@ -49,6 +49,9 @@ and district summaries
 metric \code{estimated_catch_tn_fao}, for a country that has it
 (\code{\link[=fao_portal_taxa]{fao_portal_taxa()}})
 \item Uploads all datasets to specified MongoDB collections
+\item Writes the district summaries with both methods' estimates and their
+GAUL codes to the API bucket as \verb{<country>/aggregated/district-months},
+served by peskas-api's \verb{/data/district-months} (\code{\link[=api_district_months]{api_district_months()}})
 }
 
 The function expects the summary files to be named with the pattern:
