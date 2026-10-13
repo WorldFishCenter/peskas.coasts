@@ -1,3 +1,9 @@
+# coasts 4.23.0
+
+## FAO ARTFISH catch by species reaches the portal data
+
+* **NEW** In Kenya, Zanzibar and Mozambique, the portal data now holds the FAO ARTFISH estimate of the total catch of each species, by district and month. The dashboards do not show it yet.
+
 # coasts 4.22.0
 
 ## FAO ARTFISH estimates of catch by species
