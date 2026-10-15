@@ -575,12 +575,23 @@ assess_species_stock <- function(
   ci_width <- runs$lbb$ci_width %||% NA_real_
   flag <- .flag_assessment_quality(cov$coverage, priors, ci_width)
 
+  # Data-quality: does this "single species" length sample actually look like a
+  # mixture (a larger second species lumped under the name)? Attached to every
+  # method row for the species.
+  mix <- flag_length_mixture(lengths, priors)
+
   purrr::list_rbind(runs) |>
     dplyr::mutate(
       scientific_name = .env$scientific_name,
       n_measured = length(lengths),
       frac_measured = cov$coverage$frac_measured,
       quality = .env$flag,
+      misid_flag = mix$misid_flag,
+      n_modes = mix$n_modes,
+      separation = mix$separation,
+      upper_linf = mix$upper_linf,
+      frac_oversize = mix$frac_oversize,
+      mixture_note = mix$mixture_note,
       .before = 1
     )
 }
@@ -599,6 +610,12 @@ assess_species_stock <- function(
 #' @param start_date Earliest landing date to include, aligning with the
 #'   PDS-covered window. Default `"2024-01-01"`.
 #' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
+#' @param group_layer Logical. Also assess coarse (genus/family) taxa with the
+#'   group-level layer and append them to the output. Default `TRUE`.
+#' @param n_groups Integer. Coarse taxa to assess per country. Default 15.
+#' @param fao_areas Named list mapping country key to FAO area codes for the
+#'   regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
+#'   uses a built-in WIO/Pacific default.
 #' @param log_threshold The logging threshold. Default `logger::DEBUG`.
 #' @param package Name of the package whose `inst/conf.yml` to read. Default
 #'   `"coasts"`.
@@ -614,6 +631,9 @@ run_stock_assessment <- function(
   methods = c("lbi", "lbspr", "lbb"),
   start_date = "2024-01-01",
   lbb_engine = NULL,
+  group_layer = TRUE,
+  n_groups = 15L,
+  fao_areas = NULL,
   log_threshold = logger::DEBUG,
   package = "coasts"
 ) {
@@ -701,14 +721,50 @@ run_stock_assessment <- function(
     "Assessment complete: {nrow(assessments)} rows | quality {qual_summary}."
   )
 
+  # Per-species rows get a scale discriminator so the group-level rows stack
+  # into one long table; differing method columns fill with NA under bind_rows.
+  results <- dplyr::mutate(assessments, scale = "species")
+
+  if (isTRUE(group_layer)) {
+    # Regional FishBase priors: WIO countries are FAO areas 51/57, Timor is 71.
+    if (is.null(fao_areas)) {
+      fao_areas <- list(
+        kenya = c(51L, 57L), zanzibar = c(51L, 57L),
+        mozambique = c(51L, 57L), timor = 71L
+      )
+    }
+    group_assessments <- tryCatch(
+      assess_group_layer(
+        landings,
+        n_groups = n_groups,
+        fao_areas = fao_areas,
+        version = resolve_db_version(conf)
+      ),
+      error = function(e) {
+        logger::log_warn("Group layer failed: {conditionMessage(e)}")
+        tibble::tibble()
+      }
+    )
+    if (nrow(group_assessments) > 0) {
+      results <- dplyr::bind_rows(results, group_assessments)
+      g_status <- group_assessments$group_status |>
+        table() |>
+        (\(x) paste(names(x), x, sep = ":", collapse = " "))()
+      logger::log_info(
+        "Group layer: {nrow(group_assessments)} coarse-taxon rows | ",
+        "status {g_status}."
+      )
+    }
+  }
+
   prefix <- conf$stock$assessment$file_prefix %||% "stock-assessment"
   upload_parquet_to_cloud(
-    data = assessments,
+    data = results,
     prefix = prefix,
     provider = conf$storage$google$key,
     options = conf$storage$google$options
   )
 
   logger::log_info("=== Stock assessment pipeline complete ===")
-  invisible(assessments)
+  invisible(results)
 }

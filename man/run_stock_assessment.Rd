@@ -10,6 +10,9 @@ run_stock_assessment(
   methods = c("lbi", "lbspr", "lbb"),
   start_date = "2024-01-01",
   lbb_engine = NULL,
+  group_layer = TRUE,
+  n_groups = 15L,
+  fao_areas = NULL,
   log_threshold = logger::DEBUG,
   package = "coasts"
 )
@@ -26,6 +29,15 @@ Default Kenya, Mozambique, Zanzibar, Timor-Leste.}
 PDS-covered window. Default `"2024-01-01"`.}
 
 \item{lbb_engine}{Optional LBB fitting routine (see [assess_stock_lbb()]).}
+
+\item{group_layer}{Logical. Also assess coarse (genus/family) taxa with the
+group-level layer and append them to the output. Default `TRUE`.}
+
+\item{n_groups}{Integer. Coarse taxa to assess per country. Default 15.}
+
+\item{fao_areas}{Named list mapping country key to FAO area codes for the
+regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
+uses a built-in WIO/Pacific default.}
 
 \item{log_threshold}{The logging threshold. Default `logger::DEBUG`.}
 
