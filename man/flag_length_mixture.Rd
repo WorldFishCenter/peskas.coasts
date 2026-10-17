@@ -9,7 +9,8 @@ flag_length_mixture(
   priors,
   min_n = 200L,
   sep_min = 1.5,
-  min_weight = 0.15
+  min_weight = 0.15,
+  oversize_frac = 0.01
 )
 }
 \arguments{
@@ -23,11 +24,15 @@ flag_length_mixture(
 call the sample bimodal. Default 1.5 (a clear valley between modes).}
 
 \item{min_weight}{Minimum weight on the smaller component. Default 0.15.}
+
+\item{oversize_frac}{Fraction of fish above `1.1 x linf` that, on its own,
+flags a misidentification (a small cluster of a larger species). Default
+0.01.}
 }
 \value{
 A one-row tibble: `n_modes`, `mode_lo`, `mode_hi`, `weight_hi`,
-  `separation`, `upper_linf` (upper mode / FishBase L-inf), `misid_flag`,
-  `mixture_note`.
+  `separation`, `upper_linf` (upper mode / FishBase L-inf), `frac_oversize`
+  (share above 1.1 x L-inf), `misid_flag`, `mixture_note`.
 }
 \description{
 Fits a two-component Gaussian mixture to a species' length sample and decides

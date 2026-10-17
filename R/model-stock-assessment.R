@@ -525,6 +525,8 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
 #' @param methods Character vector of methods to run; any of `"lbi"`,
 #'   `"lbspr"`, `"lbb"`. Default all three.
 #' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
+#' @param robustness Logical. Attach the LBB prior-robustness band. Default
+#'   `FALSE`. See [lbb_robustness()].
 #'
 #' @return A tibble with one row per method, carrying the estimate columns of
 #'   each method plus `scientific_name`, `n_measured`, `frac_measured` and
@@ -537,7 +539,8 @@ assess_species_stock <- function(
   scientific_name,
   priors,
   methods = c("lbi", "lbspr", "lbb"),
-  lbb_engine = NULL
+  lbb_engine = NULL,
+  robustness = FALSE
 ) {
   cov <- .length_coverage(landings, scientific_name)
   linf <- if (nrow(priors) > 0) priors$linf else NA_real_
@@ -580,12 +583,33 @@ assess_species_stock <- function(
   # method row for the species.
   mix <- flag_length_mixture(lengths, priors)
 
+  # Ensemble consensus: do LBB (biomass/pressure) and the Froese indicators
+  # (size structure) agree on concern vs healthy?
+  cons <- .ensemble_consensus(
+    runs$lbb$bb0 %||% NA_real_, runs$lbb$f_m %||% NA_real_,
+    runs$lbi$p_mature %||% NA_real_, runs$lbi$lmean_lopt %||% NA_real_
+  )
+
+  # Optional prior-robustness band on the LBB estimate (9x JAGS per species).
+  rb <- if (isTRUE(robustness) && "lbb" %in% methods) {
+    lbb_robustness(lengths, priors, lbb_engine)
+  } else {
+    NULL
+  }
+
   purrr::list_rbind(runs) |>
     dplyr::mutate(
       scientific_name = .env$scientific_name,
       n_measured = length(lengths),
       frac_measured = cov$coverage$frac_measured,
       quality = .env$flag,
+      consensus = cons$consensus,
+      methods_agree = cons$agree,
+      bb0_lo = if (!is.null(rb)) rb$bb0_lo else NA_real_,
+      bb0_hi = if (!is.null(rb)) rb$bb0_hi else NA_real_,
+      fm_lo = if (!is.null(rb)) rb$fm_lo else NA_real_,
+      fm_hi = if (!is.null(rb)) rb$fm_hi else NA_real_,
+      robust_flag = if (!is.null(rb)) rb$robust_flag else NA_character_,
       misid_flag = mix$misid_flag,
       n_modes = mix$n_modes,
       separation = mix$separation,
@@ -610,6 +634,9 @@ assess_species_stock <- function(
 #' @param start_date Earliest landing date to include, aligning with the
 #'   PDS-covered window. Default `"2024-01-01"`.
 #' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
+#' @param robustness Logical. Also compute the LBB prior-robustness band
+#'   (`bb0_lo/hi`, `fm_lo/hi`, `robust_flag`) per fitted species. Costs ~9x the
+#'   JAGS time, so it is off by default. See [lbb_robustness()].
 #' @param group_layer Logical. Also assess coarse (genus/family) taxa with the
 #'   group-level layer and append them to the output. Default `TRUE`.
 #' @param n_groups Integer. Coarse taxa to assess per country. Default 15.
@@ -631,6 +658,7 @@ run_stock_assessment <- function(
   methods = c("lbi", "lbspr", "lbb"),
   start_date = "2024-01-01",
   lbb_engine = NULL,
+  robustness = FALSE,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
@@ -702,7 +730,8 @@ run_stock_assessment <- function(
         scientific_name = sci,
         priors = dplyr::filter(priors, .data$scientific_name == .env$sci),
         methods = methods,
-        lbb_engine = lbb_engine
+        lbb_engine = lbb_engine,
+        robustness = robustness
       ) |>
         dplyr::mutate(country = .env$country, .before = 1)
     }

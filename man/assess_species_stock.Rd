@@ -9,7 +9,8 @@ assess_species_stock(
   scientific_name,
   priors,
   methods = c("lbi", "lbspr", "lbb"),
-  lbb_engine = NULL
+  lbb_engine = NULL,
+  robustness = FALSE
 )
 }
 \arguments{
@@ -23,6 +24,9 @@ assess_species_stock(
 `"lbspr"`, `"lbb"`. Default all three.}
 
 \item{lbb_engine}{Optional LBB fitting routine (see [assess_stock_lbb()]).}
+
+\item{robustness}{Logical. Attach the LBB prior-robustness band. Default
+`FALSE`. See [lbb_robustness()].}
 }
 \value{
 A tibble with one row per method, carrying the estimate columns of

@@ -10,6 +10,7 @@ run_stock_assessment(
   methods = c("lbi", "lbspr", "lbb"),
   start_date = "2024-01-01",
   lbb_engine = NULL,
+  robustness = FALSE,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
@@ -29,6 +30,10 @@ Default Kenya, Mozambique, Zanzibar, Timor-Leste.}
 PDS-covered window. Default `"2024-01-01"`.}
 
 \item{lbb_engine}{Optional LBB fitting routine (see [assess_stock_lbb()]).}
+
+\item{robustness}{Logical. Also compute the LBB prior-robustness band
+(`bb0_lo/hi`, `fm_lo/hi`, `robust_flag`) per fitted species. Costs ~9x the
+JAGS time, so it is off by default. See [lbb_robustness()].}
 
 \item{group_layer}{Logical. Also assess coarse (genus/family) taxa with the
 group-level layer and append them to the output. Default `TRUE`.}
