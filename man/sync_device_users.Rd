@@ -20,7 +20,8 @@ List containing user data counts, Airtable sync result, and MongoDB push result.
 \item total_users: Number of users synchronized to MongoDB
 \item new_passwords_generated: Number of new passwords created
 \item airtable_sync_result: Result of syncing users to Airtable (updates + creates)
-\item mongodb_result: Result of MongoDB data push
+\item mongodb_result: Device users matched, changed, added and removed in
+MongoDB
 }
 }
 \description{
@@ -39,12 +40,17 @@ The function performs the following steps:
 \item Generates 8-character alphanumeric passwords for ALL users without passwords
 \item Removes duplicate IMEI entries (keeps latest)
 \item Syncs complete user dataset to Airtable users table (updates existing, creates new)
-\item Pushes the complete dataset to MongoDB
+\item Updates the device users in MongoDB in place, matched by IMEI, and
+removes those whose IMEI is no longer in the list
 }
 
 Password generation uses letters (upper/lower), numbers (0-9), and is
-reproducible when a seed is provided. The function ensures complete
-synchronization by updating both Airtable and MongoDB with the same data.
+reproducible when a seed is provided.
+
+MongoDB is never emptied: the tracks app keeps users of its own there
+(administrators, fishers who registered themselves), and fishers can change
+their password in the app. A password goes to MongoDB only when the device
+user is first created, so changing one in Airtable does not reach the app.
 }
 \examples{
 \dontrun{

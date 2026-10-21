@@ -13,7 +13,7 @@ devtools::test()        # tests/testthat
 devtools::check()
 devtools::document()    # after any roxygen change; man/ is committed
 ```
-- Pipeline steps: read `.github/workflows/data-pipeline.yaml` (one `Rscript -e 'coasts::fn()'` per job).
+- Pipeline steps: read `.github/workflows/data-pipeline.yaml` (one `Rscript -e 'coasts::fn()'` per job, except `predict-pds-tracks` and `export-pds-spatial`, which run two each).
 - Other workflows: `sync-devices-users.yaml` (Airtable devices to tracks-app users),
   `collection-stats.yaml` (weekly Airtable `collection_stats`), `tracks-backup.yaml`, `app-usage-report.yaml`, `release.yaml` (GitHub release from the
   top block of `NEWS.md` on push to `main`).
@@ -61,15 +61,18 @@ devtools::document()    # after any roxygen change; man/ is committed
   dashboard's effort map (`peskas.dashboard`) reads them there, filtered to its country.
 - **`api.trips`** in `inst/conf.yml` (`peskas-api-dev` / `peskas-api-prod`) lists each
   country's `raw`/`validated` paths in the peskas-api bucket. `merge_survey_trips()`
-  (`R/match-trips.R`) reads every country's validated trips from there, plus the
-  `surveys.*` merged files from country buckets.
+  (`R/match-trips.R`) reads Kenya's, Mozambique's and Zanzibar's validated trips from there
+  (not Timor's), plus their `surveys.*` merged files from country buckets.
 - **`pds.customers` / `select_by`** in `inst/conf.yml` pick the trips coasts ingests for its
   own WIO-wide products, covering every country at once. Country pipelines carry their own
   `pds` block. `?select_country_trips` explains the device/community/exclude rules.
-- **Tracks app.** `storage.mongodb.tracks_app` collections (`users`, `catch-events`,
-  `fishers-stats`, `fishers-performance`) are read by `tracks-explorer` (`api/fisher-stats/`,
-  `api/waypoints.js`). `sync_device_users` writes `users` (with the generated login
-  passwords); `export_fishers_stats` writes stats and performance.
+- **Tracks app.** `storage.mongodb.tracks_app` collections are shared with `tracks-explorer`.
+  `sync_device_users` updates the device users in `users` in place, by IMEI (`mdb_users_upsert`);
+  the app writes its own users there too (administrators, self-registered fishers, changed
+  passwords), so never empty that collection. `export_fishers_stats` reads the app's
+  `users` and `catch-events` and writes `fishers-stats` and `fishers-performance`. App readers:
+  `api/auth/login.js` and `api/users.js` (`users`), `api/catch-events.js`,
+  `api/fisher-stats/` and `api/fisher-performance/`.
 - **Collection stats.** `export_collection_stats` (weekly, `collection-stats.yaml`, `main` only) writes one
   row per country and district to the Airtable frame table `collection_stats`, upserted on
   `key`. It reads every country's API trips, the validation database's `surveys_flags-<form>`

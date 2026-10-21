@@ -138,7 +138,8 @@ variables are:
   `PDS_PASSWORD`, `PDS_CUSTOMER_ID`
 - Google Cloud: `GCP_SA_KEY` (the service account JSON on a single line)
 - MongoDB: `MONGODB_CONNECTION_STRING_COASTS`,
-  `MONGODB_CONNECTION_STRING_TRACKS`
+  `MONGODB_CONNECTION_STRING_TRACKS`,
+  `MONGODB_CONNECTION_STRING_VALIDATION`
 - Metadata: `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID_FRAME`,
   `AIRTABLE_BASE_ID_TRACKS_APP`
 
@@ -170,6 +171,7 @@ and databases.
 | [`tracks-backup.yaml`](.github/workflows/tracks-backup.yaml) | Daily at 00:00 UTC, and on push to `main` | Backs up the GPS tracks |
 | [`sync-devices-users.yaml`](.github/workflows/sync-devices-users.yaml) | 03:00 UTC on the 1st, 4th, 7th, … of each month | Copies tracker records to Airtable and updates Peskas Tracks accounts |
 | [`app-usage-report.yaml`](.github/workflows/app-usage-report.yaml) | Mondays at 00:00 UTC, and on push to `main` | Builds the Peskas Tracks usage report |
+| [`collection-stats.yaml`](.github/workflows/collection-stats.yaml) | Mondays at 06:00 UTC, `main` only | Writes the weekly collection figures per district to Airtable |
 
 The country pipelines install the latest GitHub release of `coasts` when
 they build their images, so a change reaches them only after it is

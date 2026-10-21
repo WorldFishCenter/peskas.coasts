@@ -33,7 +33,7 @@ storage, derives fishing grounds, and uploads web-ready files that can be
 fetched directly by a Next.js / DeckGL application.
 
 Versioned files are produced (following the package's \code{add_version()}
-convention, i.e. \code{prefix__YYYYMMDDHHMMSS__extension}):
+convention, i.e. \verb{prefix__YYYYMMDDHHMMSS_<sha7>__extension}):
 \itemize{
 \item \verb{pds-h3-effort-r\{h3_res\}__*__json}: all-fleet JSON array for
 \code{H3HexagonLayer} (one row per \code{h3_index} × \code{year})

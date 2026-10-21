@@ -865,7 +865,7 @@ api_district_months <- function(districts_summaries, aggregated, country) {
 #' fetched directly by a Next.js / DeckGL application.
 #'
 #' Versioned files are produced (following the package's `add_version()`
-#' convention, i.e. `prefix__YYYYMMDDHHMMSS__extension`):
+#' convention, i.e. `prefix__YYYYMMDDHHMMSS_<sha7>__extension`):
 #' - `pds-h3-effort-r{h3_res}__*__json`: all-fleet JSON array for
 #'   `H3HexagonLayer` (one row per `h3_index` × `year`)
 #' - `pds-h3-effort-gear-r{h3_res}__*__json`: same metrics broken down by
@@ -1542,7 +1542,7 @@ export_effort_gear_shapefiles <- function(
 #' record per district without `gear_name`. Timor-Leste's census counts boats
 #' only, so it is left out.
 #' Files follow the package's `add_version()` convention
-#' (`prefix__YYYYMMDDHHMMSS__extension`).
+#' (`prefix__YYYYMMDDHHMMSS_<sha7>__extension`).
 #'
 #' @param log_threshold Logging threshold. Default is `logger::DEBUG`.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults

@@ -29,7 +29,7 @@ fishers but not as boats. Mozambique's census has no gear, so it has one
 record per district without \code{gear_name}. Timor-Leste's census counts boats
 only, so it is left out.
 Files follow the package's \code{add_version()} convention
-(\code{prefix__YYYYMMDDHHMMSS__extension}).
+(\verb{prefix__YYYYMMDDHHMMSS_<sha7>__extension}).
 }
 \seealso{
 \code{\link[=resolve_storage_opts]{resolve_storage_opts()}}, \code{\link[=upload_cloud_file]{upload_cloud_file()}}, \code{\link[=add_version]{add_version()}}
