@@ -3,6 +3,7 @@
 ## The tracks app keeps its own users
 
 * **FIXED** The device users sync, every 3 days, no longer empties the tracks app's `users` collection before writing the device users back. It deleted every administrator account and every fisher who registered in the app, and undid passwords changed in the app. Device users are now updated in place, matched by IMEI: each keeps its id, which the app's waypoints and feedback point to, and its password is written only when it is first created. Devices that leave the list still lose their login, as before.
+* **FIXED** The sync now matches a device to its row in the tracks app's Airtable `users` table by IMEI alone. Five devices whose region or community differs between PDS and that table were split in two and given a new password on every run.
 
 # coasts 4.24.0
 

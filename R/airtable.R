@@ -551,12 +551,16 @@ sync_device_users <- function(conf = NULL, seed = 123) {
         TRUE ~ NA
       )
     ) |>
-    dplyr::full_join(
-      users,
-      by = c("IMEI", "Country", "Region", "Community")
+    # By IMEI alone: PDS and the users table do not always agree on region or
+    # community, and a device split in two got a new password on every run
+    dplyr::full_join(users, by = "IMEI") |>
+    dplyr::mutate(
+      Boat = dplyr::coalesce(.data$Boat.x, .data$Boat.y),
+      Country = dplyr::coalesce(.data$Country.x, .data$Country.y),
+      Region = dplyr::coalesce(.data$Region.x, .data$Region.y),
+      Community = dplyr::coalesce(.data$Community.x, .data$Community.y)
     ) |>
-    dplyr::mutate(Boat = dplyr::coalesce(.data$Boat.x, .data$Boat.y)) |>
-    dplyr::select(-"Boat.x", -"Boat.y")
+    dplyr::select(-dplyr::ends_with(c(".x", ".y")))
 
   logger::log_info("Filtered to {nrow(devices_joined)} Africa-timezone devices")
 
