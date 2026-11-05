@@ -4,7 +4,14 @@
 \alias{assess_group_stock}
 \title{Assess One Coarse Taxon at the Group Level}
 \usage{
-assess_group_stock(landings, scientific_name, group_prior, min_measured = 100L)
+assess_group_stock(
+  landings,
+  scientific_name,
+  group_prior,
+  min_measured = 100L,
+  production = TRUE,
+  trophic_level = NA_real_
+)
 }
 \arguments{
 \item{landings}{A landing-feed tibble for a single country.}
@@ -15,6 +22,11 @@ assess_group_stock(landings, scientific_name, group_prior, min_measured = 100L)
 
 \item{min_measured}{Minimum pooled measured lengths to attempt a read.
 Default 100.}
+
+\item{production}{Logical. Append the production-based exploitation columns
+from [assess_production()] (Beverton-Holt leg). Default `TRUE`.}
+
+\item{trophic_level}{Member-median FishBase trophic level. Default `NA`.}
 }
 \value{
 A one-row tibble: `scientific_name`, `scale` (`"group"`), `method`

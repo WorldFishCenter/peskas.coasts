@@ -19,6 +19,10 @@ A list with `lengths` (numeric vector of measured lengths) and
 \description{
 Length-based methods run only on the subset of records that carry a
 `length_cm` value. This helper reports how much length information exists for
-one species and returns the raw length vector for downstream fitting.
+one species and returns the length vector for downstream fitting. A record
+with `n_catch` > 1 stands for that many fish of the recorded length (the
+validated feeds log a length class with its count), so its length is
+repeated `n_catch` times; `n_measured` therefore counts fish, while
+`frac_measured` stays a share of records.
 }
 \keyword{internal}

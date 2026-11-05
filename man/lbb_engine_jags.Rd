@@ -7,7 +7,7 @@
 lbb_engine_jags(
   lengths,
   priors,
-  bin_width = 1,
+  bin_width = NULL,
   n_iter = 6000,
   n_burn = 3000,
   n_chains = 3,
@@ -22,7 +22,10 @@ lbb_engine_jags(
 \item{priors}{A one-row life-history tibble from [get_life_history_priors()]
 (`linf`, `mk`, `lm`).}
 
-\item{bin_width}{Length-bin width (cm). Default 1.}
+\item{bin_width}{Length-bin width (cm). `NULL` (default) uses the recording
+resolution of the data (see [.length_resolution()]), at least 1 cm, with
+bins centred on the recorded class values — so 5-cm length classes are not
+split into mostly empty 1-cm bins.}
 
 \item{n_iter, n_burn, n_chains}{MCMC controls.}
 
@@ -34,7 +37,7 @@ the LBB convention.}
 }
 \value{
 A list with `bb0`, `bbmsy`, `fm`, `lc_lopt`, `ci_width` (width of the
-  95% B/B0 credible interval) and the interval bounds `bb0_lo`/`bb0_hi`, or
+  95\% B/B0 credible interval) and the interval bounds `bb0_lo`/`bb0_hi`, or
   `NULL`.
 }
 \description{

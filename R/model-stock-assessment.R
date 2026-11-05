@@ -156,7 +156,11 @@ select_priority_species <- function(
 #'
 #' Length-based methods run only on the subset of records that carry a
 #' `length_cm` value. This helper reports how much length information exists for
-#' one species and returns the raw length vector for downstream fitting.
+#' one species and returns the length vector for downstream fitting. A record
+#' with `n_catch` > 1 stands for that many fish of the recorded length (the
+#' validated feeds log a length class with its count), so its length is
+#' repeated `n_catch` times; `n_measured` therefore counts fish, while
+#' `frac_measured` stays a share of records.
 #'
 #' @param landings A landing-feed tibble for a single country.
 #' @param scientific_name A single scientific name to summarise.
@@ -173,13 +177,19 @@ select_priority_species <- function(
   measured <- sp |>
     dplyr::filter(!is.na(.data$length_cm), .data$length_cm > 0)
 
-  lengths <- measured$length_cm
+  n_fish <- if ("n_catch" %in% names(measured)) {
+    n <- suppressWarnings(as.integer(measured$n_catch))
+    dplyr::if_else(is.na(n) | n < 1L, 1L, n)
+  } else {
+    rep(1L, nrow(measured))
+  }
+  lengths <- rep(measured$length_cm, n_fish)
 
   coverage <- tibble::tibble(
     scientific_name = scientific_name,
     n_records = nrow(sp),
     n_measured = length(lengths),
-    frac_measured = if (nrow(sp) > 0) length(lengths) / nrow(sp) else NA_real_,
+    frac_measured = if (nrow(sp) > 0) nrow(measured) / nrow(sp) else NA_real_,
     n_trips_measured = dplyr::n_distinct(measured$trip_id),
     l_min = if (length(lengths) > 0) min(lengths) else NA_real_,
     l_max = if (length(lengths) > 0) max(lengths) else NA_real_,
@@ -221,20 +231,35 @@ select_priority_species <- function(
   lengths
 }
 
+#' Natural Mortality from Growth (Then et al. 2015)
+#'
+#' The growth-based estimator recommended by Then et al. (2015, ICES J. Mar.
+#' Sci. 72: 82-92): `M = 4.118 K^0.73 Linf^-0.33`, Linf in cm, K per year.
+#'
+#' @param k Von Bertalanffy K (per year).
+#' @param linf Asymptotic length (cm).
+#'
+#' @return Natural mortality M (per year).
+#'
+#' @keywords internal
+.m_then2015 <- function(k, linf) 4.118 * k^0.73 * linf^-0.33
+
 #' Fetch Life-History Priors from FishBase / SeaLifeBase
 #'
 #' Assembles the priors the length-based methods need — asymptotic length
 #' `linf`, growth `k`, natural-mortality ratio `mk`, and length-at-maturity
 #' `lm` — for a set of species. Values come from `rfishbase`; where maturity is
 #' missing it is filled with the Froese & Binohlan empirical relationship from
-#' `linf`, and where `mk` is missing it defaults to the teleost value of 1.5.
+#' `linf`; where FishBase has no M, `mk` comes from the Then et al. (2015)
+#' growth-based estimator ([.m_then2015()]) when K is known, and only otherwise
+#' defaults to the teleost value of 1.5. `mk_source` records which was used.
 #'
 #' @param scientific_names Character vector of scientific names.
 #' @param default_mk Numeric. Fallback natural-mortality-to-growth ratio when
 #'   FishBase has none. Default 1.5.
 #'
 #' @return A tibble with one row per species: `scientific_name`, `linf`, `k`,
-#'   `mk`, `lm`, `a`, `b`, `source`.
+#'   `mk`, `mk_source`, `lm`, `a`, `b`, `source`.
 #'
 #' @keywords workflow modeling
 #' @export
@@ -270,10 +295,18 @@ get_life_history_priors <- function(scientific_names, default_mk = 1.5) {
   priors <- tibble::tibble(scientific_name = scientific_names) |>
     dplyr::left_join(est_std, by = "scientific_name") |>
     dplyr::mutate(
-      mk = dplyr::if_else(
-        !is.na(.data$m) & !is.na(.data$k) & .data$k > 0,
-        .data$m / .data$k,
-        .env$default_mk
+      # M/K: FishBase M where present; otherwise Then et al. (2015) growth-based
+      # M = 4.118 K^0.73 Linf^-0.33 (their recommended Pauly_nls-T form) when K
+      # and Linf exist; the flat teleost default only as a last resort.
+      mk_source = dplyr::case_when(
+        !is.na(.data$m) & !is.na(.data$k) & .data$k > 0 ~ "fishbase_m",
+        !is.na(.data$k) & .data$k > 0 & !is.na(.data$linf) ~ "then2015",
+        TRUE ~ "default"
+      ),
+      mk = dplyr::case_when(
+        .data$mk_source == "fishbase_m" ~ .data$m / .data$k,
+        .data$mk_source == "then2015" ~ .m_then2015(.data$k, .data$linf) / .data$k,
+        TRUE ~ .env$default_mk
       ),
       lm = dplyr::if_else(
         is.na(.data$lm) & !is.na(.data$linf),
@@ -283,7 +316,7 @@ get_life_history_priors <- function(scientific_names, default_mk = 1.5) {
       source = dplyr::if_else(is.na(.data$linf), "missing", "fishbase")
     ) |>
     dplyr::select(
-      "scientific_name", "linf", "k", "mk", "lm", "a", "b", "source"
+      "scientific_name", "linf", "k", "mk", "mk_source", "lm", "a", "b", "source"
     )
 
   missing_linf <- priors |> dplyr::filter(is.na(.data$linf))
@@ -527,6 +560,11 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
 #' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
 #' @param robustness Logical. Attach the LBB prior-robustness band. Default
 #'   `FALSE`. See [lbb_robustness()].
+#' @param production Logical. Add a `"production"` method row (exploitation
+#'   rate E = F/Z against the sustainable share of production). Default `TRUE`.
+#'   See [assess_production()].
+#' @param trophic_level FishBase trophic level of the species, which sets the
+#'   harvestable share `x`. Default `NA` (conservative `x`).
 #'
 #' @return A tibble with one row per method, carrying the estimate columns of
 #'   each method plus `scientific_name`, `n_measured`, `frac_measured` and
@@ -540,7 +578,9 @@ assess_species_stock <- function(
   priors,
   methods = c("lbi", "lbspr", "lbb"),
   lbb_engine = NULL,
-  robustness = FALSE
+  robustness = FALSE,
+  production = TRUE,
+  trophic_level = NA_real_
 ) {
   cov <- .length_coverage(landings, scientific_name)
   linf <- if (nrow(priors) > 0) priors$linf else NA_real_
@@ -597,6 +637,18 @@ assess_species_stock <- function(
     NULL
   }
 
+  # Production-based exploitation (Kolding's modified Cadima): E = F/Z vs the
+  # sustainable share x of production. Cheap; uses the LBB F/M when available.
+  if (isTRUE(production)) {
+    runs$production <- assess_production(
+      lengths, priors,
+      trophic_level = trophic_level,
+      fm = runs$lbb$f_m %||% NA_real_,
+      fm_lo = rb$fm_lo %||% NA_real_,
+      fm_hi = rb$fm_hi %||% NA_real_
+    )
+  }
+
   purrr::list_rbind(runs) |>
     dplyr::mutate(
       scientific_name = .env$scientific_name,
@@ -637,6 +689,11 @@ assess_species_stock <- function(
 #' @param robustness Logical. Also compute the LBB prior-robustness band
 #'   (`bb0_lo/hi`, `fm_lo/hi`, `robust_flag`) per fitted species. Costs ~9x the
 #'   JAGS time, so it is off by default. See [lbb_robustness()].
+#' @param production Logical. Add the production-based exploitation read
+#'   (Kolding's modified Cadima estimator: E = F/Z against the sustainable share
+#'   of production by trophic level) to species and group rows, plus each
+#'   taxon's `catch_share` of sampled catch. See [assess_production()].
+#'   Default `TRUE`.
 #' @param group_layer Logical. Also assess coarse (genus/family) taxa with the
 #'   group-level layer and append them to the output. Default `TRUE`.
 #' @param n_groups Integer. Coarse taxa to assess per country. Default 15.
@@ -659,6 +716,7 @@ run_stock_assessment <- function(
   start_date = "2024-01-01",
   lbb_engine = NULL,
   robustness = FALSE,
+  production = TRUE,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
@@ -692,7 +750,13 @@ run_stock_assessment <- function(
         !is.na(.data$gaul_2_name),
         .data$landing_date >= as.Date(.env$start_date)
       ) |>
-      dplyr::mutate(country = .env$country)
+      # Feeds disagree on column types (Kenya's catch_outcome is character,
+      # Zanzibar's integer), which breaks the row-bind across countries.
+      dplyr::mutate(
+        dplyr::across(dplyr::any_of("catch_outcome"), as.character),
+        dplyr::across(dplyr::any_of("n_catch"), as.integer),
+        country = .env$country
+      )
   })
 
   if (nrow(landings) == 0) {
@@ -722,6 +786,17 @@ run_stock_assessment <- function(
     "(from {nrow(candidates)} species-level candidates)."
   )
 
+  # Trophic levels set the harvestable share x of production.
+  trophic <- if (isTRUE(production)) {
+    get_trophic_levels(priority$scientific_name, version = resolve_db_version(conf))
+  } else {
+    tibble::tibble(scientific_name = character(), trophic_level = numeric())
+  }
+  tl_of <- function(sci) {
+    v <- trophic$trophic_level[trophic$scientific_name == sci]
+    if (length(v) > 0) v[[1]] else NA_real_
+  }
+
   assessments <- purrr::pmap_dfr(
     list(priority$country, priority$scientific_name),
     function(country, sci) {
@@ -731,7 +806,9 @@ run_stock_assessment <- function(
         priors = dplyr::filter(priors, .data$scientific_name == .env$sci),
         methods = methods,
         lbb_engine = lbb_engine,
-        robustness = robustness
+        robustness = robustness,
+        production = production,
+        trophic_level = tl_of(sci)
       ) |>
         dplyr::mutate(country = .env$country, .before = 1)
     }
@@ -767,7 +844,8 @@ run_stock_assessment <- function(
         landings,
         n_groups = n_groups,
         fao_areas = fao_areas,
-        version = resolve_db_version(conf)
+        version = resolve_db_version(conf),
+        production = production
       ),
       error = function(e) {
         logger::log_warn("Group layer failed: {conditionMessage(e)}")
@@ -784,6 +862,13 @@ run_stock_assessment <- function(
         "status {g_status}."
       )
     }
+  }
+
+  if (isTRUE(production)) {
+    results <- dplyr::left_join(
+      results, .catch_share(landings),
+      by = c("country", "scientific_name")
+    )
   }
 
   prefix <- conf$stock$assessment$file_prefix %||% "stock-assessment"

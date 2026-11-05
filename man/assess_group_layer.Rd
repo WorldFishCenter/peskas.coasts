@@ -10,7 +10,8 @@ assess_group_layer(
   min_records = 30L,
   min_measured = 100L,
   fao_areas = NULL,
-  version = "latest"
+  version = "latest",
+  production = TRUE
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ area codes (e.g. `list(kenya = c(51, 57), timor = 71)`). Countries absent
 from the list skip the regional filter.}
 
 \item{version}{FishBase / SeaLifeBase release. See [resolve_db_version()].}
+
+\item{production}{Logical. Add the production-based exploitation read,
+with regional trophic levels from [get_trophic_levels()]. Default `TRUE`.}
 }
 \value{
 A tibble of per-taxon group assessments with a `country` column.

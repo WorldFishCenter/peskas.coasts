@@ -174,16 +174,20 @@ get_group_priors <- function(
       by = c("species" = "scientific_name")
     ) |>
     dplyr::group_by(.data$scientific_name) |>
+    # Member counts and spread are computed BEFORE `linf` is overwritten by its
+    # median: summarise() evaluates sequentially, so referring to `linf` after
+    # `linf = median(...)` sees the scalar and always gave n_species = 1 and
+    # linf_cv = NA (which also mis-graded every genus as "high" confidence).
     dplyr::summarise(
-      linf = stats::median(.data$linf, na.rm = TRUE),
-      mk = stats::median(.data$mk, na.rm = TRUE),
-      lm = stats::median(.data$lm, na.rm = TRUE),
       n_species = sum(!is.na(.data$linf)),
       linf_cv = if (sum(!is.na(.data$linf)) > 1) {
         stats::sd(.data$linf, na.rm = TRUE) / mean(.data$linf, na.rm = TRUE)
       } else {
         NA_real_
       },
+      linf = stats::median(.data$linf, na.rm = TRUE),
+      mk = stats::median(.data$mk, na.rm = TRUE),
+      lm = stats::median(.data$lm, na.rm = TRUE),
       .groups = "drop"
     ) |>
     dplyr::filter(.data$n_species > 0, !is.na(.data$linf)) |>
@@ -258,6 +262,9 @@ get_group_priors <- function(
 #' @param group_prior A one-row tibble from [get_group_priors()].
 #' @param min_measured Minimum pooled measured lengths to attempt a read.
 #'   Default 100.
+#' @param production Logical. Append the production-based exploitation columns
+#'   from [assess_production()] (Beverton-Holt leg). Default `TRUE`.
+#' @param trophic_level Member-median FishBase trophic level. Default `NA`.
 #'
 #' @return A one-row tibble: `scientific_name`, `scale` (`"group"`), `method`
 #'   (`"group-lbi"`), the Froese indicator columns, `group_status`,
@@ -270,7 +277,9 @@ assess_group_stock <- function(
   landings,
   scientific_name,
   group_prior,
-  min_measured = 100L
+  min_measured = 100L,
+  production = TRUE,
+  trophic_level = NA_real_
 ) {
   cov <- .length_coverage(landings, scientific_name)
   # No 1.2 x Linf cull for aggregates — only non-positive lengths are dropped.
@@ -325,7 +334,7 @@ assess_group_stock <- function(
     flag <- "warn"
   }
 
-  base |>
+  out <- base |>
     dplyr::mutate(
       confidence = .env$confidence,
       lopt = ind$lopt, lm = ind$lm,
@@ -335,6 +344,15 @@ assess_group_stock <- function(
       prior_note = .env$prior_note,
       quality = .env$flag
     )
+
+  # Production-based exploitation on the pooled lengths and anchored prior
+  # (Beverton-Holt leg only: no LBB fit at group level).
+  if (isTRUE(production)) {
+    prod <- assess_production(lengths, adj_prior, trophic_level = trophic_level) |>
+      dplyr::select(-"method")
+    out <- dplyr::bind_cols(out, prod)
+  }
+  out
 }
 
 #' Run the Group-Level Layer Across Countries
@@ -353,6 +371,8 @@ assess_group_stock <- function(
 #'   area codes (e.g. `list(kenya = c(51, 57), timor = 71)`). Countries absent
 #'   from the list skip the regional filter.
 #' @param version FishBase / SeaLifeBase release. See [resolve_db_version()].
+#' @param production Logical. Add the production-based exploitation read,
+#'   with regional trophic levels from [get_trophic_levels()]. Default `TRUE`.
 #'
 #' @return A tibble of per-taxon group assessments with a `country` column.
 #'
@@ -364,7 +384,8 @@ assess_group_layer <- function(
   min_records = 30L,
   min_measured = 100L,
   fao_areas = NULL,
-  version = "latest"
+  version = "latest",
+  production = TRUE
 ) {
   ranked <- .species_economic_rank(landings) |>
     dplyr::filter(
@@ -391,9 +412,21 @@ assess_group_layer <- function(
       fao_areas = areas, version = version
     )
 
+    trophic <- if (isTRUE(production)) {
+      get_trophic_levels(cc$scientific_name, fao_areas = areas, version = version)
+    } else {
+      tibble::tibble(scientific_name = character(), trophic_level = numeric())
+    }
+
     purrr::map_dfr(cc$scientific_name, function(sci) {
       gp <- priors |> dplyr::filter(.data$scientific_name == .env$sci)
-      assess_group_stock(land_c, sci, gp, min_measured = min_measured) |>
+      tl <- trophic$trophic_level[trophic$scientific_name == sci]
+      assess_group_stock(
+        land_c, sci, gp,
+        min_measured = min_measured,
+        production = production,
+        trophic_level = if (length(tl) > 0) tl[[1]] else NA_real_
+      ) |>
         dplyr::mutate(country = .env$country, .before = 1)
     }) |>
       dplyr::left_join(

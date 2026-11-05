@@ -10,7 +10,9 @@ assess_species_stock(
   priors,
   methods = c("lbi", "lbspr", "lbb"),
   lbb_engine = NULL,
-  robustness = FALSE
+  robustness = FALSE,
+  production = TRUE,
+  trophic_level = NA_real_
 )
 }
 \arguments{
@@ -27,6 +29,13 @@ assess_species_stock(
 
 \item{robustness}{Logical. Attach the LBB prior-robustness band. Default
 `FALSE`. See [lbb_robustness()].}
+
+\item{production}{Logical. Add a `"production"` method row (exploitation
+rate E = F/Z against the sustainable share of production). Default `TRUE`.
+See [assess_production()].}
+
+\item{trophic_level}{FishBase trophic level of the species, which sets the
+harvestable share `x`. Default `NA` (conservative `x`).}
 }
 \value{
 A tibble with one row per method, carrying the estimate columns of

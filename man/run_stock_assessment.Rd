@@ -11,6 +11,7 @@ run_stock_assessment(
   start_date = "2024-01-01",
   lbb_engine = NULL,
   robustness = FALSE,
+  production = TRUE,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
@@ -34,6 +35,12 @@ PDS-covered window. Default `"2024-01-01"`.}
 \item{robustness}{Logical. Also compute the LBB prior-robustness band
 (`bb0_lo/hi`, `fm_lo/hi`, `robust_flag`) per fitted species. Costs ~9x the
 JAGS time, so it is off by default. See [lbb_robustness()].}
+
+\item{production}{Logical. Add the production-based exploitation read
+(Kolding's modified Cadima estimator: E = F/Z against the sustainable share
+of production by trophic level) to species and group rows, plus each
+taxon's `catch_share` of sampled catch. See [assess_production()].
+Default `TRUE`.}
 
 \item{group_layer}{Logical. Also assess coarse (genus/family) taxa with the
 group-level layer and append them to the output. Default `TRUE`.}

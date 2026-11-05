@@ -20,7 +20,7 @@ lbb_robustness(
 \item{lbb_engine}{An LBB fitting routine (see [assess_stock_lbb()]). Required.}
 
 \item{linf_mult}{Multipliers applied to the L-inf prior centre. Default
-`c(0.85, 1, 1.15)` (±15%).}
+`c(0.85, 1, 1.15)` (±15\%).}
 
 \item{mk_mult}{Multipliers applied to the M/K prior centre. Default
 `c(0.75, 1, 1.25)`.}

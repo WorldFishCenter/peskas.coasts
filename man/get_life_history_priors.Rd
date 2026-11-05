@@ -14,14 +14,16 @@ FishBase has none. Default 1.5.}
 }
 \value{
 A tibble with one row per species: `scientific_name`, `linf`, `k`,
-  `mk`, `lm`, `a`, `b`, `source`.
+  `mk`, `mk_source`, `lm`, `a`, `b`, `source`.
 }
 \description{
 Assembles the priors the length-based methods need — asymptotic length
 `linf`, growth `k`, natural-mortality ratio `mk`, and length-at-maturity
 `lm` — for a set of species. Values come from `rfishbase`; where maturity is
 missing it is filled with the Froese & Binohlan empirical relationship from
-`linf`, and where `mk` is missing it defaults to the teleost value of 1.5.
+`linf`; where FishBase has no M, `mk` comes from the Then et al. (2015)
+growth-based estimator ([.m_then2015()]) when K is known, and only otherwise
+defaults to the teleost value of 1.5. `mk_source` records which was used.
 }
 \keyword{modeling}
 \keyword{workflow}

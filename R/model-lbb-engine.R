@@ -58,6 +58,27 @@ model {
 }
 "
 
+#' Recording Resolution of a Length Sample
+#'
+#' The most common gap between distinct recorded lengths: about 5 for data
+#' logged in 5-cm classes (Timor, Zanzibar below ~30 cm), small for lengths
+#' measured to the millimetre (Kenya). Used to size length bins.
+#'
+#' @param lengths Numeric vector of lengths (cm).
+#'
+#' @return A single number (cm), or `NA` with fewer than two distinct lengths.
+#'
+#' @keywords internal
+.length_resolution <- function(lengths) {
+  u <- sort(unique(round(lengths[is.finite(lengths)], 2)))
+  if (length(u) < 2) {
+    return(NA_real_)
+  }
+  gaps <- round(diff(u), 2)
+  tab <- table(gaps)
+  as.numeric(names(tab)[which.max(tab)])
+}
+
 #' LBB Fitting Engine (JAGS)
 #'
 #' Fits the Length-Based Bayesian biomass model (Froese et al. 2018) to one
@@ -71,7 +92,10 @@ model {
 #'   [.clean_lengths()].
 #' @param priors A one-row life-history tibble from [get_life_history_priors()]
 #'   (`linf`, `mk`, `lm`).
-#' @param bin_width Length-bin width (cm). Default 1.
+#' @param bin_width Length-bin width (cm). `NULL` (default) uses the recording
+#'   resolution of the data (see [.length_resolution()]), at least 1 cm, with
+#'   bins centred on the recorded class values — so 5-cm length classes are not
+#'   split into mostly empty 1-cm bins.
 #' @param n_iter,n_burn,n_chains MCMC controls.
 #' @param linf_sd_frac Prior SD on L-inf as a fraction of its centre. Default
 #'   0.10; the data can still pull L-inf off the FishBase value.
@@ -79,7 +103,7 @@ model {
 #'   the LBB convention.
 #'
 #' @return A list with `bb0`, `bbmsy`, `fm`, `lc_lopt`, `ci_width` (width of the
-#'   95% B/B0 credible interval) and the interval bounds `bb0_lo`/`bb0_hi`, or
+#'   95\% B/B0 credible interval) and the interval bounds `bb0_lo`/`bb0_hi`, or
 #'   `NULL`.
 #'
 #' @keywords workflow modeling
@@ -87,7 +111,7 @@ model {
 lbb_engine_jags <- function(
   lengths,
   priors,
-  bin_width = 1,
+  bin_width = NULL,
   n_iter = 6000,
   n_burn = 3000,
   n_chains = 3,
@@ -103,8 +127,16 @@ lbb_engine_jags <- function(
     return(NULL)
   }
 
+  res <- .length_resolution(lengths)
+  if (is.null(bin_width)) {
+    bin_width <- max(1, res, na.rm = TRUE)
+  }
   lmax <- as.numeric(stats::quantile(lengths, 0.99, type = 7))
-  lo <- max(2, floor(min(lengths)))
+  lo <- if (bin_width > 1) {
+    min(lengths) - bin_width / 2
+  } else {
+    max(2, floor(min(lengths)))
+  }
   breaks <- seq(lo, ceiling(lmax * 1.05) + bin_width, by = bin_width)
   idx <- floor((lengths - lo) / bin_width) + 1L
   idx <- idx[idx >= 1 & idx <= (length(breaks) - 1)]
