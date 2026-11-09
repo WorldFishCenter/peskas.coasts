@@ -122,10 +122,14 @@
         dplyr::summarise(eligible = mean(.data$bony, na.rm = TRUE) >= 0.5, .groups = "drop")
     },
     error = function(e) {
-      logger::log_warn("Taxon screening skipped: {conditionMessage(e)}")
-      tibble::tibble(scientific_name = character(), eligible = logical())
+      logger::log_warn("Taxon screening failed: {conditionMessage(e)}")
+      NULL
     }
   )
+  fishbase_ok <- !is.null(shares)
+  if (!fishbase_ok) {
+    shares <- tibble::tibble(scientific_name = character(), eligible = logical())
+  }
 
   out <- out |>
     dplyr::left_join(shares, by = "scientific_name") |>
@@ -136,7 +140,60 @@
       "Excluded from length methods (not bony fish): {paste(dropped, collapse = ', ')}."
     )
   }
+  attr(out, "fishbase_ok") <- fishbase_ok
   out
+}
+
+#' Is FishBase / SeaLifeBase Reachable?
+#' @keywords internal
+.fishbase_reachable <- function(version = "latest") {
+  isTRUE(tryCatch(nrow(get_taxa_backbone(version = version)) > 0, error = function(e) FALSE))
+}
+
+#' Fetch from FishBase, Retrying, and Stop Rather Than Continue Half-Empty
+#'
+#' FishBase is read remotely; a dropped connection mid-run used to leave
+#' priors or trophic levels silently empty, so whole groups were written as
+#' "unknown" (twice on 2026-11-09). This wrapper retries an incomplete fetch
+#' and, if FishBase is unreachable, stops with a `fishbase_unavailable` error so
+#' no partial results are uploaded. An incomplete result is accepted only when
+#' it repeats while FishBase is reachable (a genuine data gap, e.g. a name with
+#' no FishBase match).
+#'
+#' @param fetch A function of no arguments performing the lookup.
+#' @param ok A function of the result returning `TRUE` when it is complete.
+#' @param what Label for log messages.
+#' @param version FishBase release, for the reachability check.
+#' @param tries,wait Attempts and seconds between them.
+#'
+#' @return The result of `fetch()`.
+#'
+#' @keywords internal
+.fb_retry <- function(fetch, ok, what, version = "latest", tries = 3L, wait = 10) {
+  for (i in seq_len(tries)) {
+    res <- tryCatch(fetch(), error = function(e) {
+      logger::log_warn("FishBase lookup for {what} failed: {conditionMessage(e)}")
+      NULL
+    })
+    if (!is.null(res) && isTRUE(ok(res))) {
+      return(res)
+    }
+    if (i > 1 && !is.null(res) && .fishbase_reachable(version)) {
+      logger::log_info("FishBase reachable; accepting incomplete {what} as a data gap.")
+      return(res)
+    }
+    if (i < tries) {
+      logger::log_warn("FishBase lookup for {what} incomplete (try {i}/{tries}); retrying.")
+      Sys.sleep(wait)
+    }
+  }
+  rlang::abort(
+    paste0(
+      "FishBase unavailable while fetching ", what,
+      "; stopping so that no partial results are written."
+    ),
+    class = "fishbase_unavailable"
+  )
 }
 
 #' FishBase Classes Outside Teleost Length Methods
@@ -747,6 +804,7 @@ assess_species_stock <- function(
       quality_reasons = .env$reasons,
       advice = .env$advice,
       size_reach = cov$coverage$l_99 / priors$linf,
+      n_length_classes = cov$coverage$n_length_classes,
       main_gear = gear_prof$main_gear,
       main_gear_share = gear_prof$main_gear_share,
       selective_gear_share = gear_prof$selective_gear_share,
@@ -814,8 +872,12 @@ assess_species_stock <- function(
 #' @param package Name of the package whose `inst/conf.yml` to read. Default
 #'   `"coasts"`.
 #'
-#' @return Invisibly, a tibble of per-species, per-method assessments with
-#'   quality flags.
+#' @return Invisibly, the long tibble of per-taxon, per-method (and per-gear)
+#'   assessments with quality flags; its `"summary"` attribute holds the
+#'   one-row-per-stock table from [summarise_stock_status()]. With
+#'   `upload = TRUE` both are written as versioned parquets
+#'   (`<prefix>` and `<prefix>-summary`). Stops with a `fishbase_unavailable`
+#'   error, uploading nothing, when FishBase cannot be read.
 #'
 #' @keywords workflow modeling
 #' @export
@@ -883,12 +945,19 @@ run_stock_assessment <- function(
   candidates <- select_priority_species(landings, n_species = n_species * 5L)
   # Teleost growth/length methods are not valid for sharks, rays or
   # invertebrates: screen them out before ranking.
-  eligible <- .length_method_eligible(
-    candidates$scientific_name, version = resolve_db_version(conf)
+  fb_version <- resolve_db_version(conf)
+  eligible <- .fb_retry(
+    function() .length_method_eligible(candidates$scientific_name, version = fb_version),
+    ok = function(x) isTRUE(attr(x, "fishbase_ok")),
+    what = "taxon screening", version = fb_version
   )
   candidates <- candidates |>
     dplyr::semi_join(dplyr::filter(eligible, .data$eligible), by = "scientific_name")
-  priors <- get_life_history_priors(candidates$scientific_name)
+  priors <- .fb_retry(
+    function() get_life_history_priors(candidates$scientific_name),
+    ok = function(x) any(!is.na(x$linf)),
+    what = "species priors", version = fb_version
+  )
 
   priority <- candidates |>
     dplyr::left_join(
@@ -908,7 +977,11 @@ run_stock_assessment <- function(
 
   # Trophic levels set the harvestable share x of production.
   trophic <- if (isTRUE(production)) {
-    get_trophic_levels(priority$scientific_name, version = resolve_db_version(conf))
+    .fb_retry(
+      function() get_trophic_levels(priority$scientific_name, version = fb_version),
+      ok = function(x) nrow(x) > 0,
+      what = "species trophic levels", version = fb_version
+    )
   } else {
     tibble::tibble(scientific_name = character(), trophic_level = numeric())
   }
@@ -999,6 +1072,10 @@ run_stock_assessment <- function(
         min_gear_fish = min_gear_fish
       ),
       error = function(e) {
+        # A FishBase outage must stop the run, not quietly drop the groups.
+        if (inherits(e, "fishbase_unavailable")) {
+          stop(e)
+        }
         logger::log_warn("Group layer failed: {conditionMessage(e)}")
         tibble::tibble()
       }
@@ -1025,6 +1102,13 @@ run_stock_assessment <- function(
     results <- .mark_reference_gear(results)
   }
 
+  # One row per stock: the table the portal and reports read.
+  summary <- summarise_stock_status(results)
+  logger::log_info(
+    "Stock summary: {nrow(summary)} stocks | reliability ",
+    "{paste(names(table(summary$reliability)), table(summary$reliability), sep = ':', collapse = ' ')}."
+  )
+
   prefix <- conf$stock$assessment$file_prefix %||% "stock-assessment"
   if (isTRUE(upload)) {
     upload_parquet_to_cloud(
@@ -1033,7 +1117,14 @@ run_stock_assessment <- function(
       provider = conf$storage$google$key,
       options = conf$storage$google$options
     )
+    upload_parquet_to_cloud(
+      data = summary,
+      prefix = paste0(prefix, "-summary"),
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options
+    )
   }
+  attr(results, "summary") <- summary
 
   logger::log_info("=== Stock assessment pipeline complete ===")
   invisible(results)

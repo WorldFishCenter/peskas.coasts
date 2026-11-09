@@ -73,8 +73,12 @@ network or credentials hiccup at the end cannot discard the results.}
 `"coasts"`.}
 }
 \value{
-Invisibly, a tibble of per-species, per-method assessments with
-  quality flags.
+Invisibly, the long tibble of per-taxon, per-method (and per-gear)
+  assessments with quality flags; its `"summary"` attribute holds the
+  one-row-per-stock table from [summarise_stock_status()]. With
+  `upload = TRUE` both are written as versioned parquets
+  (`<prefix>` and `<prefix>-summary`). Stops with a `fishbase_unavailable`
+  error, uploading nothing, when FishBase cannot be read.
 }
 \description{
 Workflow orchestrator. For each country it downloads the validated landing

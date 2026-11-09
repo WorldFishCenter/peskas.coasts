@@ -365,6 +365,7 @@ assess_group_stock <- function(
   dplyr::mutate(
     out,
     size_reach = cov$coverage$l_99 / linf_fb,
+    n_length_classes = cov$coverage$n_length_classes,
     main_gear = gear_prof$main_gear,
     main_gear_share = gear_prof$main_gear_share,
     selective_gear_share = gear_prof$selective_gear_share,
@@ -429,7 +430,11 @@ assess_group_layer <- function(
     )
   # Rays, sharks and invertebrates (e.g. Aetobatus, Loligo, Octopodidae) are
   # outside teleost length methods.
-  eligible <- .length_method_eligible(pool$scientific_name, version = version)
+  eligible <- .fb_retry(
+    function() .length_method_eligible(pool$scientific_name, version = version),
+    ok = function(x) isTRUE(attr(x, "fishbase_ok")),
+    what = "group taxon screening", version = version
+  )
   ranked <- pool |>
     dplyr::semi_join(dplyr::filter(eligible, .data$eligible), by = "scientific_name") |>
     dplyr::group_by(.data$country) |>
@@ -446,13 +451,23 @@ assess_group_layer <- function(
     land_c <- landings |> dplyr::filter(.data$country == .env$country)
     areas <- if (is.list(fao_areas)) fao_areas[[country]] else fao_areas
 
-    priors <- get_group_priors(
-      cc |> dplyr::select("scientific_name", "catch_taxon"),
-      fao_areas = areas, version = version
+    priors <- .fb_retry(
+      function() {
+        get_group_priors(
+          cc |> dplyr::select("scientific_name", "catch_taxon"),
+          fao_areas = areas, version = version
+        )
+      },
+      ok = function(x) nrow(x) > 0,
+      what = paste("group priors,", country), version = version
     )
 
     trophic <- if (isTRUE(production)) {
-      get_trophic_levels(cc$scientific_name, fao_areas = areas, version = version)
+      .fb_retry(
+        function() get_trophic_levels(cc$scientific_name, fao_areas = areas, version = version),
+        ok = function(x) nrow(x) > 0,
+        what = paste("group trophic levels,", country), version = version
+      )
     } else {
       tibble::tibble(scientific_name = character(), trophic_level = numeric())
     }
