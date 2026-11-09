@@ -136,3 +136,18 @@ test_that(".stock_advice flags coarse length classes and method disagreement", {
   expect_match(r, "4 length classes")
   expect_match(r, "maximum size")
 })
+
+test_that("lbb_robustness adds the catch-implied Linf to the grid", {
+  fake_engine <- function(lengths, priors) list(bb0 = 20 / priors$linf, fm = 1.5 / priors$mk)
+  set.seed(5)
+  len <- runif(300, 15, 33)
+  rb <- lbb_robustness(len, tibble::tibble(linf = 55, mk = 1.5, lm = 30), fake_engine)
+  expect_equal(rb$n_fits, 12L)
+  expect_equal(rb$linf_catch, unname(stats::quantile(len, 0.99)) / 0.95)
+  expect_gt(rb$linf_ratio, 1.5)
+  # bb0 = 20 / linf: 0.31 at 1.15 x 55, ~0.57 at the catch-implied Linf -> class flips
+  expect_equal(rb$robust_flag, "sensitive")
+  rb9 <- lbb_robustness(len, tibble::tibble(linf = 55, mk = 1.5, lm = 30), fake_engine,
+    catch_linf = FALSE)
+  expect_equal(rb9$n_fits, 9L)
+})

@@ -760,6 +760,8 @@ assess_species_stock <- function(
       fm_lo = if (!is.null(rb)) rb$fm_lo else NA_real_,
       fm_hi = if (!is.null(rb)) rb$fm_hi else NA_real_,
       robust_flag = if (!is.null(rb)) rb$robust_flag else NA_character_,
+      linf_catch = if (!is.null(rb)) rb$linf_catch else NA_real_,
+      linf_ratio = if (!is.null(rb)) rb$linf_ratio else NA_real_,
       misid_flag = mix$misid_flag,
       n_modes = mix$n_modes,
       separation = mix$separation,

@@ -113,6 +113,9 @@
 #' @param fm,fm_lo,fm_hi Optional LBB F/M and its robustness band.
 #' @param mk_mult M/K multipliers for the Beverton-Holt band. Default
 #'   `c(0.75, 1.25)`.
+#' @param catch_linf Logical. Also run Beverton-Holt with the catch-implied
+#'   L-inf (`L99 / 0.95`) and include it in the band when it differs from the
+#'   prior by more than 5\%. Default `TRUE`.
 #'
 #' @return A one-row tibble: `zk_bh`, `lc_bh`, `e_bh`, `e_lbb`, `e`, `e_lo`,
 #'   `e_hi`, `e_methods`.
@@ -121,12 +124,21 @@
 #' @export
 estimate_exploitation <- function(lengths, priors, fm = NA_real_,
                                   fm_lo = NA_real_, fm_hi = NA_real_,
-                                  mk_mult = c(0.75, 1.25)) {
+                                  mk_mult = c(0.75, 1.25),
+                                  catch_linf = TRUE) {
   mk <- if (!is.null(priors$mk) && isTRUE(priors$mk > 0)) priors$mk else 1.5
   bh <- .bh_zk(lengths, priors$linf)
 
   e_bh <- .e_from_zk(bh$zk, mk)
   e_bh_band <- .e_from_zk(bh$zk, mk * mk_mult)
+  # L-inf uncertainty: the catch-implied value bounds the FishBase prior from
+  # the other side (see lbb_robustness()).
+  if (isTRUE(catch_linf) && length(lengths) >= 20 && isTRUE(priors$linf > 0)) {
+    linf_c <- as.numeric(stats::quantile(lengths, 0.99, type = 7)) / 0.95
+    if (abs(linf_c / priors$linf - 1) > 0.05) {
+      e_bh_band <- c(e_bh_band, .e_from_zk(.bh_zk(lengths, linf_c)$zk, mk))
+    }
+  }
   fm_to_e <- function(x) dplyr::if_else(is.na(x) | x < 0, NA_real_, x / (1 + x))
   e_lbb <- fm_to_e(fm)
   e_lbb_band <- fm_to_e(c(fm_lo, fm_hi))

@@ -9,7 +9,8 @@ lbb_robustness(
   priors,
   lbb_engine,
   linf_mult = c(0.85, 1, 1.15),
-  mk_mult = c(0.75, 1, 1.25)
+  mk_mult = c(0.75, 1, 1.25),
+  catch_linf = TRUE
 )
 }
 \arguments{
@@ -20,22 +21,35 @@ lbb_robustness(
 \item{lbb_engine}{An LBB fitting routine (see [assess_stock_lbb()]). Required.}
 
 \item{linf_mult}{Multipliers applied to the L-inf prior centre. Default
-`c(0.85, 1, 1.15)` (±15\%).}
+`c(0.85, 1, 1.15)`.}
 
 \item{mk_mult}{Multipliers applied to the M/K prior centre. Default
 `c(0.75, 1, 1.25)`.}
+
+\item{catch_linf}{Logical. Add the catch-implied L-inf (`L99 / 0.95`) to
+the grid when it lies outside the multiplier range. Default `TRUE`.}
 }
 \value{
 A one-row tibble: `bb0_center`, `bb0_lo`, `bb0_hi`, `fm_center`,
-  `fm_lo`, `fm_hi`, `n_fits`, `status_set` (distinct biomass classes seen)
-  and `robust_flag`.
+  `fm_lo`, `fm_hi`, `n_fits`, `status_set` (distinct biomass classes seen),
+  `robust_flag`, `linf_catch` (the catch-implied L-inf) and `linf_ratio`
+  (FishBase L-inf / catch-implied L-inf; well above 1 means the prior sits far
+  above anything landed).
 }
 \description{
-Re-fits the LBB engine across a grid of L-inf and M/K prior multipliers and
-summarises how much the estimate moves. Reports the central estimate, the
-B/B0 and F/M bands (min–max across the grid), and a `robust_flag`: `"robust"`
-when the biomass status class and the over/under-fishing verdict are
-unchanged across every grid point, `"sensitive"` when either flips.
+Re-fits the LBB engine across a grid of L-inf and M/K priors and summarises
+how much the estimate moves. Reports the central estimate, the B/B0 and F/M
+bands (min–max across the grid), and a `robust_flag`: `"robust"` when the
+biomass status class and the over/under-fishing verdict are unchanged across
+every grid point, `"sensitive"` when either flips.
+}
+\details{
+The L-inf axis spans the FishBase centre +/- 15\% and, when it falls
+outside that range, the catch-implied value `L99 / 0.95`. FishBase L-inf
+values for these stocks often sit far above the largest fish ever landed
+(Kenya Siganus sutor 54.9 cm vs L99 32.7 cm), so a +/- 15\% band alone
+understates the real prior uncertainty; the catch-implied value is the
+opposite (optimistic, if the gear truncates large fish) bound.
 }
 \keyword{modeling}
 \keyword{workflow}
