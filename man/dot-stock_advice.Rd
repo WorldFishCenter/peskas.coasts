@@ -12,6 +12,7 @@
   misid = NA,
   robust_flag = NA_character_,
   production_band = NA_character_,
+  gear_profile = NULL,
   coarse_low_confidence = FALSE,
   min_n = 20L,
   target_n = 150L
@@ -31,6 +32,10 @@
 \item{robust_flag}{`"robust"` / `"sensitive"` from [lbb_robustness()].}
 
 \item{production_band}{`"clear"` / `"straddles"` from [assess_production()].}
+
+\item{gear_profile}{Optional one-row output of [.gear_profile()]; when the
+sample is dominated by dome-selective gears the "large fish missing"
+advice names the gear.}
 
 \item{coarse_low_confidence}{Logical; a low-confidence genus/family read.}
 

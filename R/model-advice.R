@@ -64,6 +64,9 @@
 #' @param misid Misidentification flag from [flag_length_mixture()].
 #' @param robust_flag `"robust"` / `"sensitive"` from [lbb_robustness()].
 #' @param production_band `"clear"` / `"straddles"` from [assess_production()].
+#' @param gear_profile Optional one-row output of [.gear_profile()]; when the
+#'   sample is dominated by dome-selective gears the "large fish missing"
+#'   advice names the gear.
 #' @param coarse_low_confidence Logical; a low-confidence genus/family read.
 #' @param min_n Minimum fish for any read. Default 20 (species track).
 #' @param target_n Recommended fish per assessment period. Default 150.
@@ -75,6 +78,7 @@
                           consensus = NA_character_, misid = NA,
                           robust_flag = NA_character_,
                           production_band = NA_character_,
+                          gear_profile = NULL,
                           coarse_low_confidence = FALSE,
                           min_n = 20L, target_n = 150L) {
   n <- n_measured %||% 0
@@ -100,6 +104,15 @@
     ))
   }
   if (grepl("maximum size", reasons %||% "", fixed = TRUE)) {
+    if (isTRUE(gear_profile$selectivity_flag)) {
+      return(sprintf(
+        paste(
+          "Catch comes mainly from %s (%d%% of measured fish), which under-catch",
+          "large fish: measure catches from other gears (e.g. hand lines) to confirm the status."
+        ),
+        gear_profile$main_gear, round(100 * gear_profile$main_gear_share)
+      ))
+    }
     return(paste(
       "Large fish are missing from the sample: measure fish of all sizes and",
       "check whether the gear (e.g. traps) excludes them."

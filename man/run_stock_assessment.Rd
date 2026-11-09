@@ -12,9 +12,12 @@ run_stock_assessment(
   lbb_engine = NULL,
   robustness = FALSE,
   production = TRUE,
+  by_gear = FALSE,
+  min_gear_fish = 100L,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
+  upload = TRUE,
   log_threshold = logger::DEBUG,
   package = "coasts"
 )
@@ -43,6 +46,14 @@ of production by trophic level) to species and group rows, plus each
 taxon's `catch_share` of sampled catch. See [assess_production()].
 Default `TRUE`.}
 
+\item{by_gear}{Logical. Also assess each taxon separately for every gear
+with at least `min_gear_fish` measured fish (when two or more gears
+qualify), and mark the `reference_gear`: the gear whose catch reaches
+closest to Linf, least distorted by gear selectivity. Robustness runs on
+the pooled read only. Pooled rows carry `gear = "all"`. Default `FALSE`.}
+
+\item{min_gear_fish}{Minimum measured fish for a per-gear read. Default 100.}
+
 \item{group_layer}{Logical. Also assess coarse (genus/family) taxa with the
 group-level layer and append them to the output. Default `TRUE`.}
 
@@ -51,6 +62,10 @@ group-level layer and append them to the output. Default `TRUE`.}
 \item{fao_areas}{Named list mapping country key to FAO area codes for the
 regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
 uses a built-in WIO/Pacific default.}
+
+\item{upload}{Logical. Upload the versioned parquet to cloud storage.
+Default `TRUE` (the pipeline); set `FALSE` for local analysis runs so a
+network or credentials hiccup at the end cannot discard the results.}
 
 \item{log_threshold}{The logging threshold. Default `logger::DEBUG`.}
 

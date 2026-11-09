@@ -358,9 +358,17 @@ assess_group_stock <- function(
   e_x <- if ("e_x" %in% names(out)) out$e_x else NA_real_
   band <- if ("production_band" %in% names(out)) out$production_band else NA_character_
   cons <- .ensemble_consensus(NA_real_, NA_real_, ind$p_mature, ind$lmean_lopt, e_x = e_x)
-  reasons <- .quality_reasons(cov$coverage, linf_anchored)
+  # Reach against the FishBase member median, not the catch-anchored Linf
+  # (which is floored to L99 / 0.95 and so always looks "complete").
+  reasons <- .quality_reasons(cov$coverage, linf_fb)
+  gear_prof <- .gear_profile(landings, scientific_name)
   dplyr::mutate(
     out,
+    size_reach = cov$coverage$l_99 / linf_fb,
+    main_gear = gear_prof$main_gear,
+    main_gear_share = gear_prof$main_gear_share,
+    selective_gear_share = gear_prof$selective_gear_share,
+    selectivity_flag = gear_prof$selectivity_flag,
     consensus = cons$consensus,
     methods_agree = cons$agree,
     n_concern = cons$n_concern,
@@ -369,6 +377,7 @@ assess_group_stock <- function(
     advice = .stock_advice(
       length(lengths), reasons = reasons, production_band = band,
       n_classes = cov$coverage$n_length_classes, consensus = cons$consensus,
+      gear_profile = gear_prof,
       coarse_low_confidence = identical(confidence, "low"),
       min_n = min_measured
     )
@@ -393,6 +402,9 @@ assess_group_stock <- function(
 #' @param version FishBase / SeaLifeBase release. See [resolve_db_version()].
 #' @param production Logical. Add the production-based exploitation read,
 #'   with regional trophic levels from [get_trophic_levels()]. Default `TRUE`.
+#' @param by_gear Logical. Add per-gear reads where at least two gears each
+#'   have `min_gear_fish` measured fish. See [run_stock_assessment()].
+#' @param min_gear_fish Minimum measured fish for a per-gear read.
 #'
 #' @return A tibble of per-taxon group assessments with a `country` column.
 #'
@@ -405,7 +417,9 @@ assess_group_layer <- function(
   min_measured = 100L,
   fao_areas = NULL,
   version = "latest",
-  production = TRUE
+  production = TRUE,
+  by_gear = FALSE,
+  min_gear_fish = 100L
 ) {
   pool <- .species_economic_rank(landings) |>
     dplyr::filter(
@@ -446,13 +460,25 @@ assess_group_layer <- function(
     purrr::map_dfr(cc$scientific_name, function(sci) {
       gp <- priors |> dplyr::filter(.data$scientific_name == .env$sci)
       tl <- trophic$trophic_level[trophic$scientific_name == sci]
-      assess_group_stock(
-        land_c, sci, gp,
-        min_measured = min_measured,
-        production = production,
-        trophic_level = if (length(tl) > 0) tl[[1]] else NA_real_
-      ) |>
-        dplyr::mutate(country = .env$country, .before = 1)
+      tl <- if (length(tl) > 0) tl[[1]] else NA_real_
+      read <- function(land, g) {
+        assess_group_stock(
+          land, sci, gp,
+          min_measured = min_measured,
+          production = production,
+          trophic_level = tl
+        ) |>
+          dplyr::mutate(country = .env$country, gear = g, .before = 1)
+      }
+      gears <- if (isTRUE(by_gear)) {
+        .gears_with_fish(land_c, sci, min_fish = min_gear_fish)
+      } else {
+        character(0)
+      }
+      dplyr::bind_rows(
+        read(land_c, "all"),
+        purrr::map_dfr(gears, function(g) read(dplyr::filter(land_c, .data$gear == g), g))
+      )
     }) |>
       dplyr::left_join(
         cc |> dplyr::select("scientific_name", "catch_taxon", "rank", "rank_basis"),

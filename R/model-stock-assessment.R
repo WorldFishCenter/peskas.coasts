@@ -243,13 +243,7 @@ select_priority_species <- function(
   measured <- sp |>
     dplyr::filter(!is.na(.data$length_cm), .data$length_cm > 0)
 
-  n_fish <- if ("n_catch" %in% names(measured)) {
-    n <- suppressWarnings(as.integer(measured$n_catch))
-    dplyr::if_else(is.na(n) | n < 1L, 1L, n)
-  } else {
-    rep(1L, nrow(measured))
-  }
-  lengths <- rep(measured$length_cm, n_fish)
+  lengths <- rep(measured$length_cm, .n_fish(measured))
 
   coverage <- tibble::tibble(
     scientific_name = scientific_name,
@@ -728,11 +722,15 @@ assess_species_stock <- function(
     e_x = runs$production$e_x %||% NA_real_
   )
 
-  # Why the quality flag is what it is, and the single most useful next step.
+  # Which gears produced the sample (dome-selective traps / gill nets truncate
+  # the large fish), why the quality flag is what it is, and the single most
+  # useful next step.
+  gear_prof <- .gear_profile(landings, scientific_name)
   reasons <- .quality_reasons(cov$coverage, priors$linf, ci_width)
   advice <- .stock_advice(
     length(lengths),
     reasons = reasons,
+    gear_profile = gear_prof,
     n_classes = cov$coverage$n_length_classes,
     consensus = cons$consensus,
     misid = mix$misid_flag,
@@ -748,6 +746,11 @@ assess_species_stock <- function(
       quality = .env$flag,
       quality_reasons = .env$reasons,
       advice = .env$advice,
+      size_reach = cov$coverage$l_99 / priors$linf,
+      main_gear = gear_prof$main_gear,
+      main_gear_share = gear_prof$main_gear_share,
+      selective_gear_share = gear_prof$selective_gear_share,
+      selectivity_flag = gear_prof$selectivity_flag,
       consensus = cons$consensus,
       methods_agree = cons$agree,
       n_concern = cons$n_concern,
@@ -790,12 +793,21 @@ assess_species_stock <- function(
 #'   of production by trophic level) to species and group rows, plus each
 #'   taxon's `catch_share` of sampled catch. See [assess_production()].
 #'   Default `TRUE`.
+#' @param by_gear Logical. Also assess each taxon separately for every gear
+#'   with at least `min_gear_fish` measured fish (when two or more gears
+#'   qualify), and mark the `reference_gear`: the gear whose catch reaches
+#'   closest to Linf, least distorted by gear selectivity. Robustness runs on
+#'   the pooled read only. Pooled rows carry `gear = "all"`. Default `FALSE`.
+#' @param min_gear_fish Minimum measured fish for a per-gear read. Default 100.
 #' @param group_layer Logical. Also assess coarse (genus/family) taxa with the
 #'   group-level layer and append them to the output. Default `TRUE`.
 #' @param n_groups Integer. Coarse taxa to assess per country. Default 15.
 #' @param fao_areas Named list mapping country key to FAO area codes for the
 #'   regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
 #'   uses a built-in WIO/Pacific default.
+#' @param upload Logical. Upload the versioned parquet to cloud storage.
+#'   Default `TRUE` (the pipeline); set `FALSE` for local analysis runs so a
+#'   network or credentials hiccup at the end cannot discard the results.
 #' @param log_threshold The logging threshold. Default `logger::DEBUG`.
 #' @param package Name of the package whose `inst/conf.yml` to read. Default
 #'   `"coasts"`.
@@ -813,9 +825,12 @@ run_stock_assessment <- function(
   lbb_engine = NULL,
   robustness = FALSE,
   production = TRUE,
+  by_gear = FALSE,
+  min_gear_fish = 100L,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
+  upload = TRUE,
   log_threshold = logger::DEBUG,
   package = "coasts"
 ) {
@@ -916,6 +931,35 @@ run_stock_assessment <- function(
         dplyr::mutate(country = .env$country, .before = 1)
     }
   ) |>
+    dplyr::mutate(gear = "all", .after = "country")
+
+  # Per-gear reads where at least two gears each have enough measured fish.
+  if (isTRUE(by_gear)) {
+    gear_rows <- purrr::pmap_dfr(
+      list(priority$country, priority$scientific_name),
+      function(country, sci) {
+        land_c <- dplyr::filter(landings, .data$country == .env$country)
+        gears <- .gears_with_fish(land_c, sci, min_fish = min_gear_fish)
+        purrr::map_dfr(gears, function(g) {
+          logger::log_info("Per-gear read: {sci} | {g}")
+          assess_species_stock(
+            landings = dplyr::filter(land_c, .data$gear == .env$g),
+            scientific_name = sci,
+            priors = dplyr::filter(priors, .data$scientific_name == .env$sci),
+            methods = methods,
+            lbb_engine = lbb_engine,
+            robustness = FALSE,
+            production = production,
+            trophic_level = tl_of(sci)
+          ) |>
+            dplyr::mutate(country = .env$country, gear = .env$g, .before = 1)
+        })
+      }
+    )
+    assessments <- dplyr::bind_rows(assessments, gear_rows)
+  }
+
+  assessments <- assessments |>
     dplyr::left_join(
       priority |>
         dplyr::select("country", "scientific_name", "catch_taxon", "rank",
@@ -948,7 +992,9 @@ run_stock_assessment <- function(
         n_groups = n_groups,
         fao_areas = fao_areas,
         version = resolve_db_version(conf),
-        production = production
+        production = production,
+        by_gear = by_gear,
+        min_gear_fish = min_gear_fish
       ),
       error = function(e) {
         logger::log_warn("Group layer failed: {conditionMessage(e)}")
@@ -973,14 +1019,19 @@ run_stock_assessment <- function(
       by = c("country", "scientific_name")
     )
   }
+  if (isTRUE(by_gear)) {
+    results <- .mark_reference_gear(results)
+  }
 
   prefix <- conf$stock$assessment$file_prefix %||% "stock-assessment"
-  upload_parquet_to_cloud(
-    data = results,
-    prefix = prefix,
-    provider = conf$storage$google$key,
-    options = conf$storage$google$options
-  )
+  if (isTRUE(upload)) {
+    upload_parquet_to_cloud(
+      data = results,
+      prefix = prefix,
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options
+    )
+  }
 
   logger::log_info("=== Stock assessment pipeline complete ===")
   invisible(results)

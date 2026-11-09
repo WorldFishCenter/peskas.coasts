@@ -11,7 +11,9 @@ assess_group_layer(
   min_measured = 100L,
   fao_areas = NULL,
   version = "latest",
-  production = TRUE
+  production = TRUE,
+  by_gear = FALSE,
+  min_gear_fish = 100L
 )
 }
 \arguments{
@@ -32,6 +34,11 @@ from the list skip the regional filter.}
 
 \item{production}{Logical. Add the production-based exploitation read,
 with regional trophic levels from [get_trophic_levels()]. Default `TRUE`.}
+
+\item{by_gear}{Logical. Add per-gear reads where at least two gears each
+have `min_gear_fish` measured fish. See [run_stock_assessment()].}
+
+\item{min_gear_fish}{Minimum measured fish for a per-gear read.}
 }
 \value{
 A tibble of per-taxon group assessments with a `country` column.
