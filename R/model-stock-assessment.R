@@ -81,6 +81,71 @@
   grepl("^[A-Z][a-z]+ [a-z]+$", x) & !grepl(" spp?$", x)
 }
 
+#' Which Taxa Can Take Teleost Length-Based Methods?
+#'
+#' LBB, the Froese indicators and the production layer assume bony-fish
+#' (von Bertalanffy) growth. Sharks, rays and chimaeras (FishBase classes in
+#' `.NON_TELEOST_CLASSES`) and all SeaLifeBase taxa (cephalopods, crustaceans,
+#' molluscs) are screened out. Coarse names are eligible when at least half of
+#' their member species are bony fish. Names FishBase cannot resolve are kept
+#' (they drop out later for lack of priors), as are all names if FishBase cannot
+#' be read.
+#'
+#' @param scientific_names Character vector of taxon names.
+#' @param version FishBase / SeaLifeBase release. See [resolve_db_version()].
+#'
+#' @return A tibble: `scientific_name`, `eligible` (logical).
+#'
+#' @keywords internal
+.length_method_eligible <- function(scientific_names, version = "latest") {
+  nms <- unique(stats::na.omit(scientific_names))
+  out <- tibble::tibble(scientific_name = nms)
+  if (length(nms) == 0) {
+    return(dplyr::mutate(out, eligible = logical()))
+  }
+
+  shares <- tryCatch(
+    {
+      mem <- expand_taxonomic_info(
+        data.frame(alpha3_code = NA_character_, scientific_name = nms),
+        strip_parentheticals = TRUE, version = version
+      )
+      cls <- get_taxa_backbone(version = version) |>
+        dplyr::select("SpecCode", "server", "Class") |>
+        dplyr::distinct()
+      mem |>
+        dplyr::left_join(cls, by = c("SpecCode", "server")) |>
+        dplyr::mutate(
+          bony = .data$server == "fishbase" & !(.data$Class %in% .NON_TELEOST_CLASSES)
+        ) |>
+        dplyr::group_by(scientific_name = .data$original_name) |>
+        dplyr::summarise(eligible = mean(.data$bony, na.rm = TRUE) >= 0.5, .groups = "drop")
+    },
+    error = function(e) {
+      logger::log_warn("Taxon screening skipped: {conditionMessage(e)}")
+      tibble::tibble(scientific_name = character(), eligible = logical())
+    }
+  )
+
+  out <- out |>
+    dplyr::left_join(shares, by = "scientific_name") |>
+    dplyr::mutate(eligible = dplyr::coalesce(.data$eligible, TRUE))
+  dropped <- out$scientific_name[!out$eligible]
+  if (length(dropped) > 0) {
+    logger::log_info(
+      "Excluded from length methods (not bony fish): {paste(dropped, collapse = ', ')}."
+    )
+  }
+  out
+}
+
+#' FishBase Classes Outside Teleost Length Methods
+#' @keywords internal
+.NON_TELEOST_CLASSES <- c(
+  "Elasmobranchii", "Holocephali", "Chondrichthyes",
+  "Myxini", "Petromyzonti", "Cephalaspidomorphi"
+)
+
 #' Select the Top Priority Species per Country
 #'
 #' Picks the `n_species` most economically important species in each country,
@@ -167,7 +232,8 @@ select_priority_species <- function(
 #'
 #' @return A list with `lengths` (numeric vector of measured lengths) and
 #'   `coverage` (a one-row tibble: `n_records`, `n_measured`, `frac_measured`,
-#'   `n_trips_measured`, `l_min`, `l_max`, `l_mean`).
+#'   `n_trips_measured`, `l_min`, `l_max`, `l_99`, `l_mean`,
+#'   `n_length_classes`).
 #'
 #' @keywords internal
 .length_coverage <- function(landings, scientific_name) {
@@ -193,7 +259,13 @@ select_priority_species <- function(
     n_trips_measured = dplyr::n_distinct(measured$trip_id),
     l_min = if (length(lengths) > 0) min(lengths) else NA_real_,
     l_max = if (length(lengths) > 0) max(lengths) else NA_real_,
-    l_mean = if (length(lengths) > 0) mean(lengths) else NA_real_
+    l_99 = if (length(lengths) > 0) {
+      as.numeric(stats::quantile(lengths, 0.99, type = 7))
+    } else {
+      NA_real_
+    },
+    l_mean = if (length(lengths) > 0) mean(lengths) else NA_real_,
+    n_length_classes = dplyr::n_distinct(round(lengths, 1))
   )
 
   list(lengths = lengths, coverage = coverage)
@@ -524,8 +596,11 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
     return("unknown")
   }
 
+  # Size reach uses the 99th percentile, not the maximum: one stray large fish
+  # (or a typo) must not make a truncated sample look complete.
+  l_top <- .col_or(coverage, "l_99", .col_or(coverage, "l_max"))
   reach <- if (!is.na(priors$linf) && priors$linf > 0) {
-    coverage$l_max / priors$linf
+    l_top / priors$linf
   } else {
     NA_real_
   }
@@ -536,6 +611,7 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
     (isTRUE(coverage$frac_measured >= 0.1))
   score <- score + (isTRUE(reach >= 0.8))
   score <- score - (isTRUE(ci_width > 0.5))
+  score <- score - (isTRUE(.col_or(coverage, "n_length_classes") < 6))
 
   if (score >= 4) {
     "pass"
@@ -556,7 +632,8 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
 #' @param scientific_name A single scientific name.
 #' @param priors A one-row life-history tibble for that species.
 #' @param methods Character vector of methods to run; any of `"lbi"`,
-#'   `"lbspr"`, `"lbb"`. Default all three.
+#'   `"lbspr"`, `"lbb"`. Default `c("lbi", "lbb")`: LBSPR is opt-in until its
+#'   fit stops failing on the Peskas length data.
 #' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
 #' @param robustness Logical. Attach the LBB prior-robustness band. Default
 #'   `FALSE`. See [lbb_robustness()].
@@ -576,7 +653,7 @@ assess_species_stock <- function(
   landings,
   scientific_name,
   priors,
-  methods = c("lbi", "lbspr", "lbb"),
+  methods = c("lbi", "lbb"),
   lbb_engine = NULL,
   robustness = FALSE,
   production = TRUE,
@@ -600,7 +677,8 @@ assess_species_stock <- function(
       method = methods,
       n_measured = length(lengths),
       frac_measured = cov$coverage$frac_measured,
-      quality = "unknown"
+      quality = "unknown",
+      advice = .stock_advice(length(lengths))
     ))
   }
 
@@ -623,13 +701,6 @@ assess_species_stock <- function(
   # method row for the species.
   mix <- flag_length_mixture(lengths, priors)
 
-  # Ensemble consensus: do LBB (biomass/pressure) and the Froese indicators
-  # (size structure) agree on concern vs healthy?
-  cons <- .ensemble_consensus(
-    runs$lbb$bb0 %||% NA_real_, runs$lbb$f_m %||% NA_real_,
-    runs$lbi$p_mature %||% NA_real_, runs$lbi$lmean_lopt %||% NA_real_
-  )
-
   # Optional prior-robustness band on the LBB estimate (9x JAGS per species).
   rb <- if (isTRUE(robustness) && "lbb" %in% methods) {
     lbb_robustness(lengths, priors, lbb_engine)
@@ -649,14 +720,38 @@ assess_species_stock <- function(
     )
   }
 
+  # Ensemble consensus across LBB (biomass/pressure), the Froese indicators
+  # (size structure) and the production layer (share of production taken).
+  cons <- .ensemble_consensus(
+    runs$lbb$bb0 %||% NA_real_, runs$lbb$f_m %||% NA_real_,
+    runs$lbi$p_mature %||% NA_real_, runs$lbi$lmean_lopt %||% NA_real_,
+    e_x = runs$production$e_x %||% NA_real_
+  )
+
+  # Why the quality flag is what it is, and the single most useful next step.
+  reasons <- .quality_reasons(cov$coverage, priors$linf, ci_width)
+  advice <- .stock_advice(
+    length(lengths),
+    reasons = reasons,
+    n_classes = cov$coverage$n_length_classes,
+    consensus = cons$consensus,
+    misid = mix$misid_flag,
+    robust_flag = rb$robust_flag %||% NA_character_,
+    production_band = runs$production$production_band %||% NA_character_
+  )
+
   purrr::list_rbind(runs) |>
     dplyr::mutate(
       scientific_name = .env$scientific_name,
       n_measured = length(lengths),
       frac_measured = cov$coverage$frac_measured,
       quality = .env$flag,
+      quality_reasons = .env$reasons,
+      advice = .env$advice,
       consensus = cons$consensus,
       methods_agree = cons$agree,
+      n_concern = cons$n_concern,
+      n_methods = cons$n_methods,
       bb0_lo = if (!is.null(rb)) rb$bb0_lo else NA_real_,
       bb0_hi = if (!is.null(rb)) rb$bb0_hi else NA_real_,
       fm_lo = if (!is.null(rb)) rb$fm_lo else NA_real_,
@@ -683,6 +778,7 @@ assess_species_stock <- function(
 #' @param countries Character vector of country keys under `conf$api$trips`.
 #'   Default Kenya, Mozambique, Zanzibar, Timor-Leste.
 #' @param methods Character vector of methods (`"lbi"`, `"lbspr"`, `"lbb"`).
+#'   Default `c("lbi", "lbb")` (LBSPR opt-in).
 #' @param start_date Earliest landing date to include, aligning with the
 #'   PDS-covered window. Default `"2024-01-01"`.
 #' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
@@ -712,7 +808,7 @@ assess_species_stock <- function(
 run_stock_assessment <- function(
   n_species = 5L,
   countries = c("kenya", "mozambique", "zanzibar", "timor"),
-  methods = c("lbi", "lbspr", "lbb"),
+  methods = c("lbi", "lbb"),
   start_date = "2024-01-01",
   lbb_engine = NULL,
   robustness = FALSE,
@@ -768,6 +864,13 @@ run_stock_assessment <- function(
   # FishBase growth estimate — so the length-based track excludes invertebrates
   # (crabs, lobsters, octopus) that need molt/carapace methods, not VBGF LBB.
   candidates <- select_priority_species(landings, n_species = n_species * 5L)
+  # Teleost growth/length methods are not valid for sharks, rays or
+  # invertebrates: screen them out before ranking.
+  eligible <- .length_method_eligible(
+    candidates$scientific_name, version = resolve_db_version(conf)
+  )
+  candidates <- candidates |>
+    dplyr::semi_join(dplyr::filter(eligible, .data$eligible), by = "scientific_name")
   priors <- get_life_history_priors(candidates$scientific_name)
 
   priority <- candidates |>

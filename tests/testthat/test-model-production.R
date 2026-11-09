@@ -95,3 +95,44 @@ test_that(".m_then2015 matches the published growth-based estimator", {
   expect_equal(.m_then2015(0.34, 52), 4.118 * 0.34^0.73 * 52^-0.33)
   expect_gt(.m_then2015(0.5, 30), .m_then2015(0.2, 80))
 })
+
+test_that(".ensemble_consensus uses up to three legs", {
+  expect_equal(.ensemble_consensus(0.4, 2, 0.2, 0.7, e_x = 1.5)$consensus, "concern (agree)")
+  expect_equal(.ensemble_consensus(0.8, 0.5, 0.8, 1.0, e_x = 0.5)$consensus, "healthy (agree)")
+  mixed <- .ensemble_consensus(0.8, 0.5, 0.8, 1.0, e_x = 2)
+  expect_equal(mixed$consensus, "mixed (methods disagree)")
+  expect_equal(c(mixed$n_concern, mixed$n_methods), c(1L, 3L))
+  expect_equal(.ensemble_consensus(NA, NA, 0.2, 0.7)$consensus, "concern (1 method)")
+  expect_equal(.ensemble_consensus(NA, NA, NA, NA)$consensus, "unknown")
+})
+
+test_that(".stock_advice gives the highest-priority suggestion", {
+  expect_match(.stock_advice(9), "Not assessable")
+  expect_match(.stock_advice(300, misid = TRUE), "species identification")
+  expect_match(.stock_advice(60), "Measure more fish")
+  expect_match(.stock_advice(300, reasons = "no fish near maximum size (largest < 80% of Linf)"),
+    "Large fish")
+  expect_match(.stock_advice(300, robust_flag = "sensitive"), "Borderline")
+  expect_match(.stock_advice(300, production_band = "straddles"), "Borderline")
+  expect_match(.stock_advice(300, coarse_low_confidence = TRUE), "species level")
+  expect_match(.stock_advice(300, robust_flag = "robust", production_band = "clear"), "Reliable")
+})
+
+test_that(".quality_reasons explains a weak sample", {
+  cov <- tibble::tibble(n_measured = 50, frac_measured = 0.05, l_max = 20)
+  r <- .quality_reasons(cov, linf = 40, ci_width = 0.7)
+  expect_match(r, "few fish")
+  expect_match(r, "10% of records")
+  expect_match(r, "maximum size")
+  expect_match(r, "credible interval")
+  expect_equal(.quality_reasons(tibble::tibble(n_measured = 500, frac_measured = 0.5, l_max = 38), 40), "")
+})
+
+test_that(".stock_advice flags coarse length classes and method disagreement", {
+  expect_match(.stock_advice(1000, n_classes = 4), "nearest cm")
+  expect_match(.stock_advice(300, n_classes = 30, consensus = "mixed (methods disagree)"), "Borderline")
+  cov <- tibble::tibble(n_measured = 500, frac_measured = 0.5, l_max = 85, l_99 = 32, n_length_classes = 4)
+  r <- .quality_reasons(cov, linf = 54.9)
+  expect_match(r, "4 length classes")
+  expect_match(r, "maximum size")
+})

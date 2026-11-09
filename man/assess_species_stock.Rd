@@ -8,7 +8,7 @@ assess_species_stock(
   landings,
   scientific_name,
   priors,
-  methods = c("lbi", "lbspr", "lbb"),
+  methods = c("lbi", "lbb"),
   lbb_engine = NULL,
   robustness = FALSE,
   production = TRUE,
@@ -23,7 +23,8 @@ assess_species_stock(
 \item{priors}{A one-row life-history tibble for that species.}
 
 \item{methods}{Character vector of methods to run; any of `"lbi"`,
-`"lbspr"`, `"lbb"`. Default all three.}
+`"lbspr"`, `"lbb"`. Default `c("lbi", "lbb")`: LBSPR is opt-in until its
+fit stops failing on the Peskas length data.}
 
 \item{lbb_engine}{Optional LBB fitting routine (see [assess_stock_lbb()]).}
 

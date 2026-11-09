@@ -99,42 +99,49 @@ lbb_robustness <- function(
   )
 }
 
-#' Ensemble Consensus Across LBB and the Froese Length Indicators
+#' Ensemble Consensus Across the Length-Based Methods
 #'
-#' Collapses the two length-based methods to a single concern/healthy verdict
-#' and reports whether they agree. LBB speaks to biomass and fishing pressure
-#' (B/B0, F/M); the Froese indicators speak to size structure (share mature,
-#' mean length vs optimal). Agreement raises confidence; disagreement is itself
-#' a useful flag.
+#' Collapses up to three independent reads to a concern/healthy verdict and
+#' reports whether they agree: LBB (biomass and pressure: B/B0 < 0.5 or
+#' F/M > 1), the Froese indicators (size structure: share mature < 0.5 or
+#' Lmean/Lopt < 0.9) and the production layer (exploitation: E/x > 1, i.e.
+#' fishing takes more than its sustainable share of production). Agreement
+#' raises confidence; disagreement is itself a useful flag.
 #'
 #' @param bb0,fm LBB relative biomass and F/M.
 #' @param p_mature,lmean_lopt Froese indicators.
+#' @param e_x Production-layer E/x. Default `NA` (leg not used).
 #'
-#' @return A list: `consensus` (character) and `agree` (logical or `NA`).
+#' @return A list: `consensus` (character), `agree` (logical or `NA`),
+#'   `n_concern` and `n_methods` (integers).
 #'
 #' @keywords internal
-.ensemble_consensus <- function(bb0, fm, p_mature, lmean_lopt) {
-  lbb_known <- !is.na(bb0) || !is.na(fm)
-  lbi_known <- !is.na(p_mature) || !is.na(lmean_lopt)
-  lbb_concern <- isTRUE(bb0 < 0.5) || isTRUE(fm > 1)
-  lbi_concern <- isTRUE(p_mature < 0.5) || isTRUE(lmean_lopt < 0.9)
+.ensemble_consensus <- function(bb0, fm, p_mature, lmean_lopt, e_x = NA_real_) {
+  known <- c(
+    lbb = !is.na(bb0) || !is.na(fm),
+    lbi = !is.na(p_mature) || !is.na(lmean_lopt),
+    production = !is.na(e_x)
+  )
+  concern <- c(
+    lbb = isTRUE(bb0 < 0.5) || isTRUE(fm > 1),
+    lbi = isTRUE(p_mature < 0.5) || isTRUE(lmean_lopt < 0.9),
+    production = isTRUE(e_x > 1)
+  )[known]
+  n <- length(concern)
 
-  if (!lbb_known && !lbi_known) {
-    return(list(consensus = "unknown", agree = NA))
-  }
-  if (!lbb_known || !lbi_known) {
-    v <- if (lbb_known) lbb_concern else lbi_concern
-    return(list(
-      consensus = if (v) "concern (1 method)" else "healthy (1 method)",
-      agree = NA
-    ))
-  }
-  if (lbb_concern == lbi_concern) {
+  verdict <- if (n == 0) {
+    list(consensus = "unknown", agree = NA)
+  } else if (n == 1) {
     list(
-      consensus = if (lbb_concern) "concern (agree)" else "healthy (agree)",
-      agree = TRUE
+      consensus = if (concern) "concern (1 method)" else "healthy (1 method)",
+      agree = NA
     )
+  } else if (all(concern)) {
+    list(consensus = "concern (agree)", agree = TRUE)
+  } else if (!any(concern)) {
+    list(consensus = "healthy (agree)", agree = TRUE)
   } else {
     list(consensus = "mixed (methods disagree)", agree = FALSE)
   }
+  c(verdict, list(n_concern = as.integer(sum(concern)), n_methods = as.integer(n)))
 }

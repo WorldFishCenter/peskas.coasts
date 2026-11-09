@@ -298,7 +298,8 @@ assess_group_stock <- function(
   linf_fb <- if (nrow(group_prior) > 0) group_prior$linf else NA_real_
   if (nrow(group_prior) == 0 || is.na(linf_fb) || length(lengths) < min_measured) {
     return(dplyr::mutate(
-      base, quality = "unknown", group_status = NA_character_, prior_note = NA_character_
+      base, quality = "unknown", group_status = NA_character_, prior_note = NA_character_,
+      advice = .stock_advice(length(lengths), min_n = min_measured)
     ))
   }
 
@@ -352,7 +353,26 @@ assess_group_stock <- function(
       dplyr::select(-"method")
     out <- dplyr::bind_cols(out, prod)
   }
-  out
+
+  # Consensus of the two group-level legs, reasons for the flag and advice.
+  e_x <- if ("e_x" %in% names(out)) out$e_x else NA_real_
+  band <- if ("production_band" %in% names(out)) out$production_band else NA_character_
+  cons <- .ensemble_consensus(NA_real_, NA_real_, ind$p_mature, ind$lmean_lopt, e_x = e_x)
+  reasons <- .quality_reasons(cov$coverage, linf_anchored)
+  dplyr::mutate(
+    out,
+    consensus = cons$consensus,
+    methods_agree = cons$agree,
+    n_concern = cons$n_concern,
+    n_methods = cons$n_methods,
+    quality_reasons = reasons,
+    advice = .stock_advice(
+      length(lengths), reasons = reasons, production_band = band,
+      n_classes = cov$coverage$n_length_classes, consensus = cons$consensus,
+      coarse_low_confidence = identical(confidence, "low"),
+      min_n = min_measured
+    )
+  )
 }
 
 #' Run the Group-Level Layer Across Countries
@@ -387,12 +407,17 @@ assess_group_layer <- function(
   version = "latest",
   production = TRUE
 ) {
-  ranked <- .species_economic_rank(landings) |>
+  pool <- .species_economic_rank(landings) |>
     dplyr::filter(
       .data$n_records >= .env$min_records,
       !.is_species_level(.data$scientific_name),
       .group_rank(.data$scientific_name) %in% c("genus", "family")
-    ) |>
+    )
+  # Rays, sharks and invertebrates (e.g. Aetobatus, Loligo, Octopodidae) are
+  # outside teleost length methods.
+  eligible <- .length_method_eligible(pool$scientific_name, version = version)
+  ranked <- pool |>
+    dplyr::semi_join(dplyr::filter(eligible, .data$eligible), by = "scientific_name") |>
     dplyr::group_by(.data$country) |>
     dplyr::slice_min(.data$rank, n = n_groups, with_ties = FALSE) |>
     dplyr::ungroup()

@@ -14,7 +14,8 @@
 \value{
 A list with `lengths` (numeric vector of measured lengths) and
   `coverage` (a one-row tibble: `n_records`, `n_measured`, `frac_measured`,
-  `n_trips_measured`, `l_min`, `l_max`, `l_mean`).
+  `n_trips_measured`, `l_min`, `l_max`, `l_99`, `l_mean`,
+  `n_length_classes`).
 }
 \description{
 Length-based methods run only on the subset of records that carry a

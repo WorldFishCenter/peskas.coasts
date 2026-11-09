@@ -97,6 +97,9 @@ model {
 #'   bins centred on the recorded class values — so 5-cm length classes are not
 #'   split into mostly empty 1-cm bins.
 #' @param n_iter,n_burn,n_chains MCMC controls.
+#' @param seed Integer seed for the JAGS random number generators (one stream
+#'   per chain, `seed + chain`), so a fit is reproducible across runs and
+#'   machines. Default 1.
 #' @param linf_sd_frac Prior SD on L-inf as a fraction of its centre. Default
 #'   0.10; the data can still pull L-inf off the FishBase value.
 #' @param bmsy_b0 Assumed Bmsy/B0 used to convert B/B0 to B/Bmsy. Default 0.5,
@@ -116,7 +119,8 @@ lbb_engine_jags <- function(
   n_burn = 3000,
   n_chains = 3,
   linf_sd_frac = 0.10,
-  bmsy_b0 = 0.5
+  bmsy_b0 = 0.5,
+  seed = 1L
 ) {
   if (!requireNamespace("rjags", quietly = TRUE)) {
     logger::log_warn("rjags/JAGS not available; skipping LBB fit.")
@@ -172,9 +176,12 @@ lbb_engine_jags <- function(
     LmidMax = occ_max + 0.5,
     Lc_lo = min(lmid), Lc_hi = mode_lc + (linf_mu - mode_lc) * 0.5
   )
-  inits <- function() {
-    list(Linf = linf_mu, MK = mk_mu, FK = 1.0, Lc = mode_lc, alpha = 0.4)
-  }
+  inits <- lapply(seq_len(n_chains), function(ch) {
+    list(
+      Linf = linf_mu, MK = mk_mu, FK = 1.0, Lc = mode_lc, alpha = 0.4,
+      .RNG.name = "base::Mersenne-Twister", .RNG.seed = as.integer(seed) + ch
+    )
+  })
 
   fit <- tryCatch(
     {

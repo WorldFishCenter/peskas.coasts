@@ -2,23 +2,27 @@
 % Please edit documentation in R/model-robustness.R
 \name{.ensemble_consensus}
 \alias{.ensemble_consensus}
-\title{Ensemble Consensus Across LBB and the Froese Length Indicators}
+\title{Ensemble Consensus Across the Length-Based Methods}
 \usage{
-.ensemble_consensus(bb0, fm, p_mature, lmean_lopt)
+.ensemble_consensus(bb0, fm, p_mature, lmean_lopt, e_x = NA_real_)
 }
 \arguments{
 \item{bb0, fm}{LBB relative biomass and F/M.}
 
 \item{p_mature, lmean_lopt}{Froese indicators.}
+
+\item{e_x}{Production-layer E/x. Default `NA` (leg not used).}
 }
 \value{
-A list: `consensus` (character) and `agree` (logical or `NA`).
+A list: `consensus` (character), `agree` (logical or `NA`),
+  `n_concern` and `n_methods` (integers).
 }
 \description{
-Collapses the two length-based methods to a single concern/healthy verdict
-and reports whether they agree. LBB speaks to biomass and fishing pressure
-(B/B0, F/M); the Froese indicators speak to size structure (share mature,
-mean length vs optimal). Agreement raises confidence; disagreement is itself
-a useful flag.
+Collapses up to three independent reads to a concern/healthy verdict and
+reports whether they agree: LBB (biomass and pressure: B/B0 < 0.5 or
+F/M > 1), the Froese indicators (size structure: share mature < 0.5 or
+Lmean/Lopt < 0.9) and the production layer (exploitation: E/x > 1, i.e.
+fishing takes more than its sustainable share of production). Agreement
+raises confidence; disagreement is itself a useful flag.
 }
 \keyword{internal}

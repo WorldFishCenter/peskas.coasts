@@ -12,7 +12,8 @@ lbb_engine_jags(
   n_burn = 3000,
   n_chains = 3,
   linf_sd_frac = 0.1,
-  bmsy_b0 = 0.5
+  bmsy_b0 = 0.5,
+  seed = 1L
 )
 }
 \arguments{
@@ -34,6 +35,10 @@ split into mostly empty 1-cm bins.}
 
 \item{bmsy_b0}{Assumed Bmsy/B0 used to convert B/B0 to B/Bmsy. Default 0.5,
 the LBB convention.}
+
+\item{seed}{Integer seed for the JAGS random number generators (one stream
+per chain, `seed + chain`), so a fit is reproducible across runs and
+machines. Default 1.}
 }
 \value{
 A list with `bb0`, `bbmsy`, `fm`, `lc_lopt`, `ci_width` (width of the
