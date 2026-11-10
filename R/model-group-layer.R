@@ -1,4 +1,3 @@
-# Generated with Claude (Cowork) — review before committing.
 # Group-level assessment layer for the stock-assessment framework.
 #
 # The per-species LBB track only reaches taxa resolved to a binomial with a
@@ -12,7 +11,7 @@
 # mean-length-to-optimal) plus a coarse status and a confidence grade — not a
 # single-species biomass estimate, which a mixed aggregate cannot support.
 #
-# Prior rule ("anchor to the catch", chosen 2026-10-15): a group prior is a
+# Prior rule ("anchor to the catch"): a group prior is a
 # median over the taxon's regional member species, but the member pool can miss
 # the species actually fished. We therefore floor Linf at the observed catch
 # (L99 / 0.95) so it can never sit below the fish we measured (fixes families
@@ -119,7 +118,7 @@ get_group_priors <- function(
     expand_taxonomic_info(
       data = assessable |>
         dplyr::transmute(
-          alpha3_code = .data$catch_taxon %||% NA_character_,
+          alpha3_code = .data$catch_taxon,
           scientific_name = .data$scientific_name
         ),
       strip_parentheticals = TRUE,
@@ -166,7 +165,9 @@ get_group_priors <- function(
     return(tibble::tibble())
   }
 
-  sp_priors <- get_life_history_priors(unique(mem$species), default_mk = default_mk)
+  sp_priors <- get_life_history_priors(
+    unique(mem$species), default_mk = default_mk, version = version
+  )
 
   grouped <- mem |>
     dplyr::left_join(
@@ -174,10 +175,8 @@ get_group_priors <- function(
       by = c("species" = "scientific_name")
     ) |>
     dplyr::group_by(.data$scientific_name) |>
-    # Member counts and spread are computed BEFORE `linf` is overwritten by its
-    # median: summarise() evaluates sequentially, so referring to `linf` after
-    # `linf = median(...)` sees the scalar and always gave n_species = 1 and
-    # linf_cv = NA (which also mis-graded every genus as "high" confidence).
+    # Count members and spread before `linf` is replaced by its median:
+    # summarise() evaluates in order, so later lines would see the scalar.
     dplyr::summarise(
       n_species = sum(!is.na(.data$linf)),
       linf_cv = if (sum(!is.na(.data$linf)) > 1) {

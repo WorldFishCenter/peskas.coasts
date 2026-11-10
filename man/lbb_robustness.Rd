@@ -16,38 +16,38 @@ lbb_robustness(
 \arguments{
 \item{lengths}{Numeric vector of measured lengths (cm), already cleaned.}
 
-\item{priors}{A one-row life-history tibble (`linf`, `mk`, `lm`).}
+\item{priors}{A one-row life-history tibble (\code{linf}, \code{mk}, \code{lm}).}
 
-\item{lbb_engine}{An LBB fitting routine (see [assess_stock_lbb()]). Required.}
+\item{lbb_engine}{An LBB fitting routine (see \code{\link[=assess_stock_lbb]{assess_stock_lbb()}}). Required.}
 
 \item{linf_mult}{Multipliers applied to the L-inf prior centre. Default
-`c(0.85, 1, 1.15)`.}
+\code{c(0.85, 1, 1.15)}.}
 
 \item{mk_mult}{Multipliers applied to the M/K prior centre. Default
-`c(0.75, 1, 1.25)`.}
+\code{c(0.75, 1, 1.25)}.}
 
-\item{catch_linf}{Logical. Add the catch-implied L-inf (`L99 / 0.95`) to
-the grid when it lies outside the multiplier range. Default `TRUE`.}
+\item{catch_linf}{Logical. Add the catch-implied L-inf (\code{L99 / 0.95}) to
+the grid when it lies outside the multiplier range. Default \code{TRUE}.}
 }
 \value{
-A one-row tibble: `bb0_center`, `bb0_lo`, `bb0_hi`, `fm_center`,
-  `fm_lo`, `fm_hi`, `n_fits`, `status_set` (distinct biomass classes seen),
-  `robust_flag`, `linf_catch` (the catch-implied L-inf) and `linf_ratio`
-  (FishBase L-inf / catch-implied L-inf; well above 1 means the prior sits far
-  above anything landed).
+A one-row tibble: \code{bb0_center}, \code{bb0_lo}, \code{bb0_hi}, \code{fm_center},
+\code{fm_lo}, \code{fm_hi}, \code{n_fits}, \code{status_set} (distinct biomass classes seen),
+\code{robust_flag}, \code{linf_catch} (the catch-implied L-inf) and \code{linf_ratio}
+(FishBase L-inf / catch-implied L-inf; well above 1 means the prior sits far
+above anything landed).
 }
 \description{
 Re-fits the LBB engine across a grid of L-inf and M/K priors and summarises
 how much the estimate moves. Reports the central estimate, the B/B0 and F/M
-bands (min–max across the grid), and a `robust_flag`: `"robust"` when the
+bands (min–max across the grid), and a \code{robust_flag}: \code{"robust"} when the
 biomass status class and the over/under-fishing verdict are unchanged across
-every grid point, `"sensitive"` when either flips.
+every grid point, \code{"sensitive"} when either flips.
 }
 \details{
-The L-inf axis spans the FishBase centre +/- 15\% and, when it falls
-outside that range, the catch-implied value `L99 / 0.95`. FishBase L-inf
+The L-inf axis spans the FishBase centre +/- 15\\% and, when it falls
+outside that range, the catch-implied value \code{L99 / 0.95}. FishBase L-inf
 values for these stocks often sit far above the largest fish ever landed
-(Kenya Siganus sutor 54.9 cm vs L99 32.7 cm), so a +/- 15\% band alone
+(Kenya Siganus sutor 54.9 cm vs L99 32.7 cm), so a +/- 15\\% band alone
 understates the real prior uncertainty; the catch-implied value is the
 opposite (optimistic, if the gear truncates large fish) bound.
 }

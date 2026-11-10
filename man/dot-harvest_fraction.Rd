@@ -14,12 +14,12 @@
 \item{tl_top}{Trophic level from which a taxon counts as a top predator.}
 }
 \value{
-Numeric vector of `x`.
+Numeric vector of \code{x}.
 }
 \description{
-Kolding's heuristic exploitation fraction `x`: about 0.25 of production for
+Kolding's heuristic exploitation fraction \code{x}: about 0.25 of production for
 lower trophic levels (the rest feeds natural predators) and 0.5 for top
-predators. When the trophic level is unknown the conservative `x_low` is
+predators. When the trophic level is unknown the conservative \code{x_low} is
 used.
 }
 \keyword{internal}

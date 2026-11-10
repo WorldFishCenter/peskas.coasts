@@ -1,4 +1,3 @@
-# Generated with Claude (Cowork) — review before committing.
 # Length-Based Bayesian (LBB, Froese et al. 2018) fitting engine for the
 # stock-assessment framework. Plugs into assess_stock_lbb() via the
 # `lbb_engine` hook: a function of (lengths, priors) returning the list that

@@ -17,7 +17,7 @@ assess_group_layer(
 )
 }
 \arguments{
-\item{landings}{A landing-feed tibble with a `country` column.}
+\item{landings}{A landing-feed tibble with a \code{country} column.}
 
 \item{n_groups}{Coarse taxa to assess per country. Default 15.}
 
@@ -27,26 +27,26 @@ assess_group_layer(
 Default 100.}
 
 \item{fao_areas}{Named list mapping country key to an integer vector of FAO
-area codes (e.g. `list(kenya = c(51, 57), timor = 71)`). Countries absent
+area codes (e.g. \code{list(kenya = c(51, 57), timor = 71)}). Countries absent
 from the list skip the regional filter.}
 
-\item{version}{FishBase / SeaLifeBase release. See [resolve_db_version()].}
+\item{version}{FishBase / SeaLifeBase release. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 
 \item{production}{Logical. Add the production-based exploitation read,
-with regional trophic levels from [get_trophic_levels()]. Default `TRUE`.}
+with regional trophic levels from \code{\link[=get_trophic_levels]{get_trophic_levels()}}. Default \code{TRUE}.}
 
 \item{by_gear}{Logical. Add per-gear reads where at least two gears each
-have `min_gear_fish` measured fish. See [run_stock_assessment()].}
+have \code{min_gear_fish} measured fish. See \code{\link[=run_stock_assessment]{run_stock_assessment()}}.}
 
 \item{min_gear_fish}{Minimum measured fish for a per-gear read.}
 }
 \value{
-A tibble of per-taxon group assessments with a `country` column.
+A tibble of per-taxon group assessments with a \code{country} column.
 }
 \description{
 For each country, ranks the coarse (non-species) taxa by economic
 importance, builds regional group priors, and assesses the top
-`n_groups` of them. Intended to be called by [run_stock_assessment()] after
+\code{n_groups} of them. Intended to be called by \code{\link[=run_stock_assessment]{run_stock_assessment()}} after
 the per-species track, but usable standalone.
 }
 \keyword{modeling}

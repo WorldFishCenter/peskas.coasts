@@ -12,32 +12,32 @@ get_group_priors(
 )
 }
 \arguments{
-\item{coarse_taxa}{A tibble with `scientific_name` and `catch_taxon` (the FAO
+\item{coarse_taxa}{A tibble with \code{scientific_name} and \code{catch_taxon} (the FAO
 3-alpha code) columns — one row per coarse taxon to prior.}
 
 \item{fao_areas}{Integer vector of FAO major fishing area codes to restrict
-members to (e.g. `c(51, 57)` for the WIO, `71` for Timor-Leste). `NULL`
+members to (e.g. \code{c(51, 57)} for the WIO, \code{71} for Timor-Leste). \code{NULL}
 skips the regional filter and aggregates over all member species, flagged
 as lower confidence.}
 
-\item{version}{FishBase / SeaLifeBase release. See [resolve_db_version()].}
+\item{version}{FishBase / SeaLifeBase release. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 
 \item{default_mk}{Fallback M/K when FishBase has none. Default 1.5.}
 }
 \value{
-A tibble, one row per input taxon: `scientific_name`, `rank`,
-  `linf`, `mk`, `lm`, `n_species`, `linf_cv`, `source`, `confidence`.
+A tibble, one row per input taxon: \code{scientific_name}, \code{rank},
+\code{linf}, \code{mk}, \code{lm}, \code{n_species}, \code{linf_cv}, \code{source}, \code{confidence}.
 }
 \description{
 For each coarse taxon (genus or family label), expands it to its member
-species via [expand_taxonomic_info()], restricts those to the requested FAO
-area(s) with [filter_by_fao_area()] (the "regional species" rule), pulls the
-per-species priors with [get_life_history_priors()], and aggregates them to a
-single representative prior (median `linf`, `mk`, `lm`). Families that resolve
-to no species fall back to [.group_fallback_species()]. The spread of member
-`linf` and the taxon's rank set a confidence grade. The returned `linf` is
+species via \code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}, restricts those to the requested FAO
+area(s) with \code{\link[=filter_by_fao_area]{filter_by_fao_area()}} (the "regional species" rule), pulls the
+per-species priors with \code{\link[=get_life_history_priors]{get_life_history_priors()}}, and aggregates them to a
+single representative prior (median \code{linf}, \code{mk}, \code{lm}). Families that resolve
+to no species fall back to \code{\link[=.group_fallback_species]{.group_fallback_species()}}. The spread of member
+\code{linf} and the taxon's rank set a confidence grade. The returned \code{linf} is
 the FishBase member median; it is anchored to the observed catch later, in
-[assess_group_stock()].
+\code{\link[=assess_group_stock]{assess_group_stock()}}.
 }
 \keyword{modeling}
 \keyword{workflow}

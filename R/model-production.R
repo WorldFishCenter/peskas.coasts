@@ -1,4 +1,3 @@
-# Generated with Claude (Cowork) — review before committing.
 # Production-based exploitation layer (Kolding's modified Cadima estimator).
 #
 # Kolding (2026, "Population ecology and sustainable fisheries yields") argues

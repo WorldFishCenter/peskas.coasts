@@ -16,7 +16,7 @@ precision starts to plateau, per the 2026-10-21 subsampling test).}
 }
 \value{
 Character vector of gears; empty unless at least two gears qualify
-  (with one, the pooled read already is that gear's read).
+(with one, the pooled read already is that gear's read).
 }
 \description{
 Gears with Enough Measured Fish for Their Own Read

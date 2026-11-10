@@ -9,19 +9,19 @@ assess_lbspr(lengths, priors, bin_width = NULL)
 \arguments{
 \item{lengths}{Numeric vector of measured lengths (cm).}
 
-\item{priors}{A one-row life-history tibble (`linf`, `mk`, `lm`).}
+\item{priors}{A one-row life-history tibble (\code{linf}, \code{mk}, \code{lm}).}
 
-\item{bin_width}{Numeric length-bin width (cm). Default `NULL` picks a bin
+\item{bin_width}{Numeric length-bin width (cm). Default \code{NULL} picks a bin
 from the observed range.}
 }
 \value{
-A one-row tibble: `method`, `spr`, `f_m`, `sl50`, `sl95`, `n`.
+A one-row tibble: \code{method}, \code{spr}, \code{f_m}, \code{sl50}, \code{sl95}, \code{n}.
 }
 \description{
-Wraps [LBSPR::LBSPRfit()] to estimate the spawning potential ratio (SPR),
-relative fishing pressure `f_m`, and selectivity from a length sample and
-life-history priors. Returns an `unknown`-flagged empty row (rather than
-erroring) when the `LBSPR` package is unavailable or the fit fails, so the
+Wraps \code{\link[LBSPR:LBSPRfit]{LBSPR::LBSPRfit()}} to estimate the spawning potential ratio (SPR),
+relative fishing pressure \code{f_m}, and selectivity from a length sample and
+life-history priors. Returns an \code{unknown}-flagged empty row (rather than
+erroring) when the \code{LBSPR} package is unavailable or the fit fails, so the
 orchestrator stays robust.
 }
 \keyword{modeling}

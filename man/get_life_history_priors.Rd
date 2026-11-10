@@ -4,26 +4,28 @@
 \alias{get_life_history_priors}
 \title{Fetch Life-History Priors from FishBase / SeaLifeBase}
 \usage{
-get_life_history_priors(scientific_names, default_mk = 1.5)
+get_life_history_priors(scientific_names, default_mk = 1.5, version = "latest")
 }
 \arguments{
 \item{scientific_names}{Character vector of scientific names.}
 
 \item{default_mk}{Numeric. Fallback natural-mortality-to-growth ratio when
 FishBase has none. Default 1.5.}
+
+\item{version}{FishBase release. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-A tibble with one row per species: `scientific_name`, `linf`, `k`,
-  `mk`, `mk_source`, `lm`, `a`, `b`, `source`.
+A tibble with one row per species: \code{scientific_name}, \code{linf}, \code{k},
+\code{mk}, \code{mk_source}, \code{lm}, \code{a}, \code{b}, \code{source}.
 }
 \description{
 Assembles the priors the length-based methods need — asymptotic length
-`linf`, growth `k`, natural-mortality ratio `mk`, and length-at-maturity
-`lm` — for a set of species. Values come from `rfishbase`; where maturity is
+\code{linf}, growth \code{k}, natural-mortality ratio \code{mk}, and length-at-maturity
+\code{lm} — for a set of species. Values come from \code{rfishbase}; where maturity is
 missing it is filled with the Froese & Binohlan empirical relationship from
-`linf`; where FishBase has no M, `mk` comes from the Then et al. (2015)
-growth-based estimator ([.m_then2015()]) when K is known, and only otherwise
-defaults to the teleost value of 1.5. `mk_source` records which was used.
+\code{linf}; where FishBase has no M, \code{mk} comes from the Then et al. (2015)
+growth-based estimator (\code{\link[=.m_then2015]{.m_then2015()}}) when K is known, and only otherwise
+defaults to the teleost value of 1.5. \code{mk_source} records which was used.
 }
 \keyword{modeling}
 \keyword{workflow}

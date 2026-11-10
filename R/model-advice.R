@@ -1,9 +1,7 @@
-# Generated with Claude (Cowork) — review before committing.
 # Plain-language reasons and data-collection advice for each stock read.
 #
-# The team asked (meeting 2026-10-21) for the quality flags to become
-# actionable suggestions on the dashboard. The thresholds follow the
-# subsampling test on Siganus sutor (2026-10-21): LBB precision plateaus around
+# Turns the quality flags into actionable suggestions for the dashboard. The
+# thresholds follow a subsampling test on Siganus sutor: LBB precision plateaus around
 # 100-150 measured fish, and a status is only reliable when its uncertainty
 # band does not cross the status line.
 

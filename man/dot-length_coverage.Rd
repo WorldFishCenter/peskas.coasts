@@ -12,18 +12,18 @@
 \item{scientific_name}{A single scientific name to summarise.}
 }
 \value{
-A list with `lengths` (numeric vector of measured lengths) and
-  `coverage` (a one-row tibble: `n_records`, `n_measured`, `frac_measured`,
-  `n_trips_measured`, `l_min`, `l_max`, `l_99`, `l_mean`,
-  `n_length_classes`).
+A list with \code{lengths} (numeric vector of measured lengths) and
+\code{coverage} (a one-row tibble: \code{n_records}, \code{n_measured}, \code{frac_measured},
+\code{n_trips_measured}, \code{l_min}, \code{l_max}, \code{l_99}, \code{l_mean},
+\code{n_length_classes}).
 }
 \description{
 Length-based methods run only on the subset of records that carry a
-`length_cm` value. This helper reports how much length information exists for
+\code{length_cm} value. This helper reports how much length information exists for
 one species and returns the length vector for downstream fitting. A record
-with `n_catch` > 1 stands for that many fish of the recorded length (the
+with \code{n_catch} > 1 stands for that many fish of the recorded length (the
 validated feeds log a length class with its count), so its length is
-repeated `n_catch` times; `n_measured` therefore counts fish, while
-`frac_measured` stays a share of records.
+repeated \code{n_catch} times; \code{n_measured} therefore counts fish, while
+\code{frac_measured} stays a share of records.
 }
 \keyword{internal}

@@ -152,9 +152,9 @@
 
 #' Fetch from FishBase, Retrying, and Stop Rather Than Continue Half-Empty
 #'
-#' FishBase is read remotely; a dropped connection mid-run used to leave
+#' FishBase is read remotely; a dropped connection mid-run would leave
 #' priors or trophic levels silently empty, so whole groups were written as
-#' "unknown" (twice on 2026-11-09). This wrapper retries an incomplete fetch
+#' "unknown". This wrapper retries an incomplete fetch
 #' and, if FishBase is unreachable, stops with a `fishbase_unavailable` error so
 #' no partial results are uploaded. An incomplete result is accepted only when
 #' it repeats while FishBase is reachable (a genuine data gap, e.g. a name with
@@ -380,20 +380,22 @@ select_priority_species <- function(
 #' @param scientific_names Character vector of scientific names.
 #' @param default_mk Numeric. Fallback natural-mortality-to-growth ratio when
 #'   FishBase has none. Default 1.5.
+#' @param version FishBase release. See [resolve_db_version()].
 #'
 #' @return A tibble with one row per species: `scientific_name`, `linf`, `k`,
 #'   `mk`, `mk_source`, `lm`, `a`, `b`, `source`.
 #'
 #' @keywords workflow modeling
 #' @export
-get_life_history_priors <- function(scientific_names, default_mk = 1.5) {
+get_life_history_priors <- function(scientific_names, default_mk = 1.5,
+                                    version = "latest") {
   scientific_names <- unique(scientific_names[!is.na(scientific_names)])
   if (length(scientific_names) == 0) {
     return(tibble::tibble())
   }
 
   est <- tryCatch(
-    rfishbase::estimate(scientific_names),
+    rfishbase::estimate(scientific_names, version = version),
     error = function(e) {
       logger::log_warn("rfishbase::estimate() failed: {conditionMessage(e)}")
       tibble::tibble(Species = scientific_names)
@@ -864,7 +866,7 @@ assess_species_stock <- function(
 #' @param n_groups Integer. Coarse taxa to assess per country. Default 15.
 #' @param fao_areas Named list mapping country key to FAO area codes for the
 #'   regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
-#'   uses a built-in WIO/Pacific default.
+#'   reads `stock_assessment$fao_areas` from the configuration.
 #' @param upload Logical. Upload the versioned parquet to cloud storage.
 #'   Default `TRUE` (the pipeline); set `FALSE` for local analysis runs so a
 #'   network or credentials hiccup at the end cannot discard the results.
@@ -954,7 +956,7 @@ run_stock_assessment <- function(
   candidates <- candidates |>
     dplyr::semi_join(dplyr::filter(eligible, .data$eligible), by = "scientific_name")
   priors <- .fb_retry(
-    function() get_life_history_priors(candidates$scientific_name),
+    function() get_life_history_priors(candidates$scientific_name, version = fb_version),
     ok = function(x) any(!is.na(x$linf)),
     what = "species priors", version = fb_version
   )
@@ -1054,13 +1056,7 @@ run_stock_assessment <- function(
   results <- dplyr::mutate(assessments, scale = "species")
 
   if (isTRUE(group_layer)) {
-    # Regional FishBase priors: WIO countries are FAO areas 51/57, Timor is 71.
-    if (is.null(fao_areas)) {
-      fao_areas <- list(
-        kenya = c(51L, 57L), zanzibar = c(51L, 57L),
-        mozambique = c(51L, 57L), timor = 71L
-      )
-    }
+    fao_areas <- fao_areas %||% conf$stock_assessment$fao_areas
     group_assessments <- tryCatch(
       assess_group_layer(
         landings,
@@ -1102,24 +1098,23 @@ run_stock_assessment <- function(
     results <- .mark_reference_gear(results)
   }
 
-  # One row per stock: the table the portal and reports read.
+  # One row per stock, for dashboards and reports.
   summary <- summarise_stock_status(results)
   logger::log_info(
     "Stock summary: {nrow(summary)} stocks | reliability ",
     "{paste(names(table(summary$reliability)), table(summary$reliability), sep = ':', collapse = ' ')}."
   )
 
-  prefix <- conf$stock$assessment$file_prefix %||% "stock-assessment"
   if (isTRUE(upload)) {
     upload_parquet_to_cloud(
       data = results,
-      prefix = prefix,
+      prefix = conf$stock_assessment$results$file_prefix,
       provider = conf$storage$google$key,
       options = conf$storage$google$options
     )
     upload_parquet_to_cloud(
       data = summary,
-      prefix = paste0(prefix, "-summary"),
+      prefix = conf$stock_assessment$summary$file_prefix,
       provider = conf$storage$google$key,
       options = conf$storage$google$options
     )

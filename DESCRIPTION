@@ -37,6 +37,7 @@ Imports:
     logger,
     lubridate,
     magrittr,
+    methods,
     mongolite,
     nnls,
     parallel,
@@ -65,7 +66,9 @@ Suggests:
     covr,
     pkgdown,
     knitr,
-    rmarkdown
+    rmarkdown,
+    LBSPR,
+    rjags
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Remotes:

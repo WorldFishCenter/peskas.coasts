@@ -1,4 +1,3 @@
-# Generated with Claude (Cowork) — review before committing.
 # Misidentification / species-mixture flag for the stock-assessment framework.
 #
 # A single species' length sample should be one coherent distribution. When it

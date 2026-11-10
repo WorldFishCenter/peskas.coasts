@@ -9,22 +9,22 @@ assess_stock_lbb(lengths, priors, lbb_engine = NULL)
 \arguments{
 \item{lengths}{Numeric vector of measured lengths (cm).}
 
-\item{priors}{A one-row life-history tibble (`linf`, `mk`, `lm`).}
+\item{priors}{A one-row life-history tibble (\code{linf}, \code{mk}, \code{lm}).}
 
-\item{lbb_engine}{A function of `(lengths, priors)` returning a list with at
-least `bb0` (B/B0), `bbmsy` (B/Bmsy), `fm` (F/M), `lc_lopt` and their
-credible-interval widths. Default `NULL`.}
+\item{lbb_engine}{A function of \verb{(lengths, priors)} returning a list with at
+least \code{bb0} (B/B0), \code{bbmsy} (B/Bmsy), \code{fm} (F/M), \code{lc_lopt} and their
+credible-interval widths. Default \code{NULL}.}
 }
 \value{
-A one-row tibble: `method`, `bb0`, `bbmsy`, `f_m`, `lc_lopt`,
-  `ci_width`, `n`.
+A one-row tibble: \code{method}, \code{bb0}, \code{bbmsy}, \code{f_m}, \code{lc_lopt},
+\code{ci_width}, \code{n}.
 }
 \description{
 Runs the anchor method, Froese et al. (2018) LBB, through a pluggable engine.
 LBB depends on JAGS, which is a system library rather than a CRAN package, so
-the estimator is not bundled: pass the fitting routine via `lbb_engine` (for
+the estimator is not bundled: pass the fitting routine via \code{lbb_engine} (for
 example the SISTA16 reference model or the Monte-Carlo variant). When no
-engine is supplied the function returns an `unknown`-flagged row so the rest
+engine is supplied the function returns an \code{unknown}-flagged row so the rest
 of the framework still runs on the indicator and SPR methods.
 }
 \keyword{modeling}

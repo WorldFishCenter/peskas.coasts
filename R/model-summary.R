@@ -1,11 +1,9 @@
-# Generated with Claude (Cowork) — review before committing.
 # One-row-per-stock summary of the stock-assessment results.
 #
 # run_stock_assessment() returns a long table (one row per method and gear,
 # species and group rows stacked). Dashboards and reports need one row per
 # country x taxon with the headline read, its uncertainty, how far to trust it
-# and what to collect next. This is that table, and its columns are the
-# contract the Peskas portal reads.
+# and what to collect next. This is that table.
 
 #' Kobe-Style Status from B/B0 and F/M
 #'

@@ -10,13 +10,13 @@
 \item{x}{Character vector of scientific names.}
 }
 \value{
-A logical vector, `TRUE` where `x` is a two-word binomial that is not
-  a `sp`/`spp` aggregate.
+A logical vector, \code{TRUE} where \code{x} is a two-word binomial that is not
+a \code{sp}/\code{spp} aggregate.
 }
 \description{
 Length-based methods need a species with its own growth parameters, but the
 landing feed mixes species binomials with coarser family, order or class
-labels (e.g. `"Clupeidae"`, `"Actinopterygii"`) and genus aggregates
-(`"Siganus spp"`). This helper flags the true `Genus species` binomials.
+labels (e.g. \code{"Clupeidae"}, \code{"Actinopterygii"}) and genus aggregates
+(\code{"Siganus spp"}). This helper flags the true \verb{Genus species} binomials.
 }
 \keyword{internal}

@@ -21,19 +21,19 @@
 \arguments{
 \item{n_measured}{Measured fish in the sample.}
 
-\item{reasons}{Output of [.quality_reasons()].}
+\item{reasons}{Output of \code{\link[=.quality_reasons]{.quality_reasons()}}.}
 
 \item{n_classes}{Number of distinct recorded lengths.}
 
-\item{consensus}{Consensus label from [.ensemble_consensus()].}
+\item{consensus}{Consensus label from \code{\link[=.ensemble_consensus]{.ensemble_consensus()}}.}
 
-\item{misid}{Misidentification flag from [flag_length_mixture()].}
+\item{misid}{Misidentification flag from \code{\link[=flag_length_mixture]{flag_length_mixture()}}.}
 
-\item{robust_flag}{`"robust"` / `"sensitive"` from [lbb_robustness()].}
+\item{robust_flag}{\code{"robust"} / \code{"sensitive"} from \code{\link[=lbb_robustness]{lbb_robustness()}}.}
 
-\item{production_band}{`"clear"` / `"straddles"` from [assess_production()].}
+\item{production_band}{\code{"clear"} / \code{"straddles"} from \code{\link[=assess_production]{assess_production()}}.}
 
-\item{gear_profile}{Optional one-row output of [.gear_profile()]; when the
+\item{gear_profile}{Optional one-row output of \code{\link[=.gear_profile]{.gear_profile()}}; when the
 sample is dominated by dome-selective gears the "large fish missing"
 advice names the gear.}
 

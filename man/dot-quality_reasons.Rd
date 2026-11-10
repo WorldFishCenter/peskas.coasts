@@ -7,17 +7,17 @@
 .quality_reasons(coverage, linf, ci_width = NA_real_)
 }
 \arguments{
-\item{coverage}{A one-row coverage tibble from [.length_coverage()].}
+\item{coverage}{A one-row coverage tibble from \code{\link[=.length_coverage]{.length_coverage()}}.}
 
 \item{linf}{Asymptotic length (cm) used for the read.}
 
 \item{ci_width}{Optional relative width of the LBB credible interval.}
 }
 \value{
-A single string of `"; "`-separated reasons (`""` when none).
+A single string of \code{"; "}-separated reasons (\code{""} when none).
 }
 \description{
 Lists, in plain words, which sample properties weaken an assessment. The
-same signals feed [.flag_assessment_quality()].
+same signals feed \code{\link[=.flag_assessment_quality]{.flag_assessment_quality()}}.
 }
 \keyword{internal}

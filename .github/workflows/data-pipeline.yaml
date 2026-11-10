@@ -243,4 +243,4 @@ jobs:
         if: endsWith(github.ref, '/main')
         run: echo "R_CONFIG_ACTIVE=production" >> $GITHUB_ENV
       - name: Call run_stock_assessment()
-        run: Rscript -e 'coasts::run_stock_assessment()'
+        run: Rscript -e 'coasts::run_stock_assessment(log_threshold = logger::INFO)'

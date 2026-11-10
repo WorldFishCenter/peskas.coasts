@@ -7,47 +7,49 @@
 summarise_stock_status(results)
 }
 \arguments{
-\item{results}{The tibble returned by [run_stock_assessment()].}
+\item{results}{The tibble returned by \code{\link[=run_stock_assessment]{run_stock_assessment()}}.}
 }
 \value{
 A tibble, one row per stock, with columns:
-  * `country`, `scale` (`"species"` / `"group"`), `scientific_name`,
-    `catch_taxon`, `headline_gear` (`"all"` = pooled across gears);
-  * `status`: Kobe-style word from LBB (`healthy`, `overfishing`,
-    `overfished`, `overfished + overfishing`) when LBB fitted; otherwise the
-    Froese-based word (`healthy`, `borderline`, `overfishing signal`) —
-    always for groups, and for species whose lengths are too coarse for LBB;
-  * `status_basis`: `"LBB"` or `"Froese"`;
-  * `reliability`: `reliable` / `indicative` / `borderline` /
-    `not assessable` (see Details);
-  * `consensus`, `n_concern`, `n_methods`: agreement of LBB, Froese and the
-    production layer;
-  * `bb0`, `bb0_lo`, `bb0_hi`, `f_m`, `fm_lo`, `fm_hi`: LBB relative
-    biomass and fishing pressure with the prior-robustness band;
-  * `e`, `e_lo`, `e_hi`, `x`, `e_x`, `sy_ratio`, `production_status`,
-    `production_band`: production layer (share of production taken vs the
-    sustainable share; `sy_ratio` = sustainable catch / current catch);
-  * `p_mature`, `lmean_lopt`: Froese indicators;
-  * `n_measured`, `n_length_classes`, `size_reach`, `catch_share`,
-    `trophic_level`, `confidence` (groups), `quality`, `quality_reasons`;
-  * `main_gear`, `main_gear_share`, `selectivity_flag`, `robust_flag`,
-    `linf_ratio`, `misid_flag`;
-  * `advice`: one data-collection suggestion.
+\itemize{
+\item \code{country}, \code{scale} (\code{"species"} / \code{"group"}), \code{scientific_name},
+\code{catch_taxon}, \code{headline_gear} (\code{"all"} = pooled across gears);
+\item \code{status}: Kobe-style word from LBB (\code{healthy}, \code{overfishing},
+\code{overfished}, \code{overfished + overfishing}) when LBB fitted; otherwise the
+Froese-based word (\code{healthy}, \code{borderline}, \verb{overfishing signal}) —
+always for groups, and for species whose lengths are too coarse for LBB;
+\item \code{status_basis}: \code{"LBB"} or \code{"Froese"};
+\item \code{reliability}: \code{reliable} / \code{indicative} / \code{borderline} /
+\verb{not assessable} (see Details);
+\item \code{consensus}, \code{n_concern}, \code{n_methods}: agreement of LBB, Froese and the
+production layer;
+\item \code{bb0}, \code{bb0_lo}, \code{bb0_hi}, \code{f_m}, \code{fm_lo}, \code{fm_hi}: LBB relative
+biomass and fishing pressure with the prior-robustness band;
+\item \code{e}, \code{e_lo}, \code{e_hi}, \code{x}, \code{e_x}, \code{sy_ratio}, \code{production_status},
+\code{production_band}: production layer (share of production taken vs the
+sustainable share; \code{sy_ratio} = sustainable catch / current catch);
+\item \code{p_mature}, \code{lmean_lopt}: Froese indicators;
+\item \code{n_measured}, \code{n_length_classes}, \code{size_reach}, \code{catch_share},
+\code{trophic_level}, \code{confidence} (groups), \code{quality}, \code{quality_reasons};
+\item \code{main_gear}, \code{main_gear_share}, \code{selectivity_flag}, \code{robust_flag},
+\code{linf_ratio}, \code{misid_flag};
+\item \code{advice}: one data-collection suggestion.
+}
 }
 \description{
-Collapses the long output of [run_stock_assessment()] to one row per
+Collapses the long output of \code{\link[=run_stock_assessment]{run_stock_assessment()}} to one row per
 country x scale (species / group) x taxon. The headline read is the
-reference gear's when per-gear reads exist (see `by_gear`), otherwise the
-pooled read. Prior-robustness fields (`robust_flag`, `linf_ratio`) always
+reference gear's when per-gear reads exist (see \code{by_gear}), otherwise the
+pooled read. Prior-robustness fields (\code{robust_flag}, \code{linf_ratio}) always
 come from the pooled read, the only one the robustness grid is run on.
 }
 \details{
-`reliability` is `not assessable` without a read; `borderline`
-  when the status flips across plausible priors, the production band
-  straddles the sustainable line, or the methods disagree; `indicative` when
-  the read stands but rests on a weak basis (failed quality, fewer than 100
-  measured fish, a trap / gill net dominated sample, fewer than six length
-  classes, or a low-confidence group prior); otherwise `reliable`.
+\code{reliability} is \verb{not assessable} without a read; \code{borderline}
+when the status flips across plausible priors, the production band
+straddles the sustainable line, or the methods disagree; \code{indicative} when
+the read stands but rests on a weak basis (failed quality, fewer than 100
+measured fish, a trap / gill net dominated sample, fewer than six length
+classes, or a low-confidence group prior); otherwise \code{reliable}.
 }
 \keyword{modeling}
 \keyword{workflow}

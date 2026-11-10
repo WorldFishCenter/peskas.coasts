@@ -7,14 +7,14 @@
 .mark_reference_gear(results)
 }
 \arguments{
-\item{results}{Assessment rows with `gear`, `size_reach` and `quality`.}
+\item{results}{Assessment rows with \code{gear}, \code{size_reach} and \code{quality}.}
 }
 \value{
-`results` with a logical `reference_gear` (`NA` on pooled rows).
+\code{results} with a logical \code{reference_gear} (\code{NA} on pooled rows).
 }
 \description{
 For each country x scale x taxon with per-gear rows, the reference gear is
-the assessed gear with the highest `size_reach` (99th-percentile length /
+the assessed gear with the highest \code{size_reach} (99th-percentile length /
 Linf): the sample least truncated by gear selectivity, and so the best basis
 for the headline status. Only species and high-confidence genera get one: in
 a mixed family, gears catch different member species, so a larger reach

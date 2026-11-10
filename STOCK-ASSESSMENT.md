@@ -25,10 +25,10 @@ run_stock_assessment(
 )
 ```
 
-Recommended production call: `run_stock_assessment(robustness = TRUE, by_gear = TRUE)`, about 40 min for four countries. CI (`.github/workflows/data-pipeline.yaml`, job `stock-assessment`) currently calls `coasts::run_stock_assessment()` with defaults. Without `robustness = TRUE`, `robust_flag` is `NA` and `reliability` cannot become `borderline` on prior grounds.
+Recommended production call: `run_stock_assessment(robustness = TRUE, by_gear = TRUE)`, about 40 min for four countries. CI (`.github/workflows/data-pipeline.yaml`, job `stock-assessment`) currently calls `coasts::run_stock_assessment()` with defaults (only the log level set to INFO). Without `robustness = TRUE`, `robust_flag` is `NA` and `reliability` cannot become `borderline` on prior grounds.
 
 **Returns** (invisibly) the long results table. `attr(res, "summary")` holds the one-row-per-stock table.
-**Writes**, when `upload = TRUE`, two versioned parquets through `upload_parquet_to_cloud()`. Their names are `stock-assessment__<timestamp>_<sha>__.parquet` (long table) and `stock-assessment-summary__<timestamp>_<sha>__.parquet` (summary). The prefix comes from `conf$stock$assessment$file_prefix`, default `"stock-assessment"`.
+**Writes**, when `upload = TRUE`, two versioned parquets through `upload_parquet_to_cloud()`. Their names are `stock-assessment-results__<timestamp>_<sha>__.parquet` (long table) and `stock-assessment-summary__<timestamp>_<sha>__.parquet` (summary), set by `stock_assessment$results` and `stock_assessment$summary` in `inst/conf.yml`. The FAO areas for the group priors are `stock_assessment$fao_areas` there too.
 **Stops** with a condition of class `fishbase_unavailable`, uploading nothing, if FishBase cannot be reached.
 
 ## 2. Pipeline
@@ -288,7 +288,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 | Groups | `n_species`, `confidence`, `group_status`, `prior_note` |
 | Catch | `catch_kg_sampled`, `catch_share` |
 
-### 5.2 Summary table (`attr(res, "summary")`, parquet `stock-assessment-summary`) — portal contract
+### 5.2 Summary table (`attr(res, "summary")`, parquet `stock-assessment-summary`)
 
 One row per `country × scale × scientific_name`. Sorted by country, scale, then descending `catch_share`.
 

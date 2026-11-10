@@ -13,7 +13,7 @@
 An integer vector, one weight per row.
 }
 \description{
-A record with `n_catch` > 1 stands for that many fish of the recorded
+A record with \code{n_catch} > 1 stands for that many fish of the recorded
 length; missing or invalid counts count as one fish.
 }
 \keyword{internal}

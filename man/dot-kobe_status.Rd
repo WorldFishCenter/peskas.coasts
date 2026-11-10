@@ -10,11 +10,11 @@
 \item{bb0, fm}{Relative biomass and fishing pressure.}
 }
 \value{
-Character vector (`NA` where either input is missing).
+Character vector (\code{NA} where either input is missing).
 }
 \description{
-`healthy` when B/B0 >= 0.5 and F/M <= 1; `overfishing` when biomass is fine
-but pressure is too high; `overfished` when biomass is low but pressure is
-fine; `overfished + overfishing` when both are bad.
+\code{healthy} when B/B0 >= 0.5 and F/M <= 1; \code{overfishing} when biomass is fine
+but pressure is too high; \code{overfished} when biomass is low but pressure is
+fine; \code{overfished + overfishing} when both are bad.
 }
 \keyword{internal}

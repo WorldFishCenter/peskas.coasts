@@ -14,7 +14,7 @@
 \item{default}{Value when the column is absent.}
 }
 \description{
-`tibble`'s `$` warns on absent columns; coverage tables from older callers
-may lack the newer fields (`l_99`, `n_length_classes`).
+\code{tibble}'s \code{$} warns on absent columns; coverage tables from older callers
+may lack the newer fields (\code{l_99}, \code{n_length_classes}).
 }
 \keyword{internal}
