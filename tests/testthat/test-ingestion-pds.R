@@ -33,3 +33,24 @@ test_that("an empty bucket is not an error", {
     character(0)
   )
 })
+
+test_that("a track is described by its first and last fix in time", {
+  track <- tibble::tibble(
+    # out of order, as a re-segmented trip can come back
+    Time = as.POSIXct("2026-01-01 06:00:00", tz = "UTC") + c(120, 0, 60),
+    Boat = 7,
+    Lat = c(-6.2, -6.0, NA),
+    Lng = c(39.2, 39.0, 39.1),
+    `Speed (M/S)` = c(1, 40, 2)
+  )
+
+  out <- track_descriptors(track, Trip = 42)
+
+  expect_equal(
+    c(out$start_lat, out$start_lng, out$end_lat, out$end_lng),
+    c(-6.0, 39.0, -6.2, 39.2)
+  )
+  expect_equal(round(out$start_end_distance / 1000), 31)
+  expect_equal(out$outliers_proportion, 50)
+  expect_equal(nrow(track_descriptors(track[3, ], Trip = 42)), 0)
+})

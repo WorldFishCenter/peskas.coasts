@@ -7,14 +7,14 @@
 plot_effort_map(effort, metric = c("fishing_hours", "n_trips"))
 }
 \arguments{
-\item{effort}{A data frame with columns `h3_index`, `year`, `fishing_hours`,
-`unique_trips` (as returned by [aggregate_pds_effort()]).}
+\item{effort}{A data frame with columns \code{h3_index}, \code{year}, \code{fishing_hours},
+\code{unique_trips} (as returned by \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}).}
 
-\item{metric}{Column to colour hexagons by: `"fishing_hours"` (default) or
-`"n_trips"`.}
+\item{metric}{Column to colour hexagons by: \code{"fishing_hours"} (default) or
+\code{"n_trips"}.}
 }
 \value{
-A `leaflet` htmlwidget.
+A \code{leaflet} htmlwidget.
 }
 \description{
 Builds a Leaflet map of H3 fishing effort with one layer per year, toggled
@@ -23,12 +23,12 @@ metric. A basemap switcher (Dark / Light / Satellite) is provided via a
 custom control in the top-right corner.
 }
 \details{
-The function accepts the output of [aggregate_pds_effort()] (which includes
-a `year` column) and aggregates effort to the H3 cell level within each year
+The function accepts the output of \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}} (which includes
+a \code{year} column) and aggregates effort to the H3 cell level within each year
 before building the map layers. An all-time view can be approximated by
 first collapsing the data across years:
-```r
-all_time <- h3_grid |>
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{all_time <- h3_grid |>
   dplyr::group_by(h3_index) |>
   dplyr::summarise(
     fishing_hours = sum(fishing_hours),
@@ -37,9 +37,9 @@ all_time <- h3_grid |>
   ) |>
   dplyr::mutate(year = "All years")
 plot_effort_map(all_time)
-```
+}\if{html}{\out{</div>}}
 }
 \seealso{
-[aggregate_pds_effort()], [derive_fishing_grounds()]
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}, \code{\link[=derive_fishing_grounds]{derive_fishing_grounds()}}
 }
 \keyword{modeling}

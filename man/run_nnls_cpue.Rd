@@ -7,18 +7,18 @@
 run_nnls_cpue(trips, top_n, min_trips)
 }
 \arguments{
-\item{trips}{Combined effort + catch tibble from [join_effort_catch()].}
+\item{trips}{Combined effort + catch tibble from \code{\link[=join_effort_catch]{join_effort_catch()}}.}
 
 \item{top_n}{Integer. Number of top species to model.}
 
 \item{min_trips}{Integer. Minimum unique trips per H3 cell to retain.}
 }
 \value{
-A named list with elements `cpue` (tibble) and `species`
-  (character vector).
+A named list with elements \code{cpue} (tibble) and \code{species}
+(character vector).
 }
 \description{
-Solves `min ||Xq - y||^2 s.t. q >= 0` for each species, spatially
+Solves \verb{min ||Xq - y||^2 s.t. q >= 0} for each species, spatially
 deconvolving catch into per-cell CPUE estimates. More statistically
 rigorous than the weighted method but requires an overdetermined system
 (rule of thumb: at least 3x more trips than H3 cells).

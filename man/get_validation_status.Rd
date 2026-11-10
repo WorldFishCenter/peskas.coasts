@@ -20,7 +20,7 @@ get_validation_status(
 \item{asset_id}{Character. The KoBoToolbox asset id.}
 
 \item{token}{Character. A KoBoToolbox API token, with or without the
-`Token ` prefix. Ignored when `username` is supplied.}
+\code{Token } prefix. Ignored when \code{username} is supplied.}
 
 \item{username, password}{Character. Basic-auth credentials.}
 
@@ -29,18 +29,18 @@ get_validation_status(
 \item{debug}{Logical. Print the request before performing it.}
 }
 \value{
-A one-row tibble: `submission_id`, `validation_status`,
-  `validated_at`, `validated_by`, `fetch_error`. A submission that has never
-  been validated reports `not_validated`; `fetch_error` marks a genuine
-  transport failure, **not** an absent status. KoBoToolbox answers 404 for
-  the former, which is why [kobo_request()] does not let `httr2` throw on a
-  4xx — otherwise every unvalidated submission is recorded as a fetch
-  failure.
+A one-row tibble: \code{submission_id}, \code{validation_status},
+\code{validated_at}, \code{validated_by}, \code{fetch_error}. A submission that has never
+been validated reports \code{not_validated}; \code{fetch_error} marks a genuine
+transport failure, \strong{not} an absent status. KoBoToolbox answers 404 for
+the former, which is why \code{\link[=kobo_request]{kobo_request()}} does not let \code{httr2} throw on a
+4xx — otherwise every unvalidated submission is recorded as a fetch
+failure.
 }
 \description{
-[list_validation_statuses()] is the bulk form and the one a pipeline should
+\code{\link[=list_validation_statuses]{list_validation_statuses()}} is the bulk form and the one a pipeline should
 call; this single-submission accessor exists because
-[update_validation_status()] re-reads what it wrote.
+\code{\link[=update_validation_status]{update_validation_status()}} re-reads what it wrote.
 }
 \examples{
 \dontrun{
@@ -54,6 +54,6 @@ get_validation_status(
 }
 }
 \seealso{
-[list_validation_statuses()], [update_validation_status()]
+\code{\link[=list_validation_statuses]{list_validation_statuses()}}, \code{\link[=update_validation_status]{update_validation_status()}}
 }
 \keyword{validation}

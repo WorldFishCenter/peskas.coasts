@@ -16,10 +16,13 @@ Set to NULL for random passwords each time.}
 }
 \value{
 List containing user data counts, Airtable sync result, and MongoDB push result.
-  - total_users: Number of users synchronized to MongoDB
-  - new_passwords_generated: Number of new passwords created
-  - airtable_sync_result: Result of syncing users to Airtable (updates + creates)
-  - mongodb_result: Result of MongoDB data push
+\itemize{
+\item total_users: Number of users synchronized to MongoDB
+\item new_passwords_generated: Number of new passwords created
+\item airtable_sync_result: Result of syncing users to Airtable (updates + creates)
+\item mongodb_result: Device users matched, changed, added and removed in
+MongoDB
+}
 }
 \description{
 Retrieves device data from Airtable, joins with user data, generates passwords
@@ -29,18 +32,25 @@ devices in Africa timezones with complete synchronization between systems.
 }
 \details{
 The function performs the following steps:
-1. Retrieves users data from Airtable tracks_app base
-2. Retrieves device data from Airtable frame base (pds_devices table)
-3. Filters devices to Africa timezones only
-4. Joins devices with existing user data by IMEI
-5. Generates 8-character alphanumeric passwords for ALL users without passwords
-6. Removes duplicate IMEI entries (keeps latest)
-7. Syncs complete user dataset to Airtable users table (updates existing, creates new)
-8. Pushes the complete dataset to MongoDB
+\enumerate{
+\item Retrieves users data from Airtable tracks_app base
+\item Retrieves device data from Airtable frame base (pds_devices table)
+\item Filters devices to Africa timezones only
+\item Joins devices with existing user data by IMEI
+\item Generates 8-character alphanumeric passwords for ALL users without passwords
+\item Removes duplicate IMEI entries (keeps latest)
+\item Syncs complete user dataset to Airtable users table (updates existing, creates new)
+\item Updates the device users in MongoDB in place, matched by IMEI, and
+removes those whose IMEI is no longer in the list
+}
 
 Password generation uses letters (upper/lower), numbers (0-9), and is
-reproducible when a seed is provided. The function ensures complete
-synchronization by updating both Airtable and MongoDB with the same data.
+reproducible when a seed is provided.
+
+MongoDB is never emptied: the tracks app keeps users of its own there
+(administrators, fishers who registered themselves), and fishers can change
+their password in the app. A password goes to MongoDB only when the device
+user is first created, so changing one in Airtable does not reach the app.
 }
 \examples{
 \dontrun{

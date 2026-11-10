@@ -26,10 +26,10 @@ which the data was generated or processed. This function adds this
 information, a version identifier, to a file name (character string)
 }
 \details{
-The SHA information is retrieved using [git2r::sha]. If the code is not
+The SHA information is retrieved using \link[git2r:sha]{git2r::sha}. If the code is not
 running in a context aware of a git repository (for example when code is
 running inside a container) then this function attempts to get the sha from
-the environment variable `GITHUB_SHA`. If both of these methods fail, no sha
+the environment variable \code{GITHUB_SHA}. If both of these methods fail, no sha
 versioning is added.
 }
 \examples{

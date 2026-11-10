@@ -9,15 +9,15 @@ download_predicted_tracks(trip_ids, conf)
 \arguments{
 \item{trip_ids}{Character vector of PDS trip IDs to retrieve.}
 
-\item{conf}{Configuration list, as returned by [read_config()].}
+\item{conf}{Configuration list, as returned by \code{\link[=read_config]{read_config()}}.}
 }
 \value{
-A tibble of fishing GPS points with columns `trip`, `timestamp`,
-  `latitude`, `longitude`.
+A tibble of fishing GPS points with columns \code{trip}, \code{timestamp},
+\code{latitude}, \code{longitude}.
 }
 \description{
 Fetches the per-trip predicted fishing track parquet files (produced by
-[predict_pds_tracks()]) from the PDS storage bucket, filtered to a given
+\code{\link[=predict_pds_tracks]{predict_pds_tracks()}}) from the PDS storage bucket, filtered to a given
 set of trip IDs.
 }
 \keyword{internal}

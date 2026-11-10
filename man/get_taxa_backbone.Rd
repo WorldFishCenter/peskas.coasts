@@ -8,14 +8,14 @@ get_taxa_backbone(version = "latest")
 }
 \arguments{
 \item{version}{FishBase / SeaLifeBase release to read. See
-[resolve_db_version()].}
+\code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-A tibble with columns: `SpecCode`, `sci_name`, `Genus`, `Species`,
-  `Family`, `Order`, `Class`, `server`.
+A tibble with columns: \code{SpecCode}, \code{sci_name}, \code{Genus}, \code{Species},
+\code{Family}, \code{Order}, \code{Class}, \code{server}.
 }
 \description{
-Joins the `species` and `families` tables from both FishBase and
+Joins the \code{species} and \code{families} tables from both FishBase and
 SeaLifeBase into a single reference table with scientific names and
 higher-level taxonomy.
 }

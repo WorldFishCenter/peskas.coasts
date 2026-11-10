@@ -8,41 +8,41 @@ recall_overlapping_trips(files, trip_lookup, trips)
 }
 \arguments{
 \item{files}{Character vector of object names about to be read. Trip
-identifiers are taken from the `trip_{id}_v{version}.parquet` names written
-by [predict_pds_tracks()].}
+identifiers are taken from the \verb{trip_\{id\}_v\{version\}.parquet} names written
+by \code{\link[=predict_pds_tracks]{predict_pds_tracks()}}.}
 
-\item{trip_lookup}{Trip metadata with columns `trip`, `imei`, `started` and
-`ended`.}
+\item{trip_lookup}{Trip metadata with columns \code{trip}, \code{imei}, \code{started} and
+\code{ended}.}
 
-\item{trips}{The registry of aggregated trips, with columns `trip`, `file`,
-`imei`, `first_timestamp` and `last_timestamp`.}
+\item{trips}{The registry of aggregated trips, with columns \code{trip}, \code{file},
+\code{imei}, \code{first_timestamp} and \code{last_timestamp}.}
 }
 \value{
-A tibble of `trip` and `file` for the trips to withdraw and re-read,
-  empty when there is nothing to recall.
+A tibble of \code{trip} and \code{file} for the trips to withdraw and re-read,
+empty when there is nothing to recall.
 }
 \description{
 Finds trips already in the effort store whose pings could also appear in the
 files about to be read, so they can be withdrawn and re-read alongside them.
 }
 \details{
-[drop_overlapping_pings()] can only compare pings it sees at once. When PDS
-moves *part* of a track to a new trip, the two copies arrive in different
+\code{\link[=drop_overlapping_pings]{drop_overlapping_pings()}} can only compare pings it sees at once. When PDS
+moves \emph{part} of a track to a new trip, the two copies arrive in different
 runs: the new trip is read while the old one sits in the store, the shared
 pings are never compared, and their hours stay counted twice. Withdrawing the
 stored trip and reading it again in the same batch puts both copies in front
 of the deduplication.
 
-A candidate is a stored trip on the **same device** whose fishing overlaps
+A candidate is a stored trip on the \strong{same device} whose fishing overlaps
 the incoming trip in time -- re-segmentation moves points within one vessel's
 track, so nothing else can share a ping. Device and window come from the
 stored trip listing, which means the recall costs no downloads to decide.
 Trips PDS no longer lists carry no device metadata and so cannot be matched
 this way; full copies of them are still caught by
-[index_trip_duplicates()], and [predict_pds_tracks()] deletes their files
+\code{\link[=index_trip_duplicates]{index_trip_duplicates()}}, and \code{\link[=predict_pds_tracks]{predict_pds_tracks()}} deletes their files
 outright.
 }
 \seealso{
-[drop_overlapping_pings()], [aggregate_pds_effort()]
+\code{\link[=drop_overlapping_pings]{drop_overlapping_pings()}}, \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 }
 \keyword{internal}

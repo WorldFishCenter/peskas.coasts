@@ -10,7 +10,7 @@ cloud_storage_authenticate(provider, options, force = FALSE)
 \item{provider}{A character string specifying the cloud provider ("gcs" or "aws").}
 
 \item{options}{A named list of options specific to the cloud provider. For
-GCS, must include `service_account_key`.}
+GCS, must include \code{service_account_key}.}
 
 \item{force}{A logical value indicating whether to force re-authentication.
 Default is FALSE.}

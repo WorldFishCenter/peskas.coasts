@@ -7,13 +7,13 @@
 join_effort_catch(effort, catch_wide)
 }
 \arguments{
-\item{effort}{A tibble as returned by [aggregate_trip_effort()].}
+\item{effort}{A tibble as returned by \code{\link[=aggregate_trip_effort]{aggregate_trip_effort()}}.}
 
-\item{catch_wide}{A wide catch matrix as returned by [build_catch_wide()].}
+\item{catch_wide}{A wide catch matrix as returned by \code{\link[=build_catch_wide]{build_catch_wide()}}.}
 }
 \value{
-A tibble combining effort columns (`trip`, `h3_index`, `year`,
-  `fishing_hours`) with one column per species (catch in kg).
+A tibble combining effort columns (\code{trip}, \code{h3_index}, \code{year},
+\code{fishing_hours}) with one column per species (catch in kg).
 }
 \description{
 Inner-joins the per-trip H3 effort table with the wide catch matrix on

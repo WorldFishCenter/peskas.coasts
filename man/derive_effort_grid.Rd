@@ -8,19 +8,19 @@ derive_effort_grid(trip_effort)
 }
 \arguments{
 \item{trip_effort}{Per-trip cell-day effort, as returned by
-[build_trip_effort()].}
+\code{\link[=build_trip_effort]{build_trip_effort()}}.}
 }
 \value{
-A tibble with one row per `(h3_index, year, gear, country)` and the
-  grid columns documented in [aggregate_pds_effort()].
+A tibble with one row per \verb{(h3_index, year, gear, country)} and the
+grid columns documented in \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}.
 }
 \description{
-Collapses the per-trip cell-day table built by [build_trip_effort()] into the
-published H3 grid: one row per `(h3_index, year, gear, country)`.
+Collapses the per-trip cell-day table built by \code{\link[=build_trip_effort]{build_trip_effort()}} into the
+published H3 grid: one row per \verb{(h3_index, year, gear, country)}.
 }
 \details{
 Every column is computed from the whole store in one pass, so the result does
-not depend on how the trips were batched. `unique_trips` counts distinct
+not depend on how the trips were batched. \code{unique_trips} counts distinct
 trips instead of summing per-batch counts, and a trip whose fishing crosses
 midnight on New Year contributes to both year rows without being counted
 twice in either. Fidelity is a trip's share of its own total fishing hours
@@ -28,6 +28,6 @@ spent in a cell, with the total taken across every cell and year the trip
 touched.
 }
 \seealso{
-[build_trip_effort()], [aggregate_pds_effort()]
+\code{\link[=build_trip_effort]{build_trip_effort()}}, \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 }
 \keyword{internal}

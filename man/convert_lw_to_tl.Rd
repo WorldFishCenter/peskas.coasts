@@ -8,47 +8,47 @@ convert_lw_to_tl(length_weight, length_length, max_intercept = 1)
 }
 \arguments{
 \item{length_weight}{Length-weight rows as returned by
-[get_length_weight_coeffs()]. Must carry `species_found`, `server`, `Type`,
-`a` and `b`.}
+\code{\link[=get_length_weight_coeffs]{get_length_weight_coeffs()}}. Must carry \code{species_found}, \code{server}, \code{Type},
+\code{a} and \code{b}.}
 
 \item{length_length}{Length-length rows as returned by
-[get_length_length_coeffs()], from the **same** expansion so that
-`species_found` and `server` are keyed consistently. Build them with
-`length_types = NULL`: the default `c("TL", "FL")` keeps no standard-length
-pair, and `SL` is where the correction is largest.}
+\code{\link[=get_length_length_coeffs]{get_length_length_coeffs()}}, from the \strong{same} expansion so that
+\code{species_found} and \code{server} are keyed consistently. Build them with
+\code{length_types = NULL}: the default \code{c("TL", "FL")} keeps no standard-length
+pair, and \code{SL} is where the correction is largest.}
 
-\item{max_intercept}{Numeric. Conversions whose intercept `aL` exceeds this
+\item{max_intercept}{Numeric. Conversions whose intercept \code{aL} exceeds this
 in absolute value are discarded before the median is taken. Defaults to
-`1` (cm); a large intercept means the fit is not well approximated by the
+\code{1} (cm); a large intercept means the fit is not well approximated by the
 pure ratio applied here.}
 }
 \value{
-`length_weight` with `a` restated and `Type` set to `"TL"` for every
-  row that had a usable conversion. Rows with no conversion are returned
-  **unchanged**, still carrying their original `Type`, so nothing is silently
-  dropped. Filter on `Type == "TL"` afterwards if only restated pairs are
-  wanted.
+\code{length_weight} with \code{a} restated and \code{Type} set to \code{"TL"} for every
+row that had a usable conversion. Rows with no conversion are returned
+\strong{unchanged}, still carrying their original \code{Type}, so nothing is silently
+dropped. Filter on \code{Type == "TL"} afterwards if only restated pairs are
+wanted.
 }
 \description{
-Rescales `a` so that a length-weight pair published against fork, standard or
+Rescales \code{a} so that a length-weight pair published against fork, standard or
 another length type reads as a pair against total length, using the
 length-length conversions from the same expansion.
 }
 \details{
-Given `W = a * L_type^b` and `L_type ~= ratio * TL`, substitution gives
-`W = a * ratio^b * TL^b`. So `b` is unchanged and only `a` moves.
+Given \code{W = a * L_type^b} and \verb{L_type ~= ratio * TL}, substitution gives
+\code{W = a * ratio^b * TL^b}. So \code{b} is unchanged and only \code{a} moves.
 
 The ratio comes from the POPLL table, which fits
-`Length1 = aL + bL * Length2` — the **second** column is the predictor. A row
-with `Length2 == "TL"` therefore gives `ratio = bL` for `Length1`, and a row
-with `Length1 == "TL"` gives `ratio = 1 / bL` for `Length2`. Reading that fit
-backwards inverts every ratio and moves weight by roughly `(1/r)^b / r^b` —
+\code{Length1 = aL + bL * Length2} — the \strong{second} column is the predictor. A row
+with \code{Length2 == "TL"} therefore gives \code{ratio = bL} for \code{Length1}, and a row
+with \code{Length1 == "TL"} gives \code{ratio = 1 / bL} for \code{Length2}. Reading that fit
+backwards inverts every ratio and moves weight by roughly \code{(1/r)^b / r^b} —
 about 1.1x for fork length and 1.8x for standard length — so the direction is
 asserted in the tests rather than left to the reader. Where several published
 conversions exist for a species and type, the median is taken.
 
 Restating rather than filtering matters for coverage: keeping only
-`Type == "TL"` was measured to discard more than half the matched species for
+\code{Type == "TL"} was measured to discard more than half the matched species for
 several taxon codes. Which rows to feed in is the caller's decision — pass
 everything to restate every convertible pair, or pass only the taxa that have
 no native total-length pair to leave the rest untouched.
@@ -67,7 +67,7 @@ lw_tl <- convert_lw_to_tl(
 }
 }
 \seealso{
-[get_length_weight_coeffs()], [get_length_length_coeffs()],
-  [get_taxa_morphometrics()]
+\code{\link[=get_length_weight_coeffs]{get_length_weight_coeffs()}}, \code{\link[=get_length_length_coeffs]{get_length_length_coeffs()}},
+\code{\link[=get_taxa_morphometrics]{get_taxa_morphometrics()}}
 }
 \keyword{taxa}

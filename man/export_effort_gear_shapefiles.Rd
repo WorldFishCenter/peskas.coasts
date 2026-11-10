@@ -13,48 +13,50 @@ export_effort_gear_shapefiles(
 }
 \arguments{
 \item{h3_res}{Integer. H3 resolution of the effort grid to export.
-Default `9L`.}
+Default \code{9L}.}
 
 \item{countries}{Optional character vector of country names to export. When
-`NULL` (default) every country present in the grid is exported, except the
-`"unknown"` bucket (trips with no device metadata).}
+\code{NULL} (default) every country present in the grid is exported, except the
+\code{"unknown"} bucket (trips with no device metadata).}
 
-\item{log_threshold}{Logging threshold. Default `logger::DEBUG`.}
+\item{log_threshold}{Logging threshold. Default \code{logger::DEBUG}.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`.}
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}.}
 }
 \value{
-Invisibly, a character vector of the uploaded `.zip` object names
-  (or `NULL` if the grid was unavailable or lacked the gear/country columns).
+Invisibly, a character vector of the uploaded \code{.zip} object names
+(or \code{NULL} if the grid was unavailable or lacked the gear/country columns).
 }
 \description{
 Builds, for each country, an all-time H3 fishing-effort layer broken down by
 gear class and uploads it to cloud storage as a zipped ESRI Shapefile bundle
 (the shapefile set plus a plain-text data dictionary). Intended for partners
 who consume GIS files rather than the web JSON exports from
-[export_pds_spatial()].
+\code{\link[=export_pds_spatial]{export_pds_spatial()}}.
 }
 \details{
 Reads the gear/country-partitioned H3 effort grid
-(`predicted-pds-h3_grid_r{h3_res}`) produced by [aggregate_pds_effort()].
+(\verb{predicted-pds-h3_grid_r\{h3_res\}}) produced by \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}.
 For each country it:
-1. Collapses the per-year rows to one row per `(h3_index, gear)`, summing
-   `fishing_hours` and `unique_trips` and taking the **union** of
-   `active_dates` for an exact active-day count (so `hrs_day` is correct
-   across years).
-2. Attaches H3 hexagon polygons via [create_spatial_grid()].
-3. Renames columns to <=10-character names (the ESRI Shapefile DBF limit).
-4. Writes the shapefile set and a `README.txt` data dictionary, zips them,
-   and uploads a versioned `.zip` to the coasts bucket.
+\enumerate{
+\item Collapses the per-year rows to one row per \verb{(h3_index, gear)}, summing
+\code{fishing_hours} and \code{unique_trips} and taking the \strong{union} of
+\code{active_dates} for an exact active-day count (so \code{hrs_day} is correct
+across years).
+\item Attaches H3 hexagon polygons via \code{\link[=create_spatial_grid]{create_spatial_grid()}}.
+\item Renames columns to <=10-character names (the ESRI Shapefile DBF limit).
+\item Writes the shapefile set and a \code{README.txt} data dictionary, zips them,
+and uploads a versioned \code{.zip} to the coasts bucket.
+}
 
-Shapefile fields: `h3_id`, `gear_class`, `fish_hrs` (total fishing hours),
-`trips` (unique trips), `n_days` (active days), `hrs_day` (fishing hours per
+Shapefile fields: \code{h3_id}, \code{gear_class}, \code{fish_hrs} (total fishing hours),
+\code{trips} (unique trips), \code{n_days} (active days), \code{hrs_day} (fishing hours per
 active day).
 }
 \seealso{
-[aggregate_pds_effort()], [export_pds_spatial()],
-  [create_spatial_grid()]
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}, \code{\link[=export_pds_spatial]{export_pds_spatial()}},
+\code{\link[=create_spatial_grid]{create_spatial_grid()}}
 }
 \keyword{export}
 \keyword{workflow}

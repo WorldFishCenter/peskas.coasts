@@ -22,17 +22,17 @@ insistent_download_cloud_file(
 
 \item{file}{A character vector of local file paths. Defaults to object names.}
 
-\item{max_times}{Maximum number of attempts. Default `10`.}
+\item{max_times}{Maximum number of attempts. Default \code{10}.}
 
-\item{pause_cap}{Longest pause between attempts, in seconds. Default `300`.}
+\item{pause_cap}{Longest pause between attempts, in seconds. Default \code{300}.}
 }
 \value{
-A character vector of local file paths, as [download_cloud_file()].
+A character vector of local file paths, as \code{\link[=download_cloud_file]{download_cloud_file()}}.
 }
 \description{
-[download_cloud_file()] wrapped in [with_storage_retry()].
+\code{\link[=download_cloud_file]{download_cloud_file()}} wrapped in \code{\link[=with_storage_retry]{with_storage_retry()}}.
 }
 \seealso{
-[download_cloud_file()], [with_storage_retry()]
+\code{\link[=download_cloud_file]{download_cloud_file()}}, \code{\link[=with_storage_retry]{with_storage_retry()}}
 }
 \keyword{storage}

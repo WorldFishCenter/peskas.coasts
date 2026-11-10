@@ -21,7 +21,7 @@ get_pelagic_boats(
 \item{token}{Character. Access token obtained from pelagic_auth()}
 
 \item{customers}{Character vector. Customer IDs to filter by. Falls back to
-`customer_id`; one of the two is required.}
+\code{customer_id}; one of the two is required.}
 
 \item{boats}{Character/Numeric vector. Boat IDs to filter by. If NULL, returns all boats.}
 
@@ -48,9 +48,9 @@ Supports server-side filtering to reduce data transfer and processing time.
 }
 \section{Two API limitations}{
 
-There is no way to query without a customer filter, so `customers` and
-`customer_id` cannot both be `NULL`. Supplying `imeis` also appears to
-override `customers` server-side, so a request scoped to one customer can
+There is no way to query without a customer filter, so \code{customers} and
+\code{customer_id} cannot both be \code{NULL}. Supplying \code{imeis} also appears to
+override \code{customers} server-side, so a request scoped to one customer can
 return another's boats — do not trust the two together.
 }
 

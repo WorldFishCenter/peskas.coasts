@@ -15,24 +15,24 @@ predict_and_upload_track(
 )
 }
 \arguments{
-\item{track_df}{Data frame of cleaned track points with columns `trip`,
-`timestamp`, `latitude`, `longitude`.}
+\item{track_df}{Data frame of cleaned track points with columns \code{trip},
+\code{timestamp}, \code{latitude}, \code{longitude}.}
 
 \item{trip_id}{Character. Trip ID.}
 
 \item{file_prefix}{Character. Cloud storage object prefix for predicted tracks.}
 
-\item{model_version}{Character. Model version string from `ssfaitk`.}
+\item{model_version}{Character. Model version string from \code{ssfaitk}.}
 
-\item{provider}{Character. Cloud storage provider key (e.g. `"gcs"`).}
+\item{provider}{Character. Cloud storage provider key (e.g. \code{"gcs"}).}
 
 \item{pds_opts}{Named list. Cloud storage options for the PDS bucket.}
 
 \item{shore_distance}{Numeric. Shore distance in km to use for prediction.}
 }
 \value{
-A named list with `trip`, `status`, and optionally `n_points` or
-  `message`.
+A named list with \code{trip}, \code{status}, and optionally \code{n_points} or
+\code{message}.
 }
 \description{
 Predict Fishing Activity and Upload Results for a Single Trip

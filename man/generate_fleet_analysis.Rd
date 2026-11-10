@@ -10,15 +10,17 @@ generate_fleet_analysis(log_threshold = logger::DEBUG, package = "coasts")
 \item{log_threshold}{Logging threshold level (default: logger::DEBUG).
 Controls the verbosity of logging output during pipeline execution.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
 Invisibly returns NULL. The function's primary purpose is to:
-  - Generate and save aggregated analysis results to RDS file
-  - Upload results to cloud storage
-  - Log progress and completion status
+\itemize{
+\item Generate and save aggregated analysis results to RDS file
+\item Upload results to cloud storage
+\item Log progress and completion status
+}
 }
 \description{
 Executes the complete fleet activity analysis pipeline from data retrieval through
@@ -27,31 +29,68 @@ including metadata retrieval, trip processing, fleet estimation, and results sto
 }
 \details{
 This function executes the complete analysis pipeline:
-1. Reads configuration parameters and retrieves metadata
-2. Prepares boat registry from metadata
-3. Processes trip data from PDS API using device IMEIs
-4. Downloads monthly summaries from cloud storage
-5. Calculates monthly trip statistics from GPS data
-6. Estimates fleet-wide activity using boat registry
-7. Calculates district totals using catch/revenue data
-8. Generates annual summary statistics by district
-9. Saves aggregated results to RDS file and uploads to cloud storage
+\enumerate{
+\item Reads configuration parameters and retrieves metadata
+\item Counts the boats per district in the census (Airtable \code{frame_units})
+\item Processes trip data from PDS API using device IMEIs
+\item Downloads the districts summaries (surveyed trips, mean catch and revenue
+per trip by district and month) from cloud storage
+\item Calculates monthly trip statistics from GPS data
+\item Estimates fleet-wide activity using the census boats
+\item Calculates district totals using catch/revenue data
+\item Generates annual summary statistics by district
+\item Saves aggregated results to RDS file and uploads to cloud storage
+}
 
 The function creates a comprehensive analysis that scales GPS-tracked boat data
-to estimate total fleet activity, catch, and revenue by district and time period.
+to estimate total fleet activity, catch, and revenue by district and time period:
+the GPS tracker method. A country whose config has \code{fao.surveys} also gets the
+FAO ARTFISH method's totals (\code{\link[=raise_catch_fao]{raise_catch_fao()}}). Its catch and revenue per
+trip are then averaged as that method does (\code{\link[=fao_catch_per_trip]{fao_catch_per_trip()}}): each
+kind of boat and gear by its boats in the census, not by how often it is
+surveyed. A district and month without such an average keeps the plain mean
+of its surveyed trips.
+
+Where a tracker is depends on \code{pds.fleet_location}:
+\itemize{
+\item Not set: the district linked to the device in Airtable \code{pds_devices}. The
+fleet is the devices owned by the customers in \code{pds.fleet_customers}, or in
+\code{pds.customers} when that key is not set. A pipeline that selects trips
+with \code{pds.exclude_customers} cannot set \code{pds.customers}, so it names its
+fleet with \code{pds.fleet_customers}. Trips longer than 48 hours are dropped.
+\item \code{landing}: where the boat lands, with no manual link. Each trip in the
+country's \code{pds.pds_trips} file is placed by the end point of its track
+(written by \code{\link[=describe_pds_tracks]{describe_pds_tracks()}}) in the nearest of the country's
+districts, matched by GAUL code to the \code{metadata.map_boundaries.gaul2}
+polygons, and left unplaced beyond 30 km. That reaches a frame district
+from the newer GAUL districts carved out of it (Chonguene and Limpopo from
+Xai-Xai) while leaving out places the frame lacks (Palma, Kilwa, both over
+100 km from any of their country's districts). Each tracker then belongs, each
+month, to the district where most of its trips landed, and all its trips
+of that month count there. Trips of any length are kept.
+}
 }
 \section{Output Files}{
 
 The function creates an RDS file containing a list with three components:
-- **fleet_estimates**: Monthly fleet activity estimates by district
-- **district_totals**: Monthly district-level catch and revenue totals
-- **annual_summary**: Annual summary statistics by district including:
-  - months_with_data: Number of months with data
-  - avg_sampling_rate: Average sampling rate across months
-  - total_estimated_catch_kg: Total estimated annual catch
-  - total_estimated_revenue: Total estimated annual revenue
-  - avg_monthly_catch_kg: Average monthly catch
-  - avg_monthly_revenue: Average monthly revenue
+\itemize{
+\item \strong{fleet_estimates}: Monthly fleet activity estimates by district
+\item \strong{district_totals}: Monthly district-level catch and revenue totals
+\item \strong{annual_summary}: Annual summary statistics by district including:
+\itemize{
+\item months_with_data: Number of months with data
+\item avg_sampling_rate: Average sampling rate across months
+\item total_estimated_catch_kg: Total estimated annual catch
+\item total_estimated_revenue: Total estimated annual revenue
+\item avg_monthly_catch_kg: Average monthly catch
+\item avg_monthly_revenue: Average monthly revenue
+}
+\item \strong{fao}: The same totals raised with the FAO ARTFISH method, per district, fishing
+unit and month (see \code{\link[=raise_catch_fao]{raise_catch_fao()}}); \code{NULL} for a country whose config
+has no \code{fao.surveys}
+\item \strong{fao_species}: The FAO ARTFISH method's catch by species, per district,
+fishing unit and month (see \code{\link[=estimate_species_fao]{estimate_species_fao()}}); \code{NULL} like \code{fao}
+}
 }
 
 \examples{
@@ -65,11 +104,12 @@ generate_fleet_analysis(log_threshold = logger::INFO)
 
 }
 \seealso{
-* [prepare_boat_registry()] for boat registry preparation
-* [process_trip_data()] for trip data processing
-* [calculate_monthly_trip_stats()] for monthly statistics
-* [estimate_fleet_activity()] for fleet estimates
-* [calculate_district_totals()] for final totals
+\itemize{
+\item \code{\link[=process_trip_data]{process_trip_data()}} for trip data processing
+\item \code{\link[=calculate_monthly_trip_stats]{calculate_monthly_trip_stats()}} for monthly statistics
+\item \code{\link[=estimate_fleet_activity]{estimate_fleet_activity()}} for fleet estimates
+\item \code{\link[=calculate_district_totals]{calculate_district_totals()}} for final totals
+}
 }
 \keyword{analysis}
 \keyword{pipeline}

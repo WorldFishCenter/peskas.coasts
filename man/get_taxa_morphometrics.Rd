@@ -15,38 +15,40 @@ get_taxa_morphometrics(
 )
 }
 \arguments{
-\item{data}{A data frame with `alpha3_code` and `scientific_name` columns,
-as accepted by [expand_taxonomic_info()].}
+\item{data}{A data frame with \code{alpha3_code} and \code{scientific_name} columns,
+as accepted by \code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}.}
 
 \item{fao_areas}{Numeric vector of FAO major fishing area codes to restrict
-species to. If `NULL` (default) the value is resolved from `conf` via
-[resolve_fao_areas()], which falls back to `c(51, 57)`. Pass
-`filter_by_area = FALSE` to apply no restriction at all.}
+species to. If \code{NULL} (default) the value is resolved from \code{conf} via
+\code{\link[=resolve_fao_areas]{resolve_fao_areas()}}, which falls back to \code{c(51, 57)}. Pass
+\code{filter_by_area = FALSE} to apply no restriction at all.}
 
-\item{filter_by_area}{Logical. If `FALSE`, species are **not** restricted by
-FAO area and `fao_areas` is ignored. Default `TRUE`. See Details for the
+\item{filter_by_area}{Logical. If \code{FALSE}, species are \strong{not} restricted by
+FAO area and \code{fao_areas} is ignored. Default \code{TRUE}. See Details for the
 coverage trade-off, which is substantial.}
 
 \item{length_types}{Character vector of length measurement codes for the
-length-length table. See [get_length_length_coeffs()].}
+length-length table. See \code{\link[=get_length_length_coeffs]{get_length_length_coeffs()}}.}
 
-\item{strip_parentheticals}{Logical, passed to [expand_taxonomic_info()].
-Default `FALSE`.}
+\item{strip_parentheticals}{Logical, passed to \code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}.
+Default \code{FALSE}.}
 
-\item{version}{FishBase / SeaLifeBase release to read. If `NULL` (default)
-it is resolved once, from the `metadata.fishbase.db_version` configuration
+\item{version}{FishBase / SeaLifeBase release to read. If \code{NULL} (default)
+it is resolved once, from the \code{metadata.fishbase.db_version} configuration
 key, and the same release is used for every read this call makes. Falls
-back to `"latest"`. See [resolve_db_version()].}
+back to \code{"latest"}. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 
-\item{conf}{Optional configuration list. If `NULL` (default) and the area or
-the release is being resolved from configuration, [read_config()] is
+\item{conf}{Optional configuration list. If \code{NULL} (default) and the area or
+the release is being resolved from configuration, \code{\link[=read_config]{read_config()}} is
 called.}
 }
 \value{
 A named list of three tibbles:
-  - `expanded`: the species expansion actually used.
-  - `length_weight`: see [get_length_weight_coeffs()].
-  - `length_length`: see [get_length_length_coeffs()].
+\itemize{
+\item \code{expanded}: the species expansion actually used.
+\item \code{length_weight}: see \code{\link[=get_length_weight_coeffs]{get_length_weight_coeffs()}}.
+\item \code{length_length}: see \code{\link[=get_length_length_coeffs]{get_length_length_coeffs()}}.
+}
 }
 \description{
 Single entry point for the morphometric half of the taxa pipeline: expands a
@@ -56,34 +58,34 @@ the length-length coefficient tables from that one expansion.
 }
 \details{
 Because both coefficient tables are derived from a single expansion, the two
-are guaranteed to be keyed consistently and can be joined on `species_found`
-and `server` without re-resolving names.
+are guaranteed to be keyed consistently and can be joined on \code{species_found}
+and \code{server} without re-resolving names.
 
-No `Type` or `EsQ` filtering is applied to `length_weight` — see
-[get_length_weight_coeffs()] for why.
+No \code{Type} or \code{EsQ} filtering is applied to \code{length_weight} — see
+\code{\link[=get_length_weight_coeffs]{get_length_weight_coeffs()}} for why.
 
 The release is resolved once, at the top, and threaded through all five
 table reads, so a single call cannot mix two snapshots of FishBase.
-
-## Whether to filter by FAO area
+\subsection{Whether to filter by FAO area}{
 
 Restricting to an area is right for distributional traits, and it is what
-[enrich_taxa()] does. For length-weight coefficients it is a coverage
-decision rather than a correctness one: `a` and `b` describe body form, which
+\code{\link[=enrich_taxa]{enrich_taxa()}} does. For length-weight coefficients it is a coverage
+decision rather than a correctness one: \code{a} and \code{b} describe body form, which
 does not stop applying at an FAO boundary, and FishBase's area assignments are
-incomplete. Measured over Timor-Leste's 57 taxa:
+incomplete. Measured over Timor-Leste's 57 taxa:\tabular{lll}{
+    \tab area 71 \tab unrestricted \cr
+   species expanded \tab 2,469 \tab 5,150 \cr
+   species with \code{a}/\code{b} \tab 764 \tab 1,283 \cr
+   length-weight rows \tab 2,970 \tab 5,225 \cr
+   taxon codes with length-length \tab 38 \tab 39 \cr
+}
 
-| | area 71 | unrestricted |
-|---|---|---|
-| species expanded | 2,469 | 5,150 |
-| species with `a`/`b` | 764 | 1,283 |
-| length-weight rows | 2,970 | 5,225 |
-| taxon codes with length-length | 38 | 39 |
 
-Filtering here costs 40% of the species that have usable coefficients. Set
-`filter_by_area = FALSE` when maximum coefficient coverage matters more than
+Filtering here costs 40\% of the species that have usable coefficients. Set
+\code{filter_by_area = FALSE} when maximum coefficient coverage matters more than
 regional specificity, which is generally the case when the coefficients feed
 a weight estimate aggregated across a whole taxon code.
+}
 }
 \examples{
 \dontrun{
@@ -106,6 +108,6 @@ m <- get_taxa_morphometrics(taxa, version = "25.04")
 }
 }
 \seealso{
-[expand_taxonomic_info()], [enrich_taxa()]
+\code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}}, \code{\link[=enrich_taxa]{enrich_taxa()}}
 }
 \keyword{taxa}

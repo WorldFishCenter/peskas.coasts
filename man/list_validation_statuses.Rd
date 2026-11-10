@@ -17,31 +17,31 @@ list_validation_statuses(
 \item{asset_id}{Character. The KoBoToolbox asset id.}
 
 \item{token}{Character. A KoBoToolbox API token, with or without the
-`Token ` prefix. Ignored when `username` is supplied.}
+\code{Token } prefix. Ignored when \code{username} is supplied.}
 
 \item{username, password}{Character. Basic-auth credentials.}
 
 \item{url}{Character. The KoBoToolbox host. Defaults to
-`"eu.kobotoolbox.org"`, matching [get_kobo_data()].}
+\code{"eu.kobotoolbox.org"}, matching \code{\link[=get_kobo_data]{get_kobo_data()}}.}
 
 \item{page_size}{Integer. Submissions per request. KoBoToolbox caps this at
 1,000 and silently truncates anything larger.}
 }
 \value{
-A tibble with one row per submission: `submission_id`,
-  `validation_status` (`not_validated` where none is set), `validated_at`,
-  `validated_by`, `fetch_error`.
+A tibble with one row per submission: \code{submission_id},
+\code{validation_status} (\code{not_validated} where none is set), \code{validated_at},
+\code{validated_by}, \code{fetch_error}.
 }
 \description{
-The bulk form of [get_validation_status()], and the one a pipeline should
-use. The data endpoint returns `_validation_status` alongside `_id` for up to
-1,000 submissions per request, so one asset costs `ceiling(n / 1000)`
+The bulk form of \code{\link[=get_validation_status]{get_validation_status()}}, and the one a pipeline should
+use. The data endpoint returns \verb{_validation_status} alongside \verb{_id} for up to
+1,000 submissions per request, so one asset costs \code{ceiling(n / 1000)}
 requests rather than one request per submission.
 
-Measured against Timor-Leste's v2 form (64,997 submissions): **65 requests
-and roughly 70 seconds**, against more than twenty minutes for a
+Measured against Timor-Leste's v2 form (64,997 submissions): \strong{65 requests
+and roughly 70 seconds}, against more than twenty minutes for a
 per-submission loop over 7,776 previously-flagged submissions spread across
-ten parallel workers. It also covers *every* submission rather than only
+ten parallel workers. It also covers \emph{every} submission rather than only
 those a previous run flagged, so an approval entered by hand on a submission
 the pipeline never flagged is seen too.
 }
@@ -56,7 +56,7 @@ list_validation_statuses(
 }
 }
 \seealso{
-[get_validation_status()], [update_validation_status()],
-  [get_kobo_data()]
+\code{\link[=get_validation_status]{get_validation_status()}}, \code{\link[=update_validation_status]{update_validation_status()}},
+\code{\link[=get_kobo_data]{get_kobo_data()}}
 }
 \keyword{validation}

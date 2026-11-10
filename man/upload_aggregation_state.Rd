@@ -9,17 +9,17 @@ upload_aggregation_state(state, names, provider, options)
 \arguments{
 \item{state}{The aggregation state to write.}
 
-\item{names}{Object names, as returned by [aggregation_state_names()].}
+\item{names}{Object names, as returned by \code{\link[=aggregation_state_names]{aggregation_state_names()}}.}
 
 \item{provider}{Cloud storage provider key.}
 
 \item{options}{Named list of cloud storage options.}
 }
 \value{
-Invisibly `NULL`.
+Invisibly \code{NULL}.
 }
 \description{
-Writes the four side files that let [aggregate_pds_effort()] rebuild the grid
+Writes the four side files that let \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}} rebuild the grid
 without re-reading every predicted track: the manifest of aggregated objects
 (with the modification time each was aggregated at, so replaced files can be
 detected), the registry of trips seen (with the fingerprint used to spot
@@ -27,6 +27,6 @@ duplicates arriving in later runs), the per-trip cell-day effort the grid is
 derived from, and the settings those hours were measured under.
 }
 \seealso{
-[load_aggregation_state()]
+\code{\link[=load_aggregation_state]{load_aggregation_state()}}
 }
 \keyword{internal}

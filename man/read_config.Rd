@@ -7,16 +7,16 @@
 read_config(package = "coasts")
 }
 \arguments{
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Downstream packages that ship their own `conf.yml` should
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Downstream packages that ship their own \code{conf.yml} should
 pass their own package name here so that their configuration is loaded
-instead of the `coasts` defaults.}
+instead of the \code{coasts} defaults.}
 }
 \value{
 the environment parameters
 }
 \description{
-Reads configuration file in `conf.yml` and adds some logging lines. Wrapped
+Reads configuration file in \code{conf.yml} and adds some logging lines. Wrapped
 for convenience
 }
 \keyword{helper}

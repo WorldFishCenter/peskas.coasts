@@ -1,3 +1,136 @@
+# coasts 4.24.1
+
+## The tracks app keeps its own users
+
+* **FIXED** The device users sync, every 3 days, no longer empties the tracks app's `users` collection before writing the device users back. It deleted every administrator account and every fisher who registered in the app, and undid passwords changed in the app. Device users are now updated in place, matched by IMEI: each keeps its id, which the app's waypoints and feedback point to, and its password is written only when it is first created. Devices that leave the list still lose their login, as before.
+* **FIXED** The sync now matches a device to its row in the tracks app's Airtable `users` table by IMEI alone. Five devices whose region or community differs between PDS and that table were split in two and given a new password on every run.
+
+# coasts 4.24.0
+
+## Monthly district figures for the Peskas Fishery Data API
+
+* **NEW** Each country's pipeline now writes one row per district and month to the API bucket (`<country>/aggregated/district-months`), for the API's planned `/data/district-months` endpoint: the dashboard's district figures, both methods' estimates of the whole fleet, and the GAUL codes of each district. Months a district recorded nothing in are kept, and landings with no district are left out. The dashboard collections do not change.
+* **NEW** The FAO ARTFISH estimates get a relative error per district and month, for catch and for revenue, in the API rows only. The Toolkit gives an error for each kind of boat and gear but none for a district total, so the district's error adds up theirs, the cautious way. In October 2026 most district-months are well above the Toolkit's 15 to 20%, because a kind of boat and gear gets 3 to 5 surveyed trips a month where the Toolkit asks for 50 to 75.
+* **CHANGED** `summarize_data()` stops if two districts share a name, or one district has two names: the summaries and the GPS tracker method join districts by name, so their numbers would be merged. No country has such a district.
+
+# coasts 4.23.0
+
+## FAO ARTFISH catch by species reaches the portal data
+
+* **NEW** In Kenya, Zanzibar and Mozambique, the portal data now holds the FAO ARTFISH estimate of the total catch of each species, by district and month. The dashboards do not show it yet.
+
+# coasts 4.22.0
+
+## FAO ARTFISH estimates of catch by species
+
+* **NEW** In Kenya, Zanzibar and Mozambique, the FAO ARTFISH method now also estimates the total catch of each species, as FAO's Toolkit sets out: each kind of boat and gear's catch is split by the species its sampled trips landed. The estimates are stored with the other totals and are not on the dashboards yet.
+* **NEW** In Kenya, where enumerators identify the species in a sample of each catch, the sample's mix is applied to the whole catch of the trip.
+
+# coasts 4.21.1
+
+## Boat counts come only from the census
+
+* **FIXED** The daily Airtable snapshot no longer asks the `districts` table for `total_boats`, which has been removed from Airtable. Without this, `ingest_assets()` stopped and the snapshot stayed at 10 October 2026. Boat counts come from `frame_units`, as they already did for the GPS tracker method.
+
+# coasts 4.21.0
+
+## Data collection numbers in Airtable
+
+* **NEW** Airtable now shows, for each country and district, the surveys submitted and validated, enumerators, landing sites, dates covered and GPS-tracked trips, refreshed daily.
+
+# coasts 4.20.2
+
+## The tracks backup runs again
+
+* **FIXED** The nightly tracks backup no longer stops on a trip PDS lists but holds no points for. Two such trips of one boat had stopped it every night since 10 September, so the backup held no track after 9 September.
+
+# coasts 4.20.1
+
+## Tracker timezones come from the country
+
+* **FIXED** The tracker sync to Airtable no longer stops when PDS reports a timezone the Airtable `device_timezone` field does not have. Each tracker's timezone now comes from its country, not from PDS, which had reset four trackers in Timor-Leste and Malawi to `America/Los_Angeles`.
+
+# coasts 4.20.0
+
+## FAO ARTFISH estimates by boat and gear together in Kenya and Zanzibar
+
+* **NEW** In Kenya and Zanzibar, the FAO ARTFISH method now raises catch and revenue for each kind of boat and main gear together, as FAO defines a fishing unit, using a new census that counts boats by both.
+* **FIXED** The boat census behind the Peskas Coasts portal counts foot fishers as fishers rather than boats, and no longer counts Kenya's boats twice.
+
+## The GPS tracker method uses the census as the FAO ARTFISH method does
+
+* **CHANGED** The GPS tracker method now takes each district's boats from the census the FAO ARTFISH method uses, no longer from the Airtable `districts` table, so both raise the same fleet. Only Mozambique's estimates change: Pemba gets estimates for the first time, and Cidade de Maputo and Xai-Xai rise with their census counts.
+* **CHANGED** In Kenya, Zanzibar and Mozambique the GPS tracker method now averages catch and revenue per trip as the FAO ARTFISH method does: each kind of boat and gear counts for its share of the boats in the census, not for how often it is surveyed. Estimates fall where the large boats are surveyed far more often than the canoes that make up most of the fleet (Kaskazini B and Beira roughly halve) and rise where it is the other way round. The two methods now differ mainly in how often boats fish: as the trackers record it, or as fishers report it.
+* **REMOVED** `prepare_boat_registry()` - Nothing called it: the boats come from the census.
+
+# coasts 4.19.0
+
+## A second estimate of total catch and revenue, by FAO's ARTFISH method
+
+* **NEW** Kenya, Zanzibar and Mozambique get a second monthly estimate of total catch and revenue for each district, made with the FAO ARTFISH method and split by gear or boat type, beside the GPS tracker method's estimate so the two can be compared.
+* **FIXED** Estimated catch and revenue are no longer shown for a district and month with fewer than ten surveyed trips, where a single trip stood for the whole fleet: in Zanzibar's Mjini, one large ring-net catch had turned December 2025 into 5,400 tonnes.
+
+# coasts 4.18.0
+
+## Kenya, Zanzibar and Mozambique boats are placed by where they land
+
+* **NEW** Fleet activity estimates in Kenya, Zanzibar and Mozambique place each tracked boat in the district where its trips land, read from its GPS track, instead of a district entered by hand for every tracker. New, moved and reassigned trackers count without anyone linking them. Timor-Leste is unchanged.
+* **NEW** Fishing trips longer than two days now count in these three countries, where multi-day trips are real.
+* **FIXED** Mozambique's TotalEnergies trackers (formerly Syberintel) are included again after the customer was renamed.
+* **NEW** The pipelines warn when a tracker customer in their settings is unknown, for example after it is renamed, instead of silently leaving its boats out.
+
+# coasts 4.17.1
+
+## Timor-Leste fleet estimates use the right boats
+
+* **FIXED** Timor-Leste's fleet activity estimates count the right boats again. They return to the regional portal once each tracker is linked to its district.
+* **FIXED** Zanzibar's and Kenya's revenue and prices on the regional portal are converted to US dollars at one rate per currency.
+
+# coasts 4.17.0
+
+## Reviewers' decisions are kept between runs
+
+* **NEW** Reviewers' approvals and rejections are no longer undone by the next pipeline run, in all four countries.
+* **FIXED** Reviewers' decisions on Kenya's KEFS surveys can be read.
+* **FIXED** Help pages show their links and formatting instead of raw markup.
+
+# coasts 4.16.0
+
+## Survey lengths can be put on the same basis as lengths at maturity
+
+* **NEW** `get_tl_conversions()` gives, for each species and length type, the FishBase / SeaLifeBase line that restates a length as total length. `enrich_taxa()` already restated lengths at maturity and optimum this way and now calls the same function, so a country pipeline that converts its survey lengths with it compares like with like. Kenya uses it for the fish KEFS measures on fork length. `taxa_enriched` is unchanged.
+* **FIXED** Fishing grounds could miss effort cells at their edges: after the cells are merged into a ground, a cell's outline can fall slightly outside it, and the cell was dropped from the ground's totals. Cells are now matched by their centre.
+
+# coasts 4.15.1
+
+## One figure per district and month
+
+* **FIXED** Districts with several landing sites in Airtable appeared once per landing site in the country dashboards, each copy scaled by that site's boat count alone: Cidade De Maputo four times (207, 120, 94 and 76 boats), Lamu West twice. Their boats are now summed, so each district-month appears once and Cidade De Maputo's estimated trips, catch and revenue are based on its 497 boats.
+* **FIXED** The annual summary in the fleet analysis output reported total catch in kg as total revenue. Nothing reads it yet.
+
+* **NEW** Pushes predicted fishing and fishing areas in country dashbaords besides the regional portal
+
+# coasts 4.15.0
+
+## Species traits, fish sizes and corrected species prices for the country dashboards
+
+* **NEW** For every species landed, the country dashboards get its vulnerability to fishing, its place in the food web, its IUCN Red List and CITES status, the length at which it first reproduces and its optimum length, from FishBase and SeaLifeBase.
+* **NEW** Recorded catch by length class, species and gear, to compare the size of the fish landed with the size at which they first reproduce.
+* **NEW** Recorded catch by gear and species, to show what each gear lands.
+* **NEW** District figures include catch and revenue per trip, the estimated number of fishing trips, and the share of the district's boats tracked behind each estimate.
+* **FIXED** Species prices divided a whole trip's value by the weight of one species. Kenya now uses the price recorded for each species; Zanzibar and Mozambique, which record one value per trip, price a species only from trips that landed it alone. Median species prices fall by 30% to 80%.
+* **FIXED** A species' catch on a trip counted only its first catch row, so where a species was split across length classes the rest was lost (recorded catch by species rises 6% in Zanzibar and 2% in Mozambique). Mean length is now weighted by catch.
+
+# coasts 4.14.0
+
+## Airtable asset text is trimmed on ingest
+
+* **FIXED**
+
+`fetch_asset()` now strips leading and trailing whitespace from every character
+column, so the assets snapshot the country pipelines read can no longer carry a
+padded join key.
+
 # coasts 4.13.0
 
 ## Restating length-weight coefficients on a total-length basis

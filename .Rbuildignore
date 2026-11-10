@@ -17,6 +17,7 @@
 ^auth$
 ^Python$
 ^.DS_Store$
+^\.env$
 
 ^CODE_OF_CONDUCT\.md$
 ^DATA-DICTIONARY\.md$

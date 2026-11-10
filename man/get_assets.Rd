@@ -16,7 +16,7 @@ get_assets(
 }
 \arguments{
 \item{form_ids}{Character vector of Airtable form record IDs, e.g. from
-one or more `get_airtable_form_id()` calls.}
+one or more \code{get_airtable_form_id()} calls.}
 
 \item{prefix}{Character. Storage prefix of the assets snapshot.}
 
@@ -31,31 +31,31 @@ one or more `get_airtable_form_id()` calls.}
 \item{version}{Snapshot version to read; defaults to the most recent.}
 }
 \value{
-A named list of tibbles, one per entry in `tables`.
+A named list of tibbles, one per entry in \code{tables}.
 }
 \description{
-Downloads the versioned assets snapshot written by [ingest_assets()] and
+Downloads the versioned assets snapshot written by \code{\link[=ingest_assets]{ingest_assets()}} and
 returns the mapping tables for the requested form(s), ready to join against
 survey data.
 }
 \details{
-This is the read-side counterpart to [ingest_assets()]. The snapshot stores
-every country's assets in one object, with `form_id` as a comma-separated
+This is the read-side counterpart to \code{\link[=ingest_assets]{ingest_assets()}}. The snapshot stores
+every country's assets in one object, with \code{form_id} as a comma-separated
 list of the forms each record belongs to — a shape created here, by
-[airtable_to_df()]. Decoding it correctly (whole-element match, not
+\code{\link[=airtable_to_df]{airtable_to_df()}}. Decoding it correctly (whole-element match, not
 substring) is knowledge that belongs next to the code that encodes it, not
 copied into each country pipeline.
 
-`drop_cols` exists because the snapshot carries columns that are useful for
-partitioning but harmful to join on. `country` rides on `taxa`, `gear`,
-`vessels` and `geo` alike, so leaving it in place makes it collide across the
-successive joins downstream; `latitude`/`longitude` are free-text fields on
-`sites`. Dropping them can make previously distinct rows identical, so
-`distinct()` is applied *after* the drop, not before.
+\code{drop_cols} exists because the snapshot carries columns that are useful for
+partitioning but harmful to join on. \code{country} rides on \code{taxa}, \code{gear},
+\code{vessels} and \code{geo} alike, so leaving it in place makes it collide across the
+successive joins downstream; \code{latitude}/\code{longitude} are free-text fields on
+\code{sites}. Dropping them can make previously distinct rows identical, so
+\code{distinct()} is applied \emph{after} the drop, not before.
 
 A table that filters down to zero rows is warned about rather than returned
 silently: it almost always means the form id is valid but wrong, which would
-otherwise surface only as an all-`NA` column far downstream.
+otherwise surface only as an all-\code{NA} column far downstream.
 }
 \examples{
 \dontrun{
@@ -70,7 +70,7 @@ assets$taxa
 
 }
 \seealso{
-[ingest_assets()], [form_id_pattern()]
+\code{\link[=ingest_assets]{ingest_assets()}}, \code{\link[=form_id_pattern]{form_id_pattern()}}
 }
 \keyword{helper}
 \keyword{preprocessing}

@@ -229,7 +229,6 @@ jobs:
       - name: Call export_effort_gear_shapefiles()
         run: Rscript -e 'coasts::export_effort_gear_shapefiles()'
 
-
   stock-assessment:
     name: Run length-based stock assessment
     needs: build-container
