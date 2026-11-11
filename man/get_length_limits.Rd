@@ -8,7 +8,7 @@ get_length_limits(taxa_lengths)
 }
 \arguments{
 \item{taxa_lengths}{The hub table \code{\link[=enrich_taxa]{enrich_taxa()}} writes, with
-\code{alpha3_code}, \code{original_name}, \code{server}, \code{length_max_tl} and
+\code{alpha3_code}, \code{original_name}, \code{server}, \code{order}, \code{length_max_tl} and
 \code{length_common_tl}.}
 }
 \value{
@@ -28,6 +28,8 @@ Where FishBase gives no common length, it is estimated as
 \code{\link[=common_length_ratio]{common_length_ratio()}} times the maximum. Only FishBase species count:
 SeaLifeBase's maximum lengths for crabs, lobsters and cephalopods are not on
 the carapace or mantle length the surveys measure (it gives the mud crab
-9 cm), so those taxa have no limits.
+9 cm), so those taxa have no limits. Rays have none either: FishBase gives
+their maximum as disc width, and its total-length estimate for them is not
+usable (140 cm for the manta).
 }
 \keyword{taxa}

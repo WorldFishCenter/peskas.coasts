@@ -1,15 +1,16 @@
-test_that("get_length_limits follows the siblings' rule on FishBase species only", {
+test_that("get_length_limits follows the siblings' rule on fish other than rays", {
   taxa <- tibble::tibble(
-    alpha3_code = c("IUU", "COM", "MUD", "SPI", "SPI"),
-    original_name = c("Siganus sutor", "Scomberomorus commerson", "Scylla serrata", "Siganus spp", "Siganus spp"),
-    server = c("fishbase", "fishbase", "sealifebase", "fishbase", "fishbase"),
-    length_max_tl = c(54.9, 266, 9.15, 30, 50),
-    length_common_tl = c(NA, 120, NA, 20, NA)
+    alpha3_code = c("IUU", "COM", "MUD", "SPI", "SPI", "RMB"),
+    original_name = c("Siganus sutor", "Scomberomorus commerson", "Scylla serrata", "Siganus spp", "Siganus spp", "Mobula birostris"),
+    server = c("fishbase", "fishbase", "sealifebase", "fishbase", "fishbase", "fishbase"),
+    order = c("Perciformes", "Scombriformes", NA, "Perciformes", "Perciformes", "Myliobatiformes"),
+    length_max_tl = c(54.9, 266, 9.15, 30, 50, 140),
+    length_common_tl = c(NA, 120, NA, 20, NA, NA)
   )
   limits <- get_length_limits(taxa)
 
   expect_equal(nrow(limits), 3)
-  expect_false("Scylla serrata" %in% limits$original_name)
+  expect_false(any(c("Scylla serrata", "Mobula birostris") %in% limits$original_name))
   sutor <- limits[limits$original_name == "Siganus sutor", ]
   expect_equal(sutor$max_length, 54.9)
   expect_equal(sutor$min_length, 0.25 * 0.625 * 54.9)

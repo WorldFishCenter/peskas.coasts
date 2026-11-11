@@ -1183,7 +1183,7 @@ enrich_taxa <- function(
 #' their own FishBase reads; Kenya uses this one for KEFS alerts 5.3 and 5.4.
 #'
 #' @param taxa_lengths The hub table [enrich_taxa()] writes, with
-#'   `alpha3_code`, `original_name`, `server`, `length_max_tl` and
+#'   `alpha3_code`, `original_name`, `server`, `order`, `length_max_tl` and
 #'   `length_common_tl`.
 #'
 #' @return A tibble with one row per `alpha3_code` and `original_name`, and
@@ -1195,13 +1195,23 @@ enrich_taxa <- function(
 #' [common_length_ratio()] times the maximum. Only FishBase species count:
 #' SeaLifeBase's maximum lengths for crabs, lobsters and cephalopods are not on
 #' the carapace or mantle length the surveys measure (it gives the mud crab
-#' 9 cm), so those taxa have no limits.
+#' 9 cm), so those taxa have no limits. Rays have none either: FishBase gives
+#' their maximum as disc width, and its total-length estimate for them is not
+#' usable (140 cm for the manta).
 #'
 #' @keywords taxa
 #' @export
 get_length_limits <- function(taxa_lengths) {
   taxa_lengths |>
-    dplyr::filter(.data$server == "fishbase") |>
+    dplyr::filter(
+      .data$server == "fishbase",
+      !.data$order %in% c(
+        "Myliobatiformes",
+        "Rajiformes",
+        "Rhinopristiformes",
+        "Torpediniformes"
+      )
+    ) |>
     dplyr::mutate(
       length_common_tl = dplyr::coalesce(
         .data$length_common_tl,
