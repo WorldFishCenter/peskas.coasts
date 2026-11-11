@@ -1,3 +1,9 @@
+# coasts 4.25.1
+
+## Rays have no species length limits
+
+* **FIXED** Rays get no longest or shortest plausible length from the shared rule, like crabs and lobsters: FishBase gives their size as disc width, and its total-length estimate for them is not usable (140 cm for a manta, which spans up to 7 m).
+
 # coasts 4.25.0
 
 ## Species length limits for validation
