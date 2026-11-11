@@ -2,8 +2,9 @@
 #
 # Turns the quality flags into actionable suggestions for the dashboard. The
 # thresholds follow a subsampling test on Siganus sutor: LBB precision plateaus around
-# 100-150 measured fish, and a status is only reliable when its uncertainty
-# band does not cross the status line.
+# 100-150 samples, and a status is only reliable when its uncertainty
+# band does not cross the status line. A sample is a trip with measured fish:
+# fish from one catch are not independent.
 
 #' Read a Column if Present
 #'
@@ -34,14 +35,14 @@
 #'
 #' @keywords internal
 .quality_reasons <- function(coverage, linf, ci_width = NA_real_, priors = NULL) {
-  n <- .col_or(coverage, "n_measured")
+  n <- .col_or(coverage, "n_trips_measured")
   frac <- .col_or(coverage, "frac_measured")
   l_top <- .col_or(coverage, "l_99", .col_or(coverage, "l_max"))
   reach <- if (isTRUE(linf > 0)) l_top / linf else NA_real_
   n_cls <- .col_or(coverage, "n_length_classes")
   reasons <- c(
     if (isTRUE(n_cls < 6)) sprintf("only %d length classes (lengths recorded too coarsely)", n_cls),
-    if (isTRUE(n < 100)) "few fish measured (n < 100)",
+    if (isTRUE(n < 100)) "fish measured on few trips (< 100)",
     if (isTRUE(frac < 0.1)) "lengths on < 10% of records",
     if (isTRUE(reach < 0.8)) "no fish near maximum size (99th percentile < 80% of Linf)",
     if (isTRUE(ci_width > 0.5)) "wide credible interval",
@@ -60,11 +61,11 @@
 #'
 #' Picks the single most useful next step for the people collecting data,
 #' in priority order: not assessable yet, possible misidentification, lengths
-#' recorded too coarsely, too few fish, large fish missing, borderline status
+#' recorded too coarsely, too few trips, large fish missing, borderline status
 #' (sensitive prior, band straddling the line, or methods disagreeing), mixed
 #' coarse taxon, reliable.
 #'
-#' @param n_measured Measured fish in the sample.
+#' @param n_trips Trips with measured fish in the sample.
 #' @param reasons Output of [.quality_reasons()].
 #' @param n_classes Number of distinct recorded lengths.
 #' @param consensus Consensus label from [.ensemble_consensus()].
@@ -75,24 +76,24 @@
 #'   sample is dominated by dome-selective gears the "large fish missing"
 #'   advice names the gear.
 #' @param coarse_low_confidence Logical; a low-confidence genus/family read.
-#' @param min_n Minimum fish for any read. Default 20 (species track).
-#' @param target_n Recommended fish per assessment period. Default 150.
+#' @param min_n Minimum trips for any read. Default 20 (species track).
+#' @param target_n Recommended trips per assessment period. Default 150.
 #'
 #' @return A single sentence.
 #'
 #' @keywords internal
-.stock_advice <- function(n_measured, reasons = "", n_classes = NA_integer_,
+.stock_advice <- function(n_trips, reasons = "", n_classes = NA_integer_,
                           consensus = NA_character_, misid = NA,
                           robust_flag = NA_character_,
                           production_band = NA_character_,
                           gear_profile = NULL,
                           coarse_low_confidence = FALSE,
                           min_n = 20L, target_n = 150L) {
-  n <- n_measured %||% 0
+  n <- n_trips %||% 0
   if (is.na(n) || n < min_n) {
     return(sprintf(
-      "Not assessable yet: measure at least %d fish (currently %d).",
-      as.integer(target_n), as.integer(dplyr::coalesce(n, 0))
+      "Not assessable yet: fish measured on %d trips, at least %d needed (aim for %d).",
+      as.integer(dplyr::coalesce(n, 0)), as.integer(min_n), as.integer(target_n)
     ))
   }
   if (isTRUE(misid)) {
@@ -106,7 +107,7 @@
   }
   if (n < 100) {
     return(sprintf(
-      "Measure more fish: aim for %d+ per assessment period (currently %d).",
+      "Measure fish on more trips: aim for %d+ per assessment period (currently %d).",
       as.integer(target_n), as.integer(n)
     ))
   }

@@ -7,6 +7,7 @@
 lbb_engine_jags(
   lengths,
   priors,
+  n_eff = NULL,
   bin_width = NULL,
   n_iter = 6000,
   n_burn = 3000,
@@ -22,6 +23,11 @@ lbb_engine_jags(
 
 \item{priors}{A one-row life-history tibble from \code{\link[=get_life_history_priors]{get_life_history_priors()}}
 (\code{linf}, \code{mk}, \code{lm}).}
+
+\item{n_eff}{Sample size for the likelihood. Fish from one catch are not
+independent, so the length-frequency is scaled to sum to \code{n_eff} (the
+trips measured) while keeping each length class's share. \code{NULL} (default)
+or a value above the fish count uses every fish.}
 
 \item{bin_width}{Length-bin width (cm). \code{NULL} (default) uses the recording
 resolution of the data (see \code{\link[=.length_resolution]{.length_resolution()}}), at least 1 cm, with

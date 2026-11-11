@@ -23,10 +23,13 @@ A list with \code{lengths} (numeric vector of measured lengths) and
 Length-based methods run only on the subset of records that carry a
 \code{length_cm} value. This helper reports how much length information exists for
 one species and returns the length vector for downstream fitting. A record
-with \code{n_catch} > 1 stands for that many fish of the recorded length (the
-validated feeds log a length class with its count), so its length is
-repeated \code{n_catch} times; \code{n_measured} therefore counts fish, while
-\code{frac_measured} stays a share of records. With \code{linf}, implausible lengths
+stands for \code{n_fish} fish of the recorded length (the validated feeds log a
+length class with its count), so its length is repeated \code{n_fish} times
+(\code{\link[=.n_fish]{.n_fish()}}); \code{n_measured} therefore counts fish. Fish from one catch are
+not independent, so the sample size the reads use is \code{n_trips_measured},
+the trips with a length kept. \code{n_records} and
+\code{frac_measured} count catches (\code{trip_id} x \code{n_catch}), not rows, since a
+catch has a row per length. With \code{linf}, implausible lengths
 are dropped first (\code{\link[=.clean_lengths]{.clean_lengths()}}), so the size checks see only the
 lengths the read uses.
 }

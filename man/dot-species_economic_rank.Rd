@@ -13,7 +13,8 @@ with at least \code{scientific_name}, \code{catch_taxon}, \code{catch_kg}, \code
 }
 \value{
 A tibble with one row per (\code{country}, \code{scientific_name}): columns
-\code{catch_taxon}, \code{revenue}, \code{catch_kg}, \code{n_records}, \code{n_trips}, \code{rank} and
+\code{catch_taxon}, \code{revenue}, \code{catch_kg}, \code{n_records} (catches: \code{trip_id} x
+\code{n_catch}, as a catch has a row per length), \code{n_trips}, \code{rank} and
 \code{rank_basis} (\code{"price"}, \code{"apportioned"} or \code{"weight"}).
 }
 \description{

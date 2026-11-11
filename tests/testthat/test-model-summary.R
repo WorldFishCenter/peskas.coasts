@@ -78,7 +78,7 @@ test_that("species without an LBB fit fall back to the Froese status; small samp
   expect_equal(s$status, "overfishing signal")
   expect_equal(s$status_basis, "Froese")
   expect_equal(s$reliability, "indicative")
-  small <- dplyr::mutate(r, n_measured = 44, n_length_classes = 20L, selectivity_flag = FALSE,
+  small <- dplyr::mutate(r, n_trips_measured = 44, n_length_classes = 20L, selectivity_flag = FALSE,
     consensus = "healthy (agree)", p_mature = c(0.9, NA, NA), lmean_lopt = c(1, NA, NA))
   expect_equal(summarise_stock_status(small)$reliability, "indicative")
 })

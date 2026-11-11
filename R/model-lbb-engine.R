@@ -1,7 +1,7 @@
 # Length-Based Bayesian (LBB, Froese et al. 2018) fitting engine for the
 # stock-assessment framework. Plugs into assess_stock_lbb() via the
-# `lbb_engine` hook: a function of (lengths, priors) returning the list that
-# assess_stock_lbb() expects (bb0, bbmsy, fm, lc_lopt, ci_width).
+# `lbb_engine` hook: a function of (lengths, priors, n_eff) returning the list
+# that assess_stock_lbb() expects (bb0, bbmsy, fm, lc_lopt, ci_width).
 #
 # The L-infinity prior is centred on the FishBase value carried in `priors`
 # (from get_life_history_priors()), so the Bayesian fit is anchored to known
@@ -91,6 +91,10 @@ model {
 #'   [.clean_lengths()].
 #' @param priors A one-row life-history tibble from [get_life_history_priors()]
 #'   (`linf`, `mk`, `lm`).
+#' @param n_eff Sample size for the likelihood. Fish from one catch are not
+#'   independent, so the length-frequency is scaled to sum to `n_eff` (the
+#'   trips measured) while keeping each length class's share. `NULL` (default)
+#'   or a value above the fish count uses every fish.
 #' @param bin_width Length-bin width (cm). `NULL` (default) uses the recording
 #'   resolution of the data (see [.length_resolution()]), at least 1 cm, with
 #'   bins centred on the recorded class values — so 5-cm length classes are not
@@ -113,6 +117,7 @@ model {
 lbb_engine_jags <- function(
   lengths,
   priors,
+  n_eff = NULL,
   bin_width = NULL,
   n_iter = 6000,
   n_burn = 3000,
@@ -167,6 +172,9 @@ lbb_engine_jags <- function(
     1.5
   }
   mode_lc <- lmid[which.max(counts)]
+  if (isTRUE(n_eff < sum(counts))) {
+    counts <- round(counts * n_eff / sum(counts))
+  }
 
   dat <- list(
     LF = counts, Lmid = lmid, nL = length(lmid), Ntot = sum(counts),
@@ -205,7 +213,7 @@ lbb_engine_jags <- function(
     .lbb_bb0(lmid, p[["Linf"]], p[["Lc"]], p[["alpha"]], p[["MK"]], p[["FK"]])
   })
   fm <- dr[, "FK"] / dr[, "MK"]
-  lopt <- dr[, "Linf"] * 3 / (3 + dr[, "MK"])
+  lopt <- .optimum_length(dr[, "Linf"], dr[, "MK"])
   lc_lopt <- dr[, "Lc"] / lopt
   bb <- stats::quantile(bb0, c(0.5, 0.025, 0.975), names = FALSE)
 

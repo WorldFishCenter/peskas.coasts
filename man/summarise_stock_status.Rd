@@ -29,7 +29,8 @@ biomass and fishing pressure with the prior-robustness band;
 \code{production_band}: production layer (share of production taken vs the
 sustainable share; \code{sy_ratio} = sustainable catch / current catch);
 \item \code{p_mature}, \code{lmean_lopt}: Froese indicators;
-\item \code{n_measured}, \code{n_length_classes}, \code{size_reach}, \code{catch_share},
+\item \code{n_measured} (fish), \code{n_trips_measured}, \code{n_length_classes},
+\code{size_reach}, \code{catch_share},
 \code{trophic_level}, \code{confidence} (groups), \code{quality}, \code{quality_reasons};
 \item \code{main_gear}, \code{main_gear_share}, \code{selectivity_flag}, \code{robust_flag},
 \code{linf_ratio}, \code{misid_flag};
@@ -47,8 +48,8 @@ come from the pooled read, the only one the robustness grid is run on.
 \code{reliability} is \verb{not assessable} without a read; \code{borderline}
 when the status flips across plausible priors, the production band
 straddles the sustainable line, or the methods disagree; \code{indicative} when
-the read stands but rests on a weak basis (failed quality, fewer than 100
-measured fish, a trap / gill net dominated sample, fewer than six length
+the read stands but rests on a weak basis (failed quality, fish measured
+on fewer than 100 trips, a trap / gill net dominated sample, fewer than six length
 classes, or a low-confidence group prior); otherwise \code{reliable}.
 }
 \keyword{modeling}

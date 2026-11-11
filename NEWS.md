@@ -1,3 +1,11 @@
+# coasts 4.27.0
+
+## Stock assessment from catch lengths
+
+* **NEW** Every day the pipeline reads the state of the main stocks in each country from the fish lengths measured at landing: the five most valuable species and the main fish groups. It writes two tables, one with each method's result and one with a single line per stock: its status, how far to trust it, and what to collect next.
+* **NEW** The assessment counts the real number of fish behind each length, and takes the number of trips with measured fish as its sample size, because fish from the same catch are not independent.
+* **CHANGED** The best size to catch shown on the dashboards uses the stock assessment's formula, which accounts for each species' growth and natural mortality. It is about 6% larger at the median.
+
 # coasts 4.26.0
 
 ## Length limits leave room above the species' maximum

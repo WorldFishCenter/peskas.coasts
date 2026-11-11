@@ -5,7 +5,7 @@
 \title{One Data-Collection Suggestion per Stock Read}
 \usage{
 .stock_advice(
-  n_measured,
+  n_trips,
   reasons = "",
   n_classes = NA_integer_,
   consensus = NA_character_,
@@ -19,7 +19,7 @@
 )
 }
 \arguments{
-\item{n_measured}{Measured fish in the sample.}
+\item{n_trips}{Trips with measured fish in the sample.}
 
 \item{reasons}{Output of \code{\link[=.quality_reasons]{.quality_reasons()}}.}
 
@@ -39,9 +39,9 @@ advice names the gear.}
 
 \item{coarse_low_confidence}{Logical; a low-confidence genus/family read.}
 
-\item{min_n}{Minimum fish for any read. Default 20 (species track).}
+\item{min_n}{Minimum trips for any read. Default 20 (species track).}
 
-\item{target_n}{Recommended fish per assessment period. Default 150.}
+\item{target_n}{Recommended trips per assessment period. Default 150.}
 }
 \value{
 A single sentence.
@@ -49,7 +49,7 @@ A single sentence.
 \description{
 Picks the single most useful next step for the people collecting data,
 in priority order: not assessable yet, possible misidentification, lengths
-recorded too coarsely, too few fish, large fish missing, borderline status
+recorded too coarsely, too few trips, large fish missing, borderline status
 (sensitive prior, band straddling the line, or methods disagreeing), mixed
 coarse taxon, reliable.
 }

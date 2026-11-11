@@ -13,7 +13,10 @@ assess_stock_lbb(lengths, priors, lbb_engine = NULL)
 
 \item{lbb_engine}{A function of \verb{(lengths, priors)} returning a list with at
 least \code{bb0} (B/B0), \code{bbmsy} (B/Bmsy), \code{fm} (F/M), \code{lc_lopt} and their
-credible-interval widths. Default \code{NULL}.}
+credible-interval widths. Default \code{NULL}. An engine passed to
+\code{\link[=assess_species_stock]{assess_species_stock()}} or \code{\link[=run_stock_assessment]{run_stock_assessment()}} is also called with
+\code{n_eff} (the trips measured), so it must accept that argument, as
+\code{\link[=lbb_engine_jags]{lbb_engine_jags()}} does.}
 }
 \value{
 A one-row tibble: \code{method}, \code{bb0}, \code{bbmsy}, \code{f_m}, \code{lc_lopt},

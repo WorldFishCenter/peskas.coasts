@@ -20,7 +20,7 @@ assess_group_stock(
 
 \item{group_prior}{A one-row tibble from \code{\link[=get_group_priors]{get_group_priors()}}.}
 
-\item{min_measured}{Minimum pooled measured lengths to attempt a read.
+\item{min_measured}{Minimum trips with measured lengths to attempt a read.
 Default 100.}
 
 \item{production}{Logical. Append the production-based exploitation columns
@@ -31,8 +31,8 @@ from \code{\link[=assess_production]{assess_production()}} (Beverton-Holt leg). 
 \value{
 A one-row tibble: \code{scientific_name}, \code{scale} (\code{"group"}), \code{method}
 (\code{"group-lbi"}), the Froese indicator columns, \code{group_status},
-\code{n_measured}, \code{frac_measured}, \code{n_species}, \code{confidence}, \code{prior_note},
-\code{quality}.
+\code{n_measured}, \code{n_trips_measured}, \code{frac_measured}, \code{n_species},
+\code{confidence}, \code{prior_note}, \code{quality}.
 }
 \description{
 Runs the Froese length indicators on a coarse taxon's pooled lengths against

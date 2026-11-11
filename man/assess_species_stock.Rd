@@ -26,7 +26,9 @@ assess_species_stock(
 \code{"lbspr"}, \code{"lbb"}. Default \code{c("lbi", "lbb")}: LBSPR is opt-in until its
 fit stops failing on the Peskas length data.}
 
-\item{lbb_engine}{Optional LBB fitting routine (see \code{\link[=assess_stock_lbb]{assess_stock_lbb()}}).}
+\item{lbb_engine}{Optional LBB fitting routine, a function of
+\verb{(lengths, priors, n_eff)} with \code{n_eff} the trips measured (see
+\code{\link[=assess_stock_lbb]{assess_stock_lbb()}} and \code{\link[=lbb_engine_jags]{lbb_engine_jags()}}).}
 
 \item{robustness}{Logical. Attach the LBB prior-robustness band. Default
 \code{FALSE}. See \code{\link[=lbb_robustness]{lbb_robustness()}}.}
@@ -40,8 +42,8 @@ harvestable share \code{x}. Default \code{NA} (conservative \code{x}).}
 }
 \value{
 A tibble with one row per method, carrying the estimate columns of
-each method plus \code{scientific_name}, \code{n_measured}, \code{frac_measured} and
-\code{quality}.
+each method plus \code{scientific_name}, \code{n_measured}, \code{n_trips_measured},
+\code{frac_measured} and \code{quality}.
 }
 \description{
 Runs the length coverage summary, life-history priors and the chosen

@@ -6,11 +6,11 @@ fake_land <- function() {
     trip_id = paste0("t", 1:6),
     gear = c("Trap", "Trap", "Trap", "Hand Line", "Hand Line", NA),
     length_cm = c(20, 22, 25, 30, 35, NA),
-    n_catch = c(50L, 50L, 20L, 60L, 50L, 1L)
+    n_fish = c(50L, 50L, 20L, 60L, 50L, 1L)
   )
 }
 
-test_that(".gear_profile weights by n_catch and flags dome-selective gears", {
+test_that(".gear_profile weights by n_fish and flags dome-selective gears", {
   gp <- .gear_profile(fake_land(), "Siganus sutor")
   expect_equal(gp$main_gear, "Trap")
   expect_equal(gp$main_gear_share, 120 / 230)
@@ -20,9 +20,9 @@ test_that(".gear_profile weights by n_catch and flags dome-selective gears", {
   expect_true(.gear_profile(trap_only, "Siganus sutor")$selectivity_flag)
 })
 
-test_that(".gears_with_fish needs two qualifying gears", {
-  expect_setequal(.gears_with_fish(fake_land(), "Siganus sutor", min_fish = 100), c("Trap", "Hand Line"))
-  expect_length(.gears_with_fish(fake_land(), "Siganus sutor", min_fish = 115), 0)
+test_that(".gears_with_trips counts trips and needs two qualifying gears", {
+  expect_setequal(.gears_with_trips(fake_land(), "Siganus sutor", min_trips = 2), c("Trap", "Hand Line"))
+  expect_length(.gears_with_trips(fake_land(), "Siganus sutor", min_trips = 3), 0)
 })
 
 test_that(".mark_reference_gear picks the gear reaching closest to Linf", {

@@ -31,14 +31,14 @@
 #' @keywords internal
 .reliability <- function(quality, robust_flag, production_band, consensus,
                          selectivity_flag, n_length_classes, confidence,
-                         n_measured = NA_real_) {
+                         n_trips_measured = NA_real_) {
   dplyr::case_when(
     is.na(quality) | quality == "unknown" ~ "not assessable",
     robust_flag %in% "sensitive" | production_band %in% "straddles" |
       consensus %in% "mixed (methods disagree)" ~ "borderline",
     quality %in% "fail" | selectivity_flag %in% TRUE |
       dplyr::coalesce(n_length_classes < 6, FALSE) | confidence %in% "low" |
-      dplyr::coalesce(n_measured < 100, FALSE) ~ "indicative",
+      dplyr::coalesce(n_trips_measured < 100, FALSE) ~ "indicative",
     TRUE ~ "reliable"
   )
 }
@@ -71,7 +71,8 @@
 #'     `production_band`: production layer (share of production taken vs the
 #'     sustainable share; `sy_ratio` = sustainable catch / current catch);
 #'   * `p_mature`, `lmean_lopt`: Froese indicators;
-#'   * `n_measured`, `n_length_classes`, `size_reach`, `catch_share`,
+#'   * `n_measured` (fish), `n_trips_measured`, `n_length_classes`,
+#'     `size_reach`, `catch_share`,
 #'     `trophic_level`, `confidence` (groups), `quality`, `quality_reasons`;
 #'   * `main_gear`, `main_gear_share`, `selectivity_flag`, `robust_flag`,
 #'     `linf_ratio`, `misid_flag`;
@@ -80,8 +81,8 @@
 #' @details `reliability` is `not assessable` without a read; `borderline`
 #'   when the status flips across plausible priors, the production band
 #'   straddles the sustainable line, or the methods disagree; `indicative` when
-#'   the read stands but rests on a weak basis (failed quality, fewer than 100
-#'   measured fish, a trap / gill net dominated sample, fewer than six length
+#'   the read stands but rests on a weak basis (failed quality, fish measured
+#'   on fewer than 100 trips, a trap / gill net dominated sample, fewer than six length
 #'   classes, or a low-confidence group prior); otherwise `reliable`.
 #'
 #' @keywords workflow modeling
@@ -94,10 +95,7 @@ summarise_stock_status <- function(results) {
   if (!"reference_gear" %in% names(results)) {
     results$reference_gear <- NA
   }
-  col <- function(df, name, default = NA) {
-    if (name %in% names(df)) df[[name]] else rep(default, nrow(df))
-  }
-  results$method <- col(results, "method", NA_character_)
+  results$method <- .col_or(results, "method", NA_character_)
 
   headline <- results |>
     dplyr::group_by(dplyr::across(dplyr::all_of(key))) |>
@@ -122,7 +120,7 @@ summarise_stock_status <- function(results) {
   }
   base_cols <- c(
     "catch_taxon", "headline_gear", "group_status", "consensus", "n_concern",
-    "n_methods", "n_measured", "size_reach", "catch_share", "confidence",
+    "n_methods", "n_measured", "n_trips_measured", "size_reach", "catch_share", "confidence",
     "quality", "quality_reasons", "advice", "main_gear", "main_gear_share",
     "selectivity_flag", "misid_flag", "p_mature", "lmean_lopt", "e", "e_lo",
     "e_hi", "x", "e_x", "sy_ratio", "production_status", "production_band",
@@ -174,7 +172,7 @@ summarise_stock_status <- function(results) {
     out <- dplyr::left_join(out, n_cls, by = key)
   }
 
-  for (v in c("bb0", "f_m", "bb0_lo", "p_mature", "lmean_lopt", "n_measured", "bb0_hi", "fm_lo", "fm_hi", "robust_flag",
+  for (v in c("bb0", "f_m", "bb0_lo", "p_mature", "lmean_lopt", "n_measured", "n_trips_measured", "bb0_hi", "fm_lo", "fm_hi", "robust_flag",
               "linf_ratio", "group_status", "production_band", "consensus",
               "selectivity_flag", "n_length_classes", "confidence", "quality",
               "catch_share")) {
@@ -197,7 +195,7 @@ summarise_stock_status <- function(results) {
       reliability = .reliability(
         .data$quality, .data$robust_flag, .data$production_band, .data$consensus,
         .data$selectivity_flag, .data$n_length_classes, .data$confidence,
-        .data$n_measured
+        .data$n_trips_measured
       )
     ) |>
     dplyr::select(
@@ -207,7 +205,7 @@ summarise_stock_status <- function(results) {
       dplyr::any_of(c(
         "e", "e_lo", "e_hi", "x", "e_x", "sy_ratio", "production_status",
         "production_band", "p_mature", "lmean_lopt", "n_measured",
-        "n_length_classes", "size_reach", "catch_share", "trophic_level",
+        "n_trips_measured", "n_length_classes", "size_reach", "catch_share", "trophic_level",
         "confidence", "quality", "quality_reasons", "main_gear",
         "main_gear_share", "selectivity_flag", "robust_flag", "linf_ratio",
         "misid_flag", "advice"

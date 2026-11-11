@@ -13,7 +13,7 @@ assess_group_layer(
   version = "latest",
   production = TRUE,
   by_gear = FALSE,
-  min_gear_fish = 100L
+  min_gear_trips = 100L
 )
 }
 \arguments{
@@ -23,7 +23,7 @@ assess_group_layer(
 
 \item{min_records}{Minimum landing records to be eligible. Default 30.}
 
-\item{min_measured}{Minimum pooled measured lengths to attempt a read.
+\item{min_measured}{Minimum trips with measured lengths to attempt a read.
 Default 100.}
 
 \item{fao_areas}{Named list mapping country key to an integer vector of FAO
@@ -36,9 +36,9 @@ from the list skip the regional filter.}
 with regional trophic levels from \code{\link[=get_trophic_levels]{get_trophic_levels()}}. Default \code{TRUE}.}
 
 \item{by_gear}{Logical. Add per-gear reads where at least two gears each
-have \code{min_gear_fish} measured fish. See \code{\link[=run_stock_assessment]{run_stock_assessment()}}.}
+have measured fish on \code{min_gear_trips} trips. See \code{\link[=run_stock_assessment]{run_stock_assessment()}}.}
 
-\item{min_gear_fish}{Minimum measured fish for a per-gear read.}
+\item{min_gear_trips}{Minimum trips with measured fish for a per-gear read.}
 }
 \value{
 A tibble of per-taxon group assessments with a \code{country} column.

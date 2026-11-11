@@ -1149,7 +1149,7 @@ enrich_taxa <- function(
       mk = dplyr::coalesce(
         .m_then2015(.data$K, .data$LengthInfinityTL) / .data$K, 1.5
       ),
-      LengthOptimumTL = 3 * .data$LengthInfinityTL / (3 + .data$mk)
+      LengthOptimumTL = .optimum_length(.data$LengthInfinityTL, .data$mk)
     ) |>
     dplyr::select("SpecCode", "server", "LengthMaturityTL", "LengthOptimumTL", "LengthCommonTL")
 

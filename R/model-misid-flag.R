@@ -1,23 +1,8 @@
-# Misidentification / species-mixture flag for the stock-assessment framework.
-#
-# A single species' length sample should be one coherent distribution. When it
-# is clearly bimodal AND the upper mode sits beyond the species' FishBase
-# asymptotic length, the large mode is almost certainly a different (larger)
-# species recorded under the same name — a data-quality problem the length data
-# itself reveals (the Scarus ghobban case: a cluster of fish far above L-inf
-# drags the fitted L-inf up and trips the "L-inf high vs FishBase" flag).
-#
-# Design notes from the Timor prototype:
-#  - Dip test and BIC are over-powered at these sample sizes (thousands of
-#    fish): both reject unimodality for any trivial deviation. The usable
-#    signal is the STANDARDISED SEPARATION of the two fitted modes and their
-#    weight balance, not a p-value.
-#  - Family/genus aggregates are bimodal by construction (they are mixes of
-#    species), so this flag is meaningful only for species-level (binomial)
-#    taxa. Bimodality WITHIN the plausible size range is read as cohorts, not
-#    misidentification.
-#  - A dependency-free two-component Gaussian EM is used so the flag adds no new
-#    package requirement.
+# Misidentification flag: a species' length sample with a second, larger mode
+# beyond its FishBase L-inf, or a cluster of fish well above it, likely mixes in
+# a larger species. The signal is the separation and weight of two fitted modes,
+# not a p-value: at thousands of fish, dip tests and BIC reject one mode for any
+# small deviation. See STOCK-ASSESSMENT.md, section 4.7.
 
 #' Two-Component Gaussian Mixture by EM (base R)
 #'

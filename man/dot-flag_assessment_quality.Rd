@@ -21,7 +21,7 @@ A single character flag: \code{"pass"}, \code{"warn"}, \code{"fail"} or
 \description{
 Mirrors the FAO estimator's vocabulary (\code{pass}, \code{warn}, \code{fail}, \code{unknown})
 so the assessment layer reads consistently with the catch estimates. The
-flag combines length-sample size, how representative the sampled records are,
+flag combines length-sample size (trips with a length), how representative the sampled records are,
 whether the sample reaches near-asymptotic sizes, and — when present — the
 width of the method's own uncertainty.
 }

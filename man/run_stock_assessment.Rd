@@ -13,7 +13,7 @@ run_stock_assessment(
   robustness = FALSE,
   production = TRUE,
   by_gear = FALSE,
-  min_gear_fish = 100L,
+  min_gear_trips = 100L,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
@@ -34,7 +34,10 @@ Default \code{c("lbi", "lbb")} (LBSPR opt-in).}
 \item{start_date}{Earliest landing date to include, aligning with the
 PDS-covered window. Default \code{"2024-01-01"}.}
 
-\item{lbb_engine}{Optional LBB fitting routine (see \code{\link[=assess_stock_lbb]{assess_stock_lbb()}}).}
+\item{lbb_engine}{Optional LBB fitting routine, a function of
+\verb{(lengths, priors, n_eff)} with \code{n_eff} the trips measured (see
+\code{\link[=assess_stock_lbb]{assess_stock_lbb()}}). \code{NULL} uses \code{\link[=lbb_engine_jags]{lbb_engine_jags()}} when \code{"lbb"} is in
+\code{methods}.}
 
 \item{robustness}{Logical. Also compute the LBB prior-robustness band
 (\code{bb0_lo/hi}, \code{fm_lo/hi}, \code{robust_flag}) per fitted species. Costs ~9x the
@@ -47,12 +50,13 @@ taxon's \code{catch_share} of sampled catch. See \code{\link[=assess_production]
 Default \code{TRUE}.}
 
 \item{by_gear}{Logical. Also assess each taxon separately for every gear
-with at least \code{min_gear_fish} measured fish (when two or more gears
+with measured fish on at least \code{min_gear_trips} trips (when two or more gears
 qualify), and mark the \code{reference_gear}: the gear whose catch reaches
 closest to Linf, least distorted by gear selectivity. Robustness runs on
 the pooled read only. Pooled rows carry \code{gear = "all"}. Default \code{FALSE}.}
 
-\item{min_gear_fish}{Minimum measured fish for a per-gear read. Default 100.}
+\item{min_gear_trips}{Minimum trips with measured fish for a per-gear read.
+Default 100.}
 
 \item{group_layer}{Logical. Also assess coarse (genus/family) taxa with the
 group-level layer and append them to the output. Default \code{TRUE}.}

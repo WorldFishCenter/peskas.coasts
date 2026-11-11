@@ -18,7 +18,7 @@ the assessed gear with the highest \code{size_reach} (99th-percentile length /
 Linf): the sample least truncated by gear selectivity, and so the best basis
 for the headline status. Only species and high-confidence genera get one: in
 a mixed family, gears catch different member species, so a larger reach
-reflects species composition rather than selectivity (2026-11-09 run:
-Carangidae / Clupeidae reach > 1.5 against the member-median Linf).
+reflects species composition rather than selectivity (Carangidae and
+Clupeidae can reach more than 1.5 times their member-median Linf).
 }
 \keyword{internal}

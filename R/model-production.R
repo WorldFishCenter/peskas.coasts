@@ -1,32 +1,6 @@
-# Production-based exploitation layer (Kolding's modified Cadima estimator).
-#
-# Kolding (2026, "Population ecology and sustainable fisheries yields") argues
-# for judging exploitation against CURRENT biological production rather than a
-# theoretical MSY. Under approximately stationary conditions P/B ~ Z, so current
-# production is P = B * Z, and the modified Cadima sustainable yield is
-#
-#   SY = x * B * Z,   x = share of production that fishing may take
-#
-# with x ~ 0.25 for lower trophic levels and ~ 0.5 for top predators
-# (heuristics, not constants). Because current yield is Y = F * B, the biomass
-# cancels:
-#
-#   SY = Y * x / E,   E = F / Z  (exploitation rate, = Y / P)
-#
-# so a stock's position needs only E (from the length data) and x (from its
-# trophic level): E / x > 1 means fishing takes more than its sustainable share
-# of production, and x / E is the sustainable catch as a multiple of the
-# current catch. Absolute tonnes need the fleet-raised catch, see
-# [scale_sustainable_yield()].
-#
-# E is estimated two ways where possible and reported with a band:
-#  - Beverton-Holt mean-length Z/K (works for species AND coarse groups),
-#    with M/K perturbed +/-25%;
-#  - LBB, E = (F/M) / (1 + F/M), with the prior-robustness F/M band if run.
-#
-# Caveat carried into every result: the validated feed holds ~one length per
-# landing, which thins small fish and steepens the apparent mortality, so E is
-# biased HIGH. Treat it as direction and rough magnitude.
+# Production-based exploitation layer (Kolding's modified Cadima estimator): the
+# exploitation rate E = F/Z read from the lengths is compared with the share x of
+# production that fishing may take. See STOCK-ASSESSMENT.md, section 4.4.
 
 #' Beverton-Holt Mean-Length Estimate of Z/K
 #'

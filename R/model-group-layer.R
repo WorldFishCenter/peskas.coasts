@@ -1,25 +1,7 @@
-# Group-level assessment layer for the stock-assessment framework.
-#
-# The per-species LBB track only reaches taxa resolved to a binomial with a
-# FishBase growth estimate. In the Peskas coasts feeds that is a small slice of
-# the catch — most landings are recorded at genus or family level (Decapterus
-# spp, Carangidae, Clupeidae ...). This module gives those coarse taxa a
-# length-based read by (a) building a *group* life-history prior from the
-# FishBase species that make up the taxon and occur in the country's FAO
-# area(s), and (b) running the existing Froese length indicators on the taxon's
-# pooled lengths. Output is descriptive (share mature / near-optimal / mega,
-# mean-length-to-optimal) plus a coarse status and a confidence grade — not a
-# single-species biomass estimate, which a mixed aggregate cannot support.
-#
-# Prior rule ("anchor to the catch"): a group prior is a
-# median over the taxon's regional member species, but the member pool can miss
-# the species actually fished. We therefore floor Linf at the observed catch
-# (L99 / 0.95) so it can never sit below the fish we measured (fixes families
-# whose pool is dominated by smaller species, e.g. Clupeidae). We do NOT shrink
-# Linf when the pool overshoots the catch, because an all-small catch is
-# genuinely ambiguous — a small species, or heavy juvenile fishing of a large
-# one — and shrinking would erase a real overfishing signal; that case is
-# flagged low-confidence instead.
+# Group layer: genus and family taxa, most of the catch, get a length-based read
+# from a prior built on their regional member species and the Froese indicators
+# on their pooled lengths. It is descriptive, not a biomass estimate, which a
+# mixed aggregate cannot support. See STOCK-ASSESSMENT.md, section 2.2.
 
 #' Taxonomic Rank of a Coarse Taxon Label
 #'
@@ -259,7 +241,7 @@ get_group_priors <- function(
 #' @param landings A landing-feed tibble for a single country.
 #' @param scientific_name The coarse taxon label.
 #' @param group_prior A one-row tibble from [get_group_priors()].
-#' @param min_measured Minimum pooled measured lengths to attempt a read.
+#' @param min_measured Minimum trips with measured lengths to attempt a read.
 #'   Default 100.
 #' @param production Logical. Append the production-based exploitation columns
 #'   from [assess_production()] (Beverton-Holt leg). Default `TRUE`.
@@ -267,8 +249,8 @@ get_group_priors <- function(
 #'
 #' @return A one-row tibble: `scientific_name`, `scale` (`"group"`), `method`
 #'   (`"group-lbi"`), the Froese indicator columns, `group_status`,
-#'   `n_measured`, `frac_measured`, `n_species`, `confidence`, `prior_note`,
-#'   `quality`.
+#'   `n_measured`, `n_trips_measured`, `frac_measured`, `n_species`,
+#'   `confidence`, `prior_note`, `quality`.
 #'
 #' @keywords workflow modeling
 #' @export
@@ -283,22 +265,24 @@ assess_group_stock <- function(
   cov <- .length_coverage(landings, scientific_name)
   # No 1.2 x Linf cull for aggregates — only non-positive lengths are dropped.
   lengths <- cov$lengths[!is.na(cov$lengths) & cov$lengths > 0]
+  n_trips <- cov$coverage$n_trips_measured
 
   base <- tibble::tibble(
     scientific_name = scientific_name,
     scale = "group",
     method = "group-lbi",
     n_measured = length(lengths),
+    n_trips_measured = n_trips,
     frac_measured = cov$coverage$frac_measured,
     n_species = if (nrow(group_prior) > 0) group_prior$n_species else NA_integer_,
     confidence = if (nrow(group_prior) > 0) group_prior$confidence else NA_character_
   )
 
   linf_fb <- if (nrow(group_prior) > 0) group_prior$linf else NA_real_
-  if (nrow(group_prior) == 0 || is.na(linf_fb) || length(lengths) < min_measured) {
+  if (nrow(group_prior) == 0 || is.na(linf_fb) || n_trips < min_measured) {
     return(dplyr::mutate(
       base, quality = "unknown", group_status = NA_character_, prior_note = NA_character_,
-      advice = .stock_advice(length(lengths), min_n = min_measured)
+      advice = .stock_advice(n_trips, min_n = min_measured)
     ))
   }
 
@@ -375,7 +359,7 @@ assess_group_stock <- function(
     n_methods = cons$n_methods,
     quality_reasons = reasons,
     advice = .stock_advice(
-      length(lengths), reasons = reasons, production_band = band,
+      n_trips, reasons = reasons, production_band = band,
       n_classes = cov$coverage$n_length_classes, consensus = cons$consensus,
       gear_profile = gear_prof,
       coarse_low_confidence = identical(confidence, "low"),
@@ -394,7 +378,7 @@ assess_group_stock <- function(
 #' @param landings A landing-feed tibble with a `country` column.
 #' @param n_groups Coarse taxa to assess per country. Default 15.
 #' @param min_records Minimum landing records to be eligible. Default 30.
-#' @param min_measured Minimum pooled measured lengths to attempt a read.
+#' @param min_measured Minimum trips with measured lengths to attempt a read.
 #'   Default 100.
 #' @param fao_areas Named list mapping country key to an integer vector of FAO
 #'   area codes (e.g. `list(kenya = c(51, 57), timor = 71)`). Countries absent
@@ -403,8 +387,8 @@ assess_group_stock <- function(
 #' @param production Logical. Add the production-based exploitation read,
 #'   with regional trophic levels from [get_trophic_levels()]. Default `TRUE`.
 #' @param by_gear Logical. Add per-gear reads where at least two gears each
-#'   have `min_gear_fish` measured fish. See [run_stock_assessment()].
-#' @param min_gear_fish Minimum measured fish for a per-gear read.
+#'   have measured fish on `min_gear_trips` trips. See [run_stock_assessment()].
+#' @param min_gear_trips Minimum trips with measured fish for a per-gear read.
 #'
 #' @return A tibble of per-taxon group assessments with a `country` column.
 #'
@@ -419,7 +403,7 @@ assess_group_layer <- function(
   version = "latest",
   production = TRUE,
   by_gear = FALSE,
-  min_gear_fish = 100L
+  min_gear_trips = 100L
 ) {
   pool <- .species_economic_rank(landings) |>
     dplyr::filter(
@@ -485,7 +469,7 @@ assess_group_layer <- function(
           dplyr::mutate(country = .env$country, gear = g, .before = 1)
       }
       gears <- if (isTRUE(by_gear)) {
-        .gears_with_fish(land_c, sci, min_fish = min_gear_fish)
+        .gears_with_trips(land_c, sci, min_trips = min_gear_trips)
       } else {
         character(0)
       }
