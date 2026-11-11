@@ -282,10 +282,13 @@ select_priority_species <- function(
 #' with `n_catch` > 1 stands for that many fish of the recorded length (the
 #' validated feeds log a length class with its count), so its length is
 #' repeated `n_catch` times; `n_measured` therefore counts fish, while
-#' `frac_measured` stays a share of records.
+#' `frac_measured` stays a share of records. With `linf`, implausible lengths
+#' are dropped first ([.clean_lengths()]), so the size checks see only the
+#' lengths the read uses.
 #'
 #' @param landings A landing-feed tibble for a single country.
 #' @param scientific_name A single scientific name to summarise.
+#' @param linf Optional asymptotic length (cm). Default `NA` (no cut).
 #'
 #' @return A list with `lengths` (numeric vector of measured lengths) and
 #'   `coverage` (a one-row tibble: `n_records`, `n_measured`, `frac_measured`,
@@ -293,14 +296,14 @@ select_priority_species <- function(
 #'   `n_length_classes`).
 #'
 #' @keywords internal
-.length_coverage <- function(landings, scientific_name) {
+.length_coverage <- function(landings, scientific_name, linf = NA_real_) {
   sp <- landings |>
     dplyr::filter(.data$scientific_name == .env$scientific_name)
 
   measured <- sp |>
     dplyr::filter(!is.na(.data$length_cm), .data$length_cm > 0)
 
-  lengths <- rep(measured$length_cm, .n_fish(measured))
+  lengths <- .clean_lengths(rep(measured$length_cm, .n_fish(measured)), linf)
 
   coverage <- tibble::tibble(
     scientific_name = scientific_name,
@@ -746,9 +749,9 @@ assess_species_stock <- function(
   production = TRUE,
   trophic_level = NA_real_
 ) {
-  cov <- .length_coverage(landings, scientific_name)
   linf <- if (nrow(priors) > 0) priors$linf else NA_real_
-  lengths <- .clean_lengths(cov$lengths, linf)
+  cov <- .length_coverage(landings, scientific_name, linf)
+  lengths <- cov$lengths
   logger::log_info(
     "Assessing {scientific_name}: {length(lengths)} measured lengths ",
     "({round(100 * (cov$coverage$frac_measured %||% 0))}% of records)."

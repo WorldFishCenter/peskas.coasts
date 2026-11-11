@@ -4,12 +4,14 @@
 \alias{.length_coverage}
 \title{Summarise Length-Measurement Coverage for a Species}
 \usage{
-.length_coverage(landings, scientific_name)
+.length_coverage(landings, scientific_name, linf = NA_real_)
 }
 \arguments{
 \item{landings}{A landing-feed tibble for a single country.}
 
 \item{scientific_name}{A single scientific name to summarise.}
+
+\item{linf}{Optional asymptotic length (cm). Default \code{NA} (no cut).}
 }
 \value{
 A list with \code{lengths} (numeric vector of measured lengths) and
@@ -24,6 +26,8 @@ one species and returns the length vector for downstream fitting. A record
 with \code{n_catch} > 1 stands for that many fish of the recorded length (the
 validated feeds log a length class with its count), so its length is
 repeated \code{n_catch} times; \code{n_measured} therefore counts fish, while
-\code{frac_measured} stays a share of records.
+\code{frac_measured} stays a share of records. With \code{linf}, implausible lengths
+are dropped first (\code{\link[=.clean_lengths]{.clean_lengths()}}), so the size checks see only the
+lengths the read uses.
 }
 \keyword{internal}

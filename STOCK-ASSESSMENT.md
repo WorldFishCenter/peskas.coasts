@@ -52,9 +52,9 @@ Every FishBase call in stages 3–5 and 7 goes through `.fb_retry()` (section 4.
 ### 2.1 `assess_species_stock()` — one species, one landings subset
 
 ```
-.length_coverage()         lengths repeated n_catch times; n_records, n_measured (fish),
+.length_coverage()         lengths repeated n_catch times, then .clean_lengths() drops
+                           lengths > 1.2 * Linf; n_records, n_measured (fish),
                            frac_measured (records), l_max, l_99, n_length_classes
-.clean_lengths()           drop lengths > 1.2 * Linf
   -- if no priors or < 20 lengths: return rows with quality = "unknown" + advice --
 assess_length_indicators() method "lbi"   (Froese indicators)
 assess_lbspr()             method "lbspr" (only if requested)

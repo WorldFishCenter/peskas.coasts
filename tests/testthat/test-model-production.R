@@ -83,6 +83,17 @@ test_that(".length_coverage repeats each length n_catch times", {
   expect_equal(cov$coverage$frac_measured, 3 / 4)
 })
 
+test_that(".length_coverage measures size only on the lengths kept", {
+  land <- tibble::tibble(
+    scientific_name = "Siganus sutor", trip_id = c("a", "b", "c"),
+    length_cm = c(20, 25, 300), n_catch = NA_integer_
+  )
+  cov <- .length_coverage(land, "Siganus sutor", linf = 40)
+  expect_equal(cov$lengths, c(20, 25))
+  expect_equal(cov$coverage$l_max, 25)
+  expect_equal(cov$coverage$n_length_classes, 2)
+})
+
 test_that(".bh_zk uses the lower class limit as Lc for classed lengths", {
   len <- rep(c(17.5, 22.5, 27.5, 32.5), times = c(10, 50, 30, 10))
   out <- .bh_zk(len, linf = 40)
