@@ -1,8 +1,7 @@
-# Generated with Claude (Cowork) — review before committing.
 # Length-Based Bayesian (LBB, Froese et al. 2018) fitting engine for the
 # stock-assessment framework. Plugs into assess_stock_lbb() via the
-# `lbb_engine` hook: a function of (lengths, priors) returning the list that
-# assess_stock_lbb() expects (bb0, bbmsy, fm, lc_lopt, ci_width).
+# `lbb_engine` hook: a function of (lengths, priors, n_eff) returning the list
+# that assess_stock_lbb() expects (bb0, bbmsy, fm, lc_lopt, ci_width).
 #
 # The L-infinity prior is centred on the FishBase value carried in `priors`
 # (from get_life_history_priors()), so the Bayesian fit is anchored to known
@@ -36,6 +35,8 @@
 
 # JAGS model. L-inf and M/K priors are informative and passed in as data
 # (Linf_mu/tau centred on FishBase; MK_mu/tau centred on the species' M/K).
+# The likelihood is the multinomial on the length-class shares with sample size
+# Neff, which can be fractional; JAGS takes it through the zeros trick.
 .LBB_JAGS <- "
 model {
   Linf  ~ dnorm(Linf_mu, Linf_tau) T(LmidMax, )
@@ -53,8 +54,11 @@ model {
   }
   for (i in 1:nL) { C[i] <- N[i] * S[i] }
   Csum <- sum(C[])
-  for (i in 1:nL) { p[i] <- C[i] / Csum }
-  LF[1:nL] ~ dmulti(p[1:nL], Ntot)
+  for (i in 1:nL) {
+    p[i] <- C[i] / Csum
+    ll[i] <- Neff * pobs[i] * log(p[i])
+  }
+  zero ~ dpois(10000 - sum(ll[]))
 }
 "
 
@@ -92,6 +96,11 @@ model {
 #'   [.clean_lengths()].
 #' @param priors A one-row life-history tibble from [get_life_history_priors()]
 #'   (`linf`, `mk`, `lm`).
+#' @param n_eff Sample size for the likelihood. Fish from one catch are not
+#'   independent, so the likelihood weighs each length class's share of fish
+#'   by `n_eff` (the trips measured) instead of by the fish count; no class is
+#'   rounded away. `NULL` (default) or a value above the fish count uses every
+#'   fish.
 #' @param bin_width Length-bin width (cm). `NULL` (default) uses the recording
 #'   resolution of the data (see [.length_resolution()]), at least 1 cm, with
 #'   bins centred on the recorded class values — so 5-cm length classes are not
@@ -114,6 +123,7 @@ model {
 lbb_engine_jags <- function(
   lengths,
   priors,
+  n_eff = NULL,
   bin_width = NULL,
   n_iter = 6000,
   n_burn = 3000,
@@ -170,7 +180,8 @@ lbb_engine_jags <- function(
   mode_lc <- lmid[which.max(counts)]
 
   dat <- list(
-    LF = counts, Lmid = lmid, nL = length(lmid), Ntot = sum(counts),
+    pobs = counts / sum(counts), Neff = min(n_eff, sum(counts)), zero = 0,
+    Lmid = lmid, nL = length(lmid),
     Linf_mu = linf_mu, Linf_tau = 1 / (linf_sd_frac * linf_mu)^2,
     MK_mu = mk_mu, MK_tau = 1 / 0.3^2,
     LmidMax = occ_max + 0.5,
@@ -206,7 +217,7 @@ lbb_engine_jags <- function(
     .lbb_bb0(lmid, p[["Linf"]], p[["Lc"]], p[["alpha"]], p[["MK"]], p[["FK"]])
   })
   fm <- dr[, "FK"] / dr[, "MK"]
-  lopt <- dr[, "Linf"] * 3 / (3 + dr[, "MK"])
+  lopt <- .optimum_length(dr[, "Linf"], dr[, "MK"])
   lc_lopt <- dr[, "Lc"] / lopt
   bb <- stats::quantile(bb0, c(0.5, 0.025, 0.975), names = FALSE)
 

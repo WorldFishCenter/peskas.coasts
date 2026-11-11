@@ -7,15 +7,15 @@
 .finalise_cpue(cpue_long, trips, min_trips)
 }
 \arguments{
-\item{cpue_long}{Long tibble with columns `h3_index`, `country`, `cpue`,
-`species`.}
+\item{cpue_long}{Long tibble with columns \code{h3_index}, \code{country}, \code{cpue},
+\code{species}.}
 
 \item{trips}{Combined effort + catch tibble (used to count trips per cell).}
 
 \item{min_trips}{Integer. Minimum unique trips per H3 cell x country.}
 }
 \value{
-Filtered tibble with additional columns `n_trips`, `lon`, `lat`.
+Filtered tibble with additional columns \code{n_trips}, \code{lon}, \code{lat}.
 }
 \description{
 Attach Trip Counts, Cell Centroids, and Apply Minimum-Trips Filter

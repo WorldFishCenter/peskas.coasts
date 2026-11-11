@@ -7,16 +7,16 @@
 plot_cpue_map(cpue_df, species, title = "CPUE (kg / fishing hour)")
 }
 \arguments{
-\item{cpue_df}{A tibble as returned by [model_cpue()] element `$cpue`,
-with columns `h3_index`, `cpue`, `species`, `n_trips`.}
+\item{cpue_df}{A tibble as returned by \code{\link[=model_cpue]{model_cpue()}} element \verb{$cpue},
+with columns \code{h3_index}, \code{cpue}, \code{species}, \code{n_trips}.}
 
 \item{species}{Character vector of species names to include as map layers.}
 
 \item{title}{Character. Map title shown in the top-right control.
-Default is `"CPUE (kg / fishing hour)"`.}
+Default is \code{"CPUE (kg / fishing hour)"}.}
 }
 \value{
-A `leaflet` htmlwidget.
+A \code{leaflet} htmlwidget.
 }
 \description{
 Renders H3 hexagonal cells coloured by CPUE (kg / fishing hour) with a
@@ -24,6 +24,6 @@ species toggle control. Cells are capped at the 95th percentile to
 prevent outliers from compressing the colour scale.
 }
 \seealso{
-[model_cpue()], [plot_effort_map()]
+\code{\link[=model_cpue]{model_cpue()}}, \code{\link[=plot_effort_map]{plot_effort_map()}}
 }
 \keyword{modeling}

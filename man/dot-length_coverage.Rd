@@ -4,26 +4,33 @@
 \alias{.length_coverage}
 \title{Summarise Length-Measurement Coverage for a Species}
 \usage{
-.length_coverage(landings, scientific_name)
+.length_coverage(landings, scientific_name, linf = NA_real_)
 }
 \arguments{
 \item{landings}{A landing-feed tibble for a single country.}
 
 \item{scientific_name}{A single scientific name to summarise.}
+
+\item{linf}{Optional asymptotic length (cm). Default \code{NA} (no cut).}
 }
 \value{
-A list with `lengths` (numeric vector of measured lengths) and
-  `coverage` (a one-row tibble: `n_records`, `n_measured`, `frac_measured`,
-  `n_trips_measured`, `l_min`, `l_max`, `l_99`, `l_mean`,
-  `n_length_classes`).
+A list with \code{lengths} (numeric vector of measured lengths) and
+\code{coverage} (a one-row tibble: \code{n_records}, \code{n_measured}, \code{frac_measured},
+\code{n_trips_measured}, \code{l_min}, \code{l_max}, \code{l_99}, \code{l_mean},
+\code{n_length_classes}).
 }
 \description{
 Length-based methods run only on the subset of records that carry a
-`length_cm` value. This helper reports how much length information exists for
+\code{length_cm} value. This helper reports how much length information exists for
 one species and returns the length vector for downstream fitting. A record
-with `n_catch` > 1 stands for that many fish of the recorded length (the
-validated feeds log a length class with its count), so its length is
-repeated `n_catch` times; `n_measured` therefore counts fish, while
-`frac_measured` stays a share of records.
+stands for \code{n_fish} fish of the recorded length (the validated feeds log a
+length class with its count), so its length is repeated \code{n_fish} times
+(\code{\link[=.n_fish]{.n_fish()}}); \code{n_measured} therefore counts fish. Fish from one catch are
+not independent, so the sample size the reads use is \code{n_trips_measured},
+the trips with a length kept. \code{n_records} and
+\code{frac_measured} count catches (\code{trip_id} x \code{n_catch}), not rows, since a
+catch has a row per length. With \code{linf}, implausible lengths
+are dropped first (\code{\link[=.clean_lengths]{.clean_lengths()}}), so the size checks see only the
+lengths the read uses.
 }
 \keyword{internal}

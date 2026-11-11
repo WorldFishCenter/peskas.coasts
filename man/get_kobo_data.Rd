@@ -32,7 +32,7 @@ get_kobo_data(
 
 \item{limit}{Number of records per page (default 1000). Maximum allowed is 1000.}
 
-\item{since_id}{Optional. If provided, only fetch submissions with `_id`
+\item{since_id}{Optional. If provided, only fetch submissions with \verb{_id}
 greater than or equal to this value. Useful for incremental data retrieval.}
 
 \item{retry_times}{Number of retry attempts for failed requests (default is 3).}
@@ -49,14 +49,14 @@ It supports pagination and handles both JSON and XML formats.
 \details{
 As of March 2026, the Kobotoolbox API enforces a maximum page size of 1,000
 records per request (previously 30,000). The default page size if not specified
-is 100. This function uses pagination via the `next` field in the API response
+is 100. This function uses pagination via the \code{next} field in the API response
 to iterate through all available records.
 
 For incremental data retrieval (e.g., syncing only new submissions), use the
-`since_id` parameter with the last known `_id` value.
+\code{since_id} parameter with the last known \verb{_id} value.
 
 Note: This change does NOT affect synchronous export endpoints
-(`/api/v2/assets/{uid}/export-settings/{uid_export}/data.xlsx|csv`).
+(\verb{/api/v2/assets/\{uid\}/export-settings/\{uid_export\}/data.xlsx|csv}).
 }
 \examples{
 \dontrun{

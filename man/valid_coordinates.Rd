@@ -10,22 +10,22 @@ valid_coordinates(longitude, latitude)
 \item{longitude, latitude}{Numeric vectors of equal length.}
 }
 \value{
-Logical vector, `TRUE` where the pair is a position H3 can be given.
+Logical vector, \code{TRUE} where the pair is a position H3 can be given.
 }
 \description{
 Tests longitude/latitude pairs for the two ways a position can be unusable:
 not a number at all, or outside the range it is meant to occupy.
 }
 \details{
-[h3jsr::point_to_cell()] fails in opposite directions on the two, and the
+\code{\link[h3jsr:point_to_cell]{h3jsr::point_to_cell()}} fails in opposite directions on the two, and the
 quiet one is the more damaging.
 
-A non-finite coordinate (`NA`, `NaN`, `Inf`) raises *Latitude or longitude
-arguments were outside of acceptable range*, which aborts the entire run --- a
+A non-finite coordinate (\code{NA}, \code{NaN}, \code{Inf}) raises \emph{Latitude or longitude
+arguments were outside of acceptable range}, which aborts the entire run --- a
 single bad ping in a batch of millions, and nothing is written, because the
 aggregation state is only uploaded at the end.
 
-An out-of-range *finite* coordinate raises nothing at all. Despite the
+An out-of-range \emph{finite} coordinate raises nothing at all. Despite the
 wording of that error, H3 does not reject these: it wraps them and returns a
 perfectly ordinary-looking cell. Latitude is where this does damage, because
 the wrap is not a wrap at all --- it reflects over the pole and swings
@@ -41,6 +41,6 @@ a device reporting outside ±180 is reporting something wrong, and the value
 being recoverable is not a reason to trust the rest of that ping.
 }
 \seealso{
-[h3_index_chunked()], [prepare_tracks_for_effort()]
+\code{\link[=h3_index_chunked]{h3_index_chunked()}}, \code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}
 }
 \keyword{internal}

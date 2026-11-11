@@ -7,14 +7,14 @@
 normalise_effort_settings(settings)
 }
 \arguments{
-\item{settings}{Named list with `max_gap_hours` and `gap_policy`.}
+\item{settings}{Named list with \code{max_gap_hours} and \code{gap_policy}.}
 }
 \value{
 The same two fields, as a double and a character.
 }
 \description{
 Puts the gap-handling settings in a canonical form, so that a run passing
-`1L` where `1` was stored is not mistaken for a change of policy and does not
+\code{1L} where \code{1} was stored is not mistaken for a change of policy and does not
 set off a rebuild.
 }
 \keyword{internal}

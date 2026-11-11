@@ -8,19 +8,23 @@ calculate_monthly_trip_stats(trips_data)
 }
 \arguments{
 \item{trips_data}{A data frame containing trip information with columns:
-- district: District name
-- date_month: Month as date (first day of month)
-- duration_hrs: Trip duration in hours
-- boat: Unique boat identifier}
+\itemize{
+\item district: District name
+\item date_month: Month as date (first day of month)
+\item duration_hrs: Trip duration in hours
+\item boat: Unique boat identifier
+}}
 }
 \value{
 A data frame with monthly statistics by district containing:
-  - district: District name
-  - date_month: Month as date
-  - sample_total_trips: Total trips recorded from tracked boats
-  - sample_boats_tracked: Number of unique boats tracked
-  - avg_trip_duration_hrs: Average trip duration in hours
-  - avg_trips_per_boat_per_month: Average trips per boat (for scaling to fleet)
+\itemize{
+\item district: District name
+\item date_month: Month as date
+\item sample_total_trips: Total trips recorded from tracked boats
+\item sample_boats_tracked: Number of unique boats tracked
+\item avg_trip_duration_hrs: Average trip duration in hours
+\item avg_trips_per_boat_per_month: Average trips per boat (for scaling to fleet)
+}
 }
 \description{
 Calculates monthly fishing activity statistics by district based on GPS-tracked boats.
@@ -29,10 +33,12 @@ fleet-wide fishing activity when combined with boat registry data.
 }
 \details{
 The function processes trip data to generate monthly summaries including:
-- Number of trips recorded from GPS-tracked boats
-- Number of unique boats tracked per month
-- Average trip duration in hours
-- Average trips per boat per month (key metric for fleet scaling)
+\itemize{
+\item Number of trips recorded from GPS-tracked boats
+\item Number of unique boats tracked per month
+\item Average trip duration in hours
+\item Average trips per boat per month (key metric for fleet scaling)
+}
 
 These metrics are particularly useful for estimating total fishing effort when
 GPS trackers are only installed on a subset of the fishing fleet.
@@ -48,8 +54,10 @@ print(monthly_stats)
 
 }
 \seealso{
-* [estimate_fleet_activity()] for scaling to total fleet
-* [calculate_district_totals()] for catch and revenue estimates
+\itemize{
+\item \code{\link[=estimate_fleet_activity]{estimate_fleet_activity()}} for scaling to total fleet
+\item \code{\link[=calculate_district_totals]{calculate_district_totals()}} for catch and revenue estimates
+}
 }
 \keyword{analysis}
 \keyword{workflow}

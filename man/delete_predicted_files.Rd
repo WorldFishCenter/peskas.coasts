@@ -12,7 +12,7 @@ delete_predicted_files(names, bucket)
 \item{bucket}{Character. Name of the bucket holding the objects.}
 }
 \value{
-Invisibly `NULL`.
+Invisibly \code{NULL}.
 }
 \description{
 Removes predicted-track objects one by one, logging rather than raising when

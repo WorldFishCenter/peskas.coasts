@@ -18,31 +18,31 @@ assess_group_stock(
 
 \item{scientific_name}{The coarse taxon label.}
 
-\item{group_prior}{A one-row tibble from [get_group_priors()].}
+\item{group_prior}{A one-row tibble from \code{\link[=get_group_priors]{get_group_priors()}}.}
 
-\item{min_measured}{Minimum pooled measured lengths to attempt a read.
+\item{min_measured}{Minimum trips with measured lengths to attempt a read.
 Default 100.}
 
 \item{production}{Logical. Append the production-based exploitation columns
-from [assess_production()] (Beverton-Holt leg). Default `TRUE`.}
+from \code{\link[=assess_production]{assess_production()}} (Beverton-Holt leg). Default \code{TRUE}.}
 
-\item{trophic_level}{Member-median FishBase trophic level. Default `NA`.}
+\item{trophic_level}{Member-median FishBase trophic level. Default \code{NA}.}
 }
 \value{
-A one-row tibble: `scientific_name`, `scale` (`"group"`), `method`
-  (`"group-lbi"`), the Froese indicator columns, `group_status`,
-  `n_measured`, `frac_measured`, `n_species`, `confidence`, `prior_note`,
-  `quality`.
+A one-row tibble: \code{scientific_name}, \code{scale} (\code{"group"}), \code{method}
+(\code{"group-lbi"}), the Froese indicator columns, \code{group_status},
+\code{n_measured}, \code{n_trips_measured}, \code{frac_measured}, \code{n_species},
+\code{confidence}, \code{prior_note}, \code{quality}.
 }
 \description{
 Runs the Froese length indicators on a coarse taxon's pooled lengths against
-a *catch-anchored* group prior. The FishBase member-median `linf` is floored
-to the observed catch (`L99 / 0.95`) so it never sits below the measured fish
-(`prior_note = "linf_floored_to_catch"`). Where the member pool instead sits
-far above the catch (`lmax < 0.6 * linf`), the read is marked
-`prior_note = "catch_below_prior"` and `confidence = "low"`, because an
+a \emph{catch-anchored} group prior. The FishBase member-median \code{linf} is floored
+to the observed catch (\code{L99 / 0.95}) so it never sits below the measured fish
+(\code{prior_note = "linf_floored_to_catch"}). Where the member pool instead sits
+far above the catch (\code{lmax < 0.6 * linf}), the read is marked
+\code{prior_note = "catch_below_prior"} and \code{confidence = "low"}, because an
 all-small catch cannot be told apart from heavy juvenile fishing on length
-alone. The `1.2 x Linf` implausible-length cull is deliberately skipped — it
+alone. The \verb{1.2 x Linf} implausible-length cull is deliberately skipped — it
 is a single-species guard, not valid for an aggregate.
 }
 \keyword{modeling}

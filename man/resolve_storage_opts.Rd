@@ -11,57 +11,59 @@ resolve_storage_opts(
 )
 }
 \arguments{
-\item{conf}{A configuration list as returned by [read_config()].}
+\item{conf}{A configuration list as returned by \code{\link[=read_config]{read_config()}}.}
 
 \item{type}{Character. The target bucket. One of:
-- `"coasts"`: the shared coasts bucket where device metadata lives.
-  Uses `conf$storage$google$options_coasts` if present (downstream packages),
-  falling back to `conf$storage$google$options` (coasts itself, where
-  `options` already points to the coasts bucket).
-- `"country"`: the country-specific pipeline bucket where processed outputs
-  are written. Always uses `conf$storage$google$options`. In the coasts
-  package this is the same bucket as `"coasts"`.
-- `"pds"`: the PDS-specific bucket where raw GPS tracks are stored.
-  Always uses `conf$pds_storage$google$options`, which resolves to the
-  correct bucket per package (`pds-peskas-coasts` in coasts,
-  `pds-mozambique-prod` in the Mozambique pipeline, etc.).
-- `"public"`: the publicly readable bucket serving portal JSON. Uses
-  `conf$public_storage$google$options`, falling back to
-  `conf$storage$google$options_public`. Optional — see `error_if_missing`.
-- `"api"`: the cross-country API bucket holding the harmonized trips
-  parquet every country publishes. Uses `conf$storage$google$options_api`.
-  Optional — coasts itself does not configure one — see `error_if_missing`.}
+\itemize{
+\item \code{"coasts"}: the shared coasts bucket where device metadata lives.
+Uses \code{conf$storage$google$options_coasts} if present (downstream packages),
+falling back to \code{conf$storage$google$options} (coasts itself, where
+\code{options} already points to the coasts bucket).
+\item \code{"country"}: the country-specific pipeline bucket where processed outputs
+are written. Always uses \code{conf$storage$google$options}. In the coasts
+package this is the same bucket as \code{"coasts"}.
+\item \code{"pds"}: the PDS-specific bucket where raw GPS tracks are stored.
+Always uses \code{conf$pds_storage$google$options}, which resolves to the
+correct bucket per package (\code{pds-peskas-coasts} in coasts,
+\code{pds-mozambique-prod} in the Mozambique pipeline, etc.).
+\item \code{"public"}: the publicly readable bucket serving portal JSON. Uses
+\code{conf$public_storage$google$options}, falling back to
+\code{conf$storage$google$options_public}. Optional — see \code{error_if_missing}.
+\item \code{"api"}: the cross-country API bucket holding the harmonized trips
+parquet every country publishes. Uses \code{conf$storage$google$options_api}.
+Optional — coasts itself does not configure one — see \code{error_if_missing}.
+}}
 
 \item{error_if_missing}{Logical. Controls what happens when the requested
-type is not configured. `FALSE` (the default) returns `NULL`, which is how
+type is not configured. \code{FALSE} (the default) returns \code{NULL}, which is how
 this function has always behaved for an unconfigured key and what makes
-`"public"` safe to ask for from a package that has no public bucket. Pass
-`TRUE` to fail fast with a message naming the expected configuration key.}
+\code{"public"} safe to ask for from a package that has no public bucket. Pass
+\code{TRUE} to fail fast with a message naming the expected configuration key.}
 }
 \value{
 A named list of Google Cloud Storage options suitable for passing
-  to [cloud_object_name()], [download_cloud_file()], or [upload_cloud_file()];
-  or `NULL` when the type is unconfigured and `error_if_missing = FALSE`.
+to \code{\link[=cloud_object_name]{cloud_object_name()}}, \code{\link[=download_cloud_file]{download_cloud_file()}}, or \code{\link[=upload_cloud_file]{upload_cloud_file()}};
+or \code{NULL} when the type is unconfigured and \code{error_if_missing = FALSE}.
 }
 \description{
 Resolves the correct Google Cloud Storage options from a configuration object
-based on the target bucket. Handles both standalone (`coasts`) and downstream
-package contexts (e.g. `peskas.mozambique.data.pipeline`) transparently,
+based on the target bucket. Handles both standalone (\code{coasts}) and downstream
+package contexts (e.g. \code{peskas.mozambique.data.pipeline}) transparently,
 so workflow functions do not need to hardcode config paths.
 }
 \details{
-The bucket types map to the following storage contexts:
+The bucket types map to the following storage contexts:\tabular{lll}{
+   \code{type} \tab coasts package \tab downstream package \cr
+   \code{"coasts"} \tab \code{peskas-coasts-dev} \tab \code{peskas-coasts-dev} \cr
+   \code{"country"} \tab \code{peskas-coasts-dev} \tab \code{mozambique-dev} \cr
+   \code{"pds"} \tab \code{pds-peskas-coasts} \tab \code{pds-mozambique-dev} \cr
+   \code{"public"} \tab \emph{(unconfigured)} \tab \code{timor-public-dev} \cr
+   \code{"api"} \tab \emph{(unconfigured)} \tab \code{peskas-api-dev} \cr
+}
 
-| `type`     | coasts package        | downstream package         |
-|------------|-----------------------|----------------------------|
-| `"coasts"` | `peskas-coasts-dev`   | `peskas-coasts-dev`        |
-| `"country"`| `peskas-coasts-dev`   | `mozambique-dev`           |
-| `"pds"`    | `pds-peskas-coasts`   | `pds-mozambique-dev`       |
-| `"public"` | *(unconfigured)*      | `timor-public-dev`         |
-| `"api"`    | *(unconfigured)*      | `peskas-api-dev`           |
 
-`"public"` is deliberately optional. `coasts` itself has no public bucket, so
-asking for it here returns `NULL`; a caller can then decide whether to skip
+\code{"public"} is deliberately optional. \code{coasts} itself has no public bucket, so
+asking for it here returns \code{NULL}; a caller can then decide whether to skip
 the publishing step or fail. The Timor-Leste
 pipeline, which serves live portal JSON from a public bucket, previously had
 to reach into its config directly because this helper could not express the
@@ -90,6 +92,6 @@ public_opts <- resolve_storage_opts(conf, "public", error_if_missing = TRUE)
 
 }
 \seealso{
-[read_config()], [download_cloud_file()], [upload_cloud_file()]
+\code{\link[=read_config]{read_config()}}, \code{\link[=download_cloud_file]{download_cloud_file()}}, \code{\link[=upload_cloud_file]{upload_cloud_file()}}
 }
 \keyword{internal}

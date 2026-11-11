@@ -7,18 +7,18 @@
 aggregate_h3_effort(df_with_h3)
 }
 \arguments{
-\item{df_with_h3}{A data frame with an `h3_index` column and a `Trip`
-column, as produced by [assign_h3_indices()].}
+\item{df_with_h3}{A data frame with an \code{h3_index} column and a \code{Trip}
+column, as produced by \code{\link[=assign_h3_indices]{assign_h3_indices()}}.}
 }
 \value{
-A data frame with columns `h3_index`, `fishing_pings`, and
-  `unique_vessels`.
+A data frame with columns \code{h3_index}, \code{fishing_pings}, and
+\code{unique_vessels}.
 }
 \description{
 Summarises GPS fishing pings by H3 hexagon index, computing total ping
 count and number of unique trips per cell.
 }
 \seealso{
-[assign_h3_indices()], [rollup_h3_resolution()]
+\code{\link[=assign_h3_indices]{assign_h3_indices()}}, \code{\link[=rollup_h3_resolution]{rollup_h3_resolution()}}
 }
 \keyword{preprocessing}

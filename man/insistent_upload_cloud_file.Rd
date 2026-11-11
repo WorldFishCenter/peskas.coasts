@@ -23,19 +23,19 @@ insistent_upload_cloud_file(
 \item{name}{A character vector of names to assign files in cloud storage.
 Defaults to local filenames.}
 
-\item{max_times}{Maximum number of attempts. Default `10`.}
+\item{max_times}{Maximum number of attempts. Default \code{10}.}
 
-\item{pause_cap}{Longest pause between attempts, in seconds. Default `300`.}
+\item{pause_cap}{Longest pause between attempts, in seconds. Default \code{300}.}
 }
 \value{
-A list of upload metadata, as [upload_cloud_file()].
+A list of upload metadata, as \code{\link[=upload_cloud_file]{upload_cloud_file()}}.
 }
 \description{
-[upload_cloud_file()] wrapped in [with_storage_retry()]. Uploads are the most
+\code{\link[=upload_cloud_file]{upload_cloud_file()}} wrapped in \code{\link[=with_storage_retry]{with_storage_retry()}}. Uploads are the most
 failure-prone step in the pipelines — large objects, hour-long service-account
 token windows, and peers that reset connections mid-stream.
 }
 \seealso{
-[upload_cloud_file()], [with_storage_retry()]
+\code{\link[=upload_cloud_file]{upload_cloud_file()}}, \code{\link[=with_storage_retry]{with_storage_retry()}}
 }
 \keyword{storage}

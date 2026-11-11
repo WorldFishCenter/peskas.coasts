@@ -27,11 +27,11 @@ reinserting to avoid index conflicts with complex geometries.}
 }
 \value{
 The number of data documents inserted (excluding metadata), or
-  invisible TRUE for geo collections.
+invisible TRUE for geo collections.
 }
 \description{
 Uploads data to a MongoDB collection, optionally creating a geospatial index.
 For non-geo collections, stores a metadata document preserving column order
-(used by [mdb_collection_pull()] to restore structure).
+(used by \code{\link[=mdb_collection_pull]{mdb_collection_pull()}} to restore structure).
 }
 \keyword{storage}

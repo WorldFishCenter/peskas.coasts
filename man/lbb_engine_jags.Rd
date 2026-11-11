@@ -7,6 +7,7 @@
 lbb_engine_jags(
   lengths,
   priors,
+  n_eff = NULL,
   bin_width = NULL,
   n_iter = 6000,
   n_burn = 3000,
@@ -18,13 +19,19 @@ lbb_engine_jags(
 }
 \arguments{
 \item{lengths}{Numeric vector of measured lengths (cm), already cleaned by
-[.clean_lengths()].}
+\code{\link[=.clean_lengths]{.clean_lengths()}}.}
 
-\item{priors}{A one-row life-history tibble from [get_life_history_priors()]
-(`linf`, `mk`, `lm`).}
+\item{priors}{A one-row life-history tibble from \code{\link[=get_life_history_priors]{get_life_history_priors()}}
+(\code{linf}, \code{mk}, \code{lm}).}
 
-\item{bin_width}{Length-bin width (cm). `NULL` (default) uses the recording
-resolution of the data (see [.length_resolution()]), at least 1 cm, with
+\item{n_eff}{Sample size for the likelihood. Fish from one catch are not
+independent, so the likelihood weighs each length class's share of fish
+by \code{n_eff} (the trips measured) instead of by the fish count; no class is
+rounded away. \code{NULL} (default) or a value above the fish count uses every
+fish.}
+
+\item{bin_width}{Length-bin width (cm). \code{NULL} (default) uses the recording
+resolution of the data (see \code{\link[=.length_resolution]{.length_resolution()}}), at least 1 cm, with
 bins centred on the recorded class values — so 5-cm length classes are not
 split into mostly empty 1-cm bins.}
 
@@ -37,19 +44,19 @@ split into mostly empty 1-cm bins.}
 the LBB convention.}
 
 \item{seed}{Integer seed for the JAGS random number generators (one stream
-per chain, `seed + chain`), so a fit is reproducible across runs and
+per chain, \code{seed + chain}), so a fit is reproducible across runs and
 machines. Default 1.}
 }
 \value{
-A list with `bb0`, `bbmsy`, `fm`, `lc_lopt`, `ci_width` (width of the
-  95\% B/B0 credible interval) and the interval bounds `bb0_lo`/`bb0_hi`, or
-  `NULL`.
+A list with \code{bb0}, \code{bbmsy}, \code{fm}, \code{lc_lopt}, \code{ci_width} (width of the
+95\\% B/B0 credible interval) and the interval bounds \code{bb0_lo}/\code{bb0_hi}, or
+\code{NULL}.
 }
 \description{
 Fits the Length-Based Bayesian biomass model (Froese et al. 2018) to one
 species' length sample via JAGS/MCMC, anchoring the asymptotic-length prior
-on the FishBase value in `priors`. Returns the summary list that
-[assess_stock_lbb()] consumes, or `NULL` when JAGS is unavailable, the
+on the FishBase value in \code{priors}. Returns the summary list that
+\code{\link[=assess_stock_lbb]{assess_stock_lbb()}} consumes, or \code{NULL} when JAGS is unavailable, the
 sample is too small, or the fit fails — so the orchestrator degrades to the
 indicator and SPR methods rather than erroring.
 }

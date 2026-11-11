@@ -12,9 +12,9 @@
 \item{scientific_name}{Taxon name.}
 }
 \value{
-A one-row tibble: `main_gear`, `main_gear_share` (share of measured
-  fish), `selective_gear_share` (share from traps / gill / tangle nets) and
-  `selectivity_flag` (`TRUE` when that share exceeds 0.7).
+A one-row tibble: \code{main_gear}, \code{main_gear_share} (share of measured
+fish), \code{selective_gear_share} (share from traps / gill / tangle nets) and
+\code{selectivity_flag} (\code{TRUE} when that share exceeds 0.7).
 }
 \description{
 Which Gears Produced a Taxon's Length Sample

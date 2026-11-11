@@ -12,7 +12,7 @@
 \item{lmean_lopt}{Mean length divided by optimal length.}
 }
 \value{
-`"healthy"`, `"borderline"` or `"overfishing signal"`.
+\code{"healthy"}, \code{"borderline"} or \code{"overfishing signal"}.
 }
 \description{
 Collapses the Froese indicators into a single, SSF-interpretable label.

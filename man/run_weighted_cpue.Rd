@@ -7,20 +7,20 @@
 run_weighted_cpue(trips, top_n, min_trips)
 }
 \arguments{
-\item{trips}{Combined effort + catch tibble from [join_effort_catch()].}
+\item{trips}{Combined effort + catch tibble from \code{\link[=join_effort_catch]{join_effort_catch()}}.}
 
 \item{top_n}{Integer. Number of top species to model.}
 
 \item{min_trips}{Integer. Minimum unique trips per H3 cell to retain.}
 }
 \value{
-A named list with elements `cpue` (tibble) and `species`
-  (character vector).
+A named list with elements \code{cpue} (tibble) and \code{species}
+(character vector).
 }
 \description{
 Computes CPUE as the ratio of total catch to total fishing hours per H3
 cell for each of the top-N species:
-`CPUE_h = sum(catch_kg for trips visiting h) / sum(fishing_hours in h)`.
+\verb{CPUE_h = sum(catch_kg for trips visiting h) / sum(fishing_hours in h)}.
 Robust with sparse data; always produces a result.
 }
 \keyword{internal}

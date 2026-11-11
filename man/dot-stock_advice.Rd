@@ -5,7 +5,7 @@
 \title{One Data-Collection Suggestion per Stock Read}
 \usage{
 .stock_advice(
-  n_measured,
+  n_trips,
   reasons = "",
   n_classes = NA_integer_,
   consensus = NA_character_,
@@ -19,29 +19,29 @@
 )
 }
 \arguments{
-\item{n_measured}{Measured fish in the sample.}
+\item{n_trips}{Trips with measured fish in the sample.}
 
-\item{reasons}{Output of [.quality_reasons()].}
+\item{reasons}{Output of \code{\link[=.quality_reasons]{.quality_reasons()}}.}
 
 \item{n_classes}{Number of distinct recorded lengths.}
 
-\item{consensus}{Consensus label from [.ensemble_consensus()].}
+\item{consensus}{Consensus label from \code{\link[=.ensemble_consensus]{.ensemble_consensus()}}.}
 
-\item{misid}{Misidentification flag from [flag_length_mixture()].}
+\item{misid}{Misidentification flag from \code{\link[=flag_length_mixture]{flag_length_mixture()}}.}
 
-\item{robust_flag}{`"robust"` / `"sensitive"` from [lbb_robustness()].}
+\item{robust_flag}{\code{"robust"} / \code{"sensitive"} from \code{\link[=lbb_robustness]{lbb_robustness()}}.}
 
-\item{production_band}{`"clear"` / `"straddles"` from [assess_production()].}
+\item{production_band}{\code{"clear"} / \code{"straddles"} from \code{\link[=assess_production]{assess_production()}}.}
 
-\item{gear_profile}{Optional one-row output of [.gear_profile()]; when the
+\item{gear_profile}{Optional one-row output of \code{\link[=.gear_profile]{.gear_profile()}}; when the
 sample is dominated by dome-selective gears the "large fish missing"
 advice names the gear.}
 
 \item{coarse_low_confidence}{Logical; a low-confidence genus/family read.}
 
-\item{min_n}{Minimum fish for any read. Default 20 (species track).}
+\item{min_n}{Minimum trips for any read. Default 20 (species track).}
 
-\item{target_n}{Recommended fish per assessment period. Default 150.}
+\item{target_n}{Recommended trips per assessment period. Default 150.}
 }
 \value{
 A single sentence.
@@ -49,7 +49,7 @@ A single sentence.
 \description{
 Picks the single most useful next step for the people collecting data,
 in priority order: not assessable yet, possible misidentification, lengths
-recorded too coarsely, too few fish, large fish missing, borderline status
+recorded too coarsely, too few trips, large fish missing, borderline status
 (sensitive prior, band straddling the line, or methods disagreeing), mixed
 coarse taxon, reliable.
 }

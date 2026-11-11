@@ -1,52 +1,3 @@
-#' Prepare Boat Registry Data from Metadata
-#'
-#' @description
-#' Processes boat registry data from metadata table to create a summary
-#' of total boats by district. This data is used for scaling GPS sample data
-#' to fleet-wide estimates.
-#'
-#' @details
-#' The function takes boat metadata and creates a district-level summary of boat counts.
-#' This is essential for calculating sampling rates and extrapolating fleet-wide activity
-#' from GPS-tracked samples.
-#'
-#' @param boats_table Data frame containing boat registry information with:
-#'   - District: District name for each boat
-#'   - Additional boat metadata (boat ID, registration details, etc.)
-#'
-#' @return A data frame with boat counts by district:
-#'   - district: District name (standardized from metadata)
-#'   - total_boats: Total number of boats registered in the district
-#'
-#' @examples
-#' \dontrun{
-#' # Get boat registry data from metadata
-#' boat_registry <- prepare_boat_registry(boats_table = metadata$boats)
-#'
-#' # View boat counts by district
-#' print(boat_registry)
-#' }
-#'
-#' @seealso
-#' * [estimate_fleet_activity()] for using boat registry in fleet estimates
-#'
-#' @keywords workflow preprocessing
-#' @export
-prepare_boat_registry <- function(boats_table = NULL) {
-  boat_registry <- boats_table |>
-    dplyr::group_by(.data$District) |>
-    dplyr::summarise(
-      n_boats = dplyr::n(),
-      .groups = "drop"
-    ) |>
-    dplyr::rename(
-      district = "District",
-      total_boats = "n_boats"
-    )
-
-  return(boat_registry)
-}
-
 #' Process Trip Data with District Information
 #'
 #' @description
@@ -149,6 +100,154 @@ process_trip_data <- function(
   return(trips_stats)
 }
 
+# The country's trips placed where their boats land, in the shape
+# process_trip_data() returns plus `gaul_2_code`. See generate_fleet_analysis().
+landing_trip_data <- function(conf, geo) {
+  country_opts <- resolve_storage_opts(conf, "country")
+  trips <- download_parquet_from_cloud(
+    prefix = conf$pds$pds_trips$file_prefix,
+    provider = conf$storage$google$key,
+    options = country_opts,
+    version = conf$pds$pds_trips$version
+  )
+  descriptors <- download_parquet_from_cloud(
+    prefix = conf$pds$pds_tracks$descriptors$file_prefix,
+    provider = conf$storage$google$key,
+    options = country_opts
+  )
+  polygons <- cloud_object_name(
+    prefix = conf$metadata$map_boundaries$gaul2,
+    provider = conf$storage$google$key,
+    options = conf$storage$google$options_coasts,
+    version = "latest",
+    extension = "geojson"
+  ) |>
+    download_cloud_file(
+      provider = conf$storage$google$key,
+      options = conf$storage$google$options_coasts
+    ) |>
+    sf::st_read(quiet = TRUE)
+
+  # Only districts in the frame can be raised; matching by code keeps a
+  # spelling difference ("Buzi", "Búzi") from losing one.
+  districts <- polygons |>
+    dplyr::transmute(gaul_2_code = as.character(.data$gaul2_code)) |>
+    dplyr::inner_join(
+      geo |>
+        dplyr::select("gaul_2_code", "gaul_2_name") |>
+        dplyr::filter(!duplicated(.data$gaul_2_code)),
+      by = "gaul_2_code"
+    )
+
+  landings <- trips |>
+    dplyr::inner_join(
+      dplyr::select(descriptors, "Trip", "end_lat", "end_lng"),
+      by = "Trip"
+    ) |>
+    dplyr::filter(!is.na(.data$end_lat), !is.na(.data$end_lng))
+  if (nrow(landings) == 0) {
+    stop(
+      "No trip has a described track. Run describe_pds_tracks() before ",
+      "generate_fleet_analysis().",
+      call. = FALSE
+    )
+  }
+  logger::log_info(
+    "{nrow(landings)} of {nrow(trips)} trips have a described track"
+  )
+
+  located <- locate_landings(landings, districts) |>
+    dplyr::mutate(
+      landing_date = lubridate::floor_date(.data$Ended, "day"),
+      date_month = lubridate::floor_date(.data$landing_date, "month")
+    ) |>
+    assign_home_district()
+  logger::log_info("{nrow(located)} trips placed in a district")
+
+  located |>
+    dplyr::transmute(
+      gaul_2_code = .data$gaul_2_code,
+      gaul_2_name = .data$gaul_2_name,
+      community = .data$Community,
+      trip = .data$Trip,
+      boat = .data$IMEI,
+      landing_date = .data$landing_date,
+      date_month = .data$date_month,
+      duration_hrs = .data$`Duration (Seconds)` / 3600
+    )
+}
+
+#' Place trip landings in districts
+#'
+#' @param landings A data frame with the landing point in `end_lat` and
+#'   `end_lng` (degrees).
+#' @param districts An sf data frame of district polygons with `gaul_2_code`
+#'   and `gaul_2_name`.
+#' @param max_km Landings farther than this from every district stay unplaced.
+#' @return `landings` with `landing_km` (distance to the nearest district),
+#'   `gaul_2_code` and `gaul_2_name`, the last two `NA` beyond `max_km`.
+#' @keywords internal
+locate_landings <- function(landings, districts, max_km = 30) {
+  # Planar metres on the local UTM zone: GAUL outlines are not valid spherical
+  # polygons, and the planar engine repairs them where the spherical one fails.
+  zone <- floor((mean(landings$end_lng) + 180) / 6) + 1
+  crs <- if (mean(landings$end_lat) < 0) 32700 + zone else 32600 + zone
+  shapes <- districts |>
+    sf::st_transform(crs) |>
+    sf::st_make_valid()
+  points <- landings |>
+    sf::st_as_sf(coords = c("end_lng", "end_lat"), crs = 4326, remove = FALSE) |>
+    sf::st_transform(crs)
+
+  nearest <- sf::st_nearest_feature(points, shapes)
+  km <- as.numeric(
+    sf::st_distance(points, shapes[nearest, ], by_element = TRUE)
+  ) /
+    1000
+  placed <- km <= max_km
+
+  landings |>
+    dplyr::mutate(
+      landing_km = km,
+      gaul_2_code = dplyr::if_else(placed, shapes$gaul_2_code[nearest], NA),
+      gaul_2_name = dplyr::if_else(placed, shapes$gaul_2_name[nearest], NA)
+    )
+}
+
+#' Place each tracker in one district per month
+#'
+#' A tracker belongs, each month, to the district where most of its trips
+#' landed, so a tracker moved to another boat or site follows its landings.
+#'
+#' @param located Trips with `IMEI`, `date_month`, `gaul_2_code` and
+#'   `gaul_2_name` (`NA` for a trip that landed nowhere near a district).
+#' @return The trips of trackers placed that month, all carrying the tracker's
+#'   district. Trackers with no placed trip that month are dropped.
+#' @keywords internal
+assign_home_district <- function(located) {
+  home <- located |>
+    dplyr::filter(!is.na(.data$gaul_2_code)) |>
+    dplyr::count(
+      .data$IMEI,
+      .data$date_month,
+      .data$gaul_2_code,
+      .data$gaul_2_name
+    ) |>
+    # Ties go to the first district by name, so reruns agree.
+    dplyr::arrange(.data$gaul_2_name) |>
+    dplyr::slice_max(
+      .data$n,
+      n = 1,
+      with_ties = FALSE,
+      by = c("IMEI", "date_month")
+    ) |>
+    dplyr::select(-"n")
+
+  located |>
+    dplyr::select(-"gaul_2_code", -"gaul_2_name") |>
+    dplyr::inner_join(home, by = c("IMEI", "date_month"))
+}
+
 #' Calculate Monthly Trip Statistics by District
 #'
 #' @description
@@ -238,8 +337,9 @@ calculate_monthly_trip_stats <- function(trips_data) {
 #'   - avg_trip_duration_hrs: Average trip duration
 #'   - avg_trips_per_boat_per_month: Average trips per boat
 #' @param boat_registry Data frame with columns:
-#'   - district: District name (must match monthly_stats)
-#'   - total_boats: Total number of boats registered in district
+#'   - gaul_2_name: District name (must match monthly_stats)
+#'   - total_boats: Number of boats in the census. A district may span several
+#'     rows (one per census unit); their boats are summed.
 #'
 #' @return A data frame combining monthly statistics with fleet estimates:
 #'   - district: District name
@@ -272,6 +372,16 @@ calculate_monthly_trip_stats <- function(trips_data) {
 #' @keywords workflow modeling
 #' @export
 estimate_fleet_activity <- function(monthly_stats, boat_registry) {
+  # Airtable `geo` holds one row per landing site, and several can share a
+  # GAUL2 unit (Cidade De Maputo: four, Lamu West: two). Joined unsummed, each
+  # district-month came out once per row, and export_portal() pushed them all.
+  boat_registry <- boat_registry |>
+    dplyr::group_by(.data$gaul_2_name) |>
+    dplyr::summarise(
+      total_boats = stat_or_na(.data$total_boats, sum),
+      .groups = "drop"
+    )
+
   monthly_stats |>
     dplyr::left_join(boat_registry, by = "gaul_2_name") |>
     dplyr::mutate(
@@ -312,11 +422,15 @@ estimate_fleet_activity <- function(monthly_stats, boat_registry) {
 #'   - estimated_total_trips: Estimated trips for entire fleet
 #'   - sampling_rate: Proportion of fleet tracked
 #'   - Other fleet statistics
-#' @param monthly_summaries Data frame with catch/revenue data containing:
-#'   - district: District name (must match fleet_estimates)
+#' @param monthly_summaries Data frame with catch/revenue data per district and
+#'   month, as in the `districts_summaries` table of [summarize_data()]:
+#'   - gaul_2_name: District name (must match fleet_estimates)
 #'   - date: Month as date (will be matched to date_month)
-#'   - metric: Metric name (filtered for mean_catch_kg and mean_catch_price)
-#'   - value: Metric value
+#'   - n_submissions: Surveyed trips
+#'   - mean_catch_kg, mean_catch_price: Average catch and revenue per trip
+#' @param min_trips Surveyed trips a district and month needs for its catch and
+#'   revenue to be raised; below it a handful of trips would stand for the whole
+#'   fleet, so the totals stay `NA`.
 #'
 #' @return A data frame with district-level totals:
 #'   - district: District name
@@ -324,6 +438,7 @@ estimate_fleet_activity <- function(monthly_stats, boat_registry) {
 #'   - sample_total_trips: Trips from tracked boats
 #'   - estimated_total_trips: Estimated trips for entire fleet
 #'   - sampling_rate: Proportion of fleet tracked
+#'   - n_submissions: Surveyed trips
 #'   - mean_catch_kg: Average catch per trip
 #'   - mean_catch_price: Average revenue per trip
 #'   - estimated_total_catch_kg: Estimated total catch for district
@@ -348,7 +463,11 @@ estimate_fleet_activity <- function(monthly_stats, boat_registry) {
 #'
 #' @keywords workflow analysis
 #' @export
-calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
+calculate_district_totals <- function(
+  fleet_estimates,
+  monthly_summaries,
+  min_trips = 10
+) {
   fleet_estimates |>
     # Join with catch/revenue data
     dplyr::full_join(
@@ -357,13 +476,20 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
     ) |>
     # Calculate total estimates based on fleet-wide projections
     dplyr::mutate(
+      enough_trips = .data$n_submissions >= min_trips,
       # Total catch estimates (mean catch per trip × estimated total trips)
-      estimated_total_catch_kg = .data$mean_catch_kg *
-        .data$estimated_total_trips,
+      estimated_total_catch_kg = dplyr::if_else(
+        .data$enough_trips,
+        .data$mean_catch_kg * .data$estimated_total_trips,
+        NA_real_
+      ),
 
       # Total revenue estimates (mean revenue per trip × estimated total trips)
-      estimated_total_revenue = .data$mean_catch_price *
-        .data$estimated_total_trips
+      estimated_total_revenue = dplyr::if_else(
+        .data$enough_trips,
+        .data$mean_catch_price * .data$estimated_total_trips,
+        NA_real_
+      )
     ) |>
     # Select relevant columns
     dplyr::select(
@@ -374,6 +500,7 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
       "estimated_total_trips",
       "sampling_rate",
       # Sample-based averages
+      "n_submissions",
       "mean_catch_kg",
       "mean_catch_price",
       # Fleet-wide totals
@@ -395,17 +522,41 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #' @details
 #' This function executes the complete analysis pipeline:
 #' 1. Reads configuration parameters and retrieves metadata
-#' 2. Prepares boat registry from metadata
+#' 2. Counts the boats per district in the census (Airtable `frame_units`)
 #' 3. Processes trip data from PDS API using device IMEIs
-#' 4. Downloads monthly summaries from cloud storage
+#' 4. Downloads the districts summaries (surveyed trips, mean catch and revenue
+#'    per trip by district and month) from cloud storage
 #' 5. Calculates monthly trip statistics from GPS data
-#' 6. Estimates fleet-wide activity using boat registry
+#' 6. Estimates fleet-wide activity using the census boats
 #' 7. Calculates district totals using catch/revenue data
 #' 8. Generates annual summary statistics by district
 #' 9. Saves aggregated results to RDS file and uploads to cloud storage
 #'
 #' The function creates a comprehensive analysis that scales GPS-tracked boat data
-#' to estimate total fleet activity, catch, and revenue by district and time period.
+#' to estimate total fleet activity, catch, and revenue by district and time period:
+#' the GPS tracker method. A country whose config has `fao.surveys` also gets the
+#' FAO ARTFISH method's totals ([raise_catch_fao()]). Its catch and revenue per
+#' trip are then averaged as that method does ([fao_catch_per_trip()]): each
+#' kind of boat and gear by its boats in the census, not by how often it is
+#' surveyed. A district and month without such an average keeps the plain mean
+#' of its surveyed trips.
+#'
+#' Where a tracker is depends on `pds.fleet_location`:
+#' * Not set: the district linked to the device in Airtable `pds_devices`. The
+#'   fleet is the devices owned by the customers in `pds.fleet_customers`, or in
+#'   `pds.customers` when that key is not set. A pipeline that selects trips
+#'   with `pds.exclude_customers` cannot set `pds.customers`, so it names its
+#'   fleet with `pds.fleet_customers`. Trips longer than 48 hours are dropped.
+#' * `landing`: where the boat lands, with no manual link. Each trip in the
+#'   country's `pds.pds_trips` file is placed by the end point of its track
+#'   (written by [describe_pds_tracks()]) in the nearest of the country's
+#'   districts, matched by GAUL code to the `metadata.map_boundaries.gaul2`
+#'   polygons, and left unplaced beyond 30 km. That reaches a frame district
+#'   from the newer GAUL districts carved out of it (Chonguene and Limpopo from
+#'   Xai-Xai) while leaving out places the frame lacks (Palma, Kilwa, both over
+#'   100 km from any of their country's districts). Each tracker then belongs, each
+#'   month, to the district where most of its trips landed, and all its trips
+#'   of that month count there. Trips of any length are kept.
 #'
 #' @param log_threshold Logging threshold level (default: logger::DEBUG).
 #'   Controls the verbosity of logging output during pipeline execution.
@@ -428,6 +579,11 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #'   - total_estimated_revenue: Total estimated annual revenue
 #'   - avg_monthly_catch_kg: Average monthly catch
 #'   - avg_monthly_revenue: Average monthly revenue
+#' - **fao**: The same totals raised with the FAO ARTFISH method, per district, fishing
+#'   unit and month (see [raise_catch_fao()]); `NULL` for a country whose config
+#'   has no `fao.surveys`
+#' - **fao_species**: The FAO ARTFISH method's catch by species, per district,
+#'   fishing unit and month (see [estimate_species_fao()]); `NULL` like `fao`
 #'
 #' @examples
 #' \dontrun{
@@ -439,7 +595,6 @@ calculate_district_totals <- function(fleet_estimates, monthly_summaries) {
 #' }
 #'
 #' @seealso
-#' * [prepare_boat_registry()] for boat registry preparation
 #' * [process_trip_data()] for trip data processing
 #' * [calculate_monthly_trip_stats()] for monthly statistics
 #' * [estimate_fleet_activity()] for fleet estimates
@@ -465,35 +620,71 @@ generate_fleet_analysis <- function(
       options = conf$storage$google$options_coasts
     ) |>
     readr::read_rds() |>
-    purrr::keep_at(c("devices", "geo"))
+    purrr::keep_at(c(
+      "devices", "geo", "frame_units", "gear_groups", "vessel_groups"
+    ))
 
-  devices <- assets$devices |>
-    dplyr::filter(.data$customer_name %in% conf$pds$customers)
+  if (identical(conf$pds$fleet_location, "landing")) {
+    trips_stats <- landing_trip_data(conf = conf, geo = assets$geo)
+    regions <- assets$geo |>
+      dplyr::filter(.data$gaul_2_code %in% trips_stats$gaul_2_code)
+  } else {
+    # pds.customers also selects trips, which a pipeline using exclude_customers can't set.
+    fleet_customers <- conf$pds$fleet_customers %||% conf$pds$customers
+    devices <- assets$devices |>
+      dplyr::filter(.data$customer_name %in% fleet_customers)
 
-  regions <-
-    assets$geo |>
-    dplyr::filter(.data$gaul_2_code %in% c(devices$gaul_2_code))
+    regions <-
+      assets$geo |>
+      dplyr::filter(.data$gaul_2_code %in% c(devices$gaul_2_code))
 
-  boat_registry <-
-    regions |>
-    dplyr::select("gaul_2_name", "total_boats")
+    trips_stats <- process_trip_data(
+      conf = conf,
+      devices_table = devices,
+      imei_list = unique(devices$imei)
+    )
+  }
 
-  # Process raw trip data
-  trips_stats <- process_trip_data(
-    conf = conf,
-    devices_table = devices,
-    imei_list = unique(devices$imei)
-  )
+  # Boats from the census, as the FAO ARTFISH method counts them; foot
+  # fishers have none.
+  boat_registry <- assets$frame_units |>
+    dplyr::filter(
+      .data$gaul_2_code %in% regions$gaul_2_code,
+      !.data$vessel_standard_name %in% "Feet"
+    ) |>
+    dplyr::select("gaul_2_name", total_boats = "n_boats")
 
-  monthly_summaries <-
+  # Same means as the monthly summaries, plus the surveyed-trip count.
+  districts_summaries <-
     download_parquet_from_cloud(
       prefix = paste0(
         conf$surveys$summaries$file_prefix,
-        "_monthly_summaries"
+        "_districts_summaries"
       ),
       provider = conf$storage$google$key,
       options = conf$storage$google$options
     )
+
+  fao <- raise_catch_fao(conf, assets)
+  if (!is.null(fao)) {
+    # Catch per trip as the FAO ARTFISH method averages it, where it has trips:
+    # each kind of boat by its census boats, not by how often it is surveyed.
+    districts_summaries <- districts_summaries |>
+      dplyr::left_join(
+        fao_catch_per_trip(fao$units),
+        by = c("gaul_2_name", "date")
+      ) |>
+      dplyr::mutate(
+        mean_catch_kg = dplyr::coalesce(
+          .data$unit_catch_kg,
+          .data$mean_catch_kg
+        ),
+        mean_catch_price = dplyr::coalesce(
+          .data$unit_catch_price,
+          .data$mean_catch_price
+        )
+      )
+  }
 
   # Calculate monthly statistics
   monthly_stats <- calculate_monthly_trip_stats(trips_data = trips_stats)
@@ -507,7 +698,7 @@ generate_fleet_analysis <- function(
   # Calculate district totals
   district_totals <- calculate_district_totals(
     fleet_estimates = fleet_estimates,
-    monthly_summaries = monthly_summaries
+    monthly_summaries = districts_summaries
   ) |>
     tidyr::complete(
       .data$gaul_2_name,
@@ -540,7 +731,7 @@ generate_fleet_analysis <- function(
         na.rm = TRUE
       ),
       total_estimated_revenue = sum(
-        .data$estimated_total_catch_kg,
+        .data$estimated_total_revenue,
         na.rm = TRUE
       ),
       avg_monthly_catch_kg = mean(.data$estimated_total_catch_kg, na.rm = TRUE),
@@ -565,7 +756,9 @@ generate_fleet_analysis <- function(
     list(
       fleet_estimates = fleet_estimates,
       district_totals = district_totals,
-      annual_summary = annual_summary
+      annual_summary = annual_summary,
+      fao = fao$units,
+      fao_species = fao$species
     )
 
   # Save aggregated results

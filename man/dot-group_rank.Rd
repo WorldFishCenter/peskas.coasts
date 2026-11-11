@@ -10,11 +10,10 @@
 \item{x}{Character vector of scientific-name labels.}
 }
 \value{
-A character vector: `"genus"`, `"family"` or `"other"`.
+A character vector: \code{"genus"}, \code{"family"} or \code{"other"}.
 }
 \description{
-Classifies a non-binomial landing label as a genus aggregate (`"Decapterus
-spp"`), a family (`"Carangidae"`) or something coarser/outside FishBase's
+Classifies a non-binomial landing label as a genus aggregate (\code{"Decapterus spp"}), a family (\code{"Carangidae"}) or something coarser/outside FishBase's
 finfish backbone (orders, classes, informal groupings, invertebrate
 infraorders). Group priors are trustworthy for genera, usable with care for
 families, and not attempted for the rest.

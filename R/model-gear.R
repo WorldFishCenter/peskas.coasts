@@ -1,11 +1,10 @@
-# Generated with Claude (Cowork) — review before committing.
 # Gear resolution for the length-based assessments.
 #
 # Small-scale gears select sizes very differently. Traps and gill nets are
 # dome-shaped: they under-catch the largest fish, so a length sample from them
 # looks like heavy mortality even when the stock is lightly fished (Zanzibar
 # Siganus sutor: trap Z/K ~4.9 vs hand line ~1.3; Timor Lethrinidae: gill net
-# ~9.7 vs hand line ~2.7, 2026-11-05). Two tools follow:
+# ~9.7 vs hand line ~2.7). Two tools follow:
 #  - a gear profile and selectivity flag on every read (which gear dominates the
 #    sample, and how much of it comes from dome-selective gears);
 #  - optional per-gear reads, with a reference gear = the gear whose catch
@@ -17,8 +16,9 @@
 
 #' Fish Represented by Each Length Record
 #'
-#' A record with `n_catch` > 1 stands for that many fish of the recorded
-#' length; missing or invalid counts count as one fish.
+#' A record stands for `n_fish` fish of the recorded length; a feed without
+#' the column, and missing or invalid counts, count as one fish. `n_catch` is
+#' the catch's place on the form, not a count.
 #'
 #' @param measured Landing rows that carry a length.
 #'
@@ -26,10 +26,10 @@
 #'
 #' @keywords internal
 .n_fish <- function(measured) {
-  if (!"n_catch" %in% names(measured)) {
+  if (!"n_fish" %in% names(measured)) {
     return(rep(1L, nrow(measured)))
   }
-  n <- suppressWarnings(as.integer(measured$n_catch))
+  n <- suppressWarnings(as.integer(measured$n_fish))
   dplyr::if_else(is.na(n) | n < 1L, 1L, n)
 }
 
@@ -79,17 +79,17 @@
   )
 }
 
-#' Gears with Enough Measured Fish for Their Own Read
+#' Gears with Enough Trips Measured for Their Own Read
 #'
 #' @inheritParams .gear_profile
-#' @param min_fish Minimum measured fish per gear. Default 100 (where LBB
-#'   precision starts to plateau, per the 2026-10-21 subsampling test).
+#' @param min_trips Minimum trips with measured fish per gear. Default 100,
+#'   where LBB precision starts to plateau.
 #'
 #' @return Character vector of gears; empty unless at least two gears qualify
 #'   (with one, the pooled read already is that gear's read).
 #'
 #' @keywords internal
-.gears_with_fish <- function(landings, scientific_name, min_fish = 100L) {
+.gears_with_trips <- function(landings, scientific_name, min_trips = 100L) {
   if (!"gear" %in% names(landings)) {
     return(character(0))
   }
@@ -98,8 +98,8 @@
   if (nrow(m) == 0) {
     return(character(0))
   }
-  by_gear <- tapply(m$n_fish, m$gear, sum)
-  ok <- names(by_gear)[by_gear >= min_fish]
+  by_gear <- tapply(m$trip_id, m$gear, dplyr::n_distinct)
+  ok <- names(by_gear)[by_gear >= min_trips]
   if (length(ok) < 2) character(0) else ok
 }
 
@@ -110,8 +110,8 @@
 #' Linf): the sample least truncated by gear selectivity, and so the best basis
 #' for the headline status. Only species and high-confidence genera get one: in
 #' a mixed family, gears catch different member species, so a larger reach
-#' reflects species composition rather than selectivity (2026-11-09 run:
-#' Carangidae / Clupeidae reach > 1.5 against the member-median Linf).
+#' reflects species composition rather than selectivity (Carangidae and
+#' Clupeidae can reach more than 1.5 times their member-median Linf).
 #'
 #' @param results Assessment rows with `gear`, `size_reach` and `quality`.
 #'

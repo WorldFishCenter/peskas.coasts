@@ -11,15 +11,15 @@
 
 \item{linf}{Asymptotic length (cm).}
 
-\item{lc}{Optional length of full selection (cm). `NULL` uses the mode.}
+\item{lc}{Optional length of full selection (cm). \code{NULL} uses the mode.}
 }
 \value{
-A list with `zk` and `lc` (both `NA` when not estimable).
+A list with \code{zk} and \code{lc} (both \code{NA} when not estimable).
 }
 \description{
 Total mortality relative to growth from the mean length of fully selected
-fish: `Z/K = (Linf - Lmean) / (Lmean - Lc)` (Beverton & Holt 1956), valid
-for a population near equilibrium with constant mortality above `Lc`. `Lc`,
+fish: \code{Z/K = (Linf - Lmean) / (Lmean - Lc)} (Beverton & Holt 1956), valid
+for a population near equilibrium with constant mortality above \code{Lc}. \code{Lc},
 the length of full selection, defaults to the modal length class.
 }
 \keyword{internal}

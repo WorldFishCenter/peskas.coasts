@@ -142,20 +142,20 @@ export_geos <- function(package = "coasts") {
     dplyr::bind_rows() |>
     dplyr::mutate(
       mean_rpue = dplyr::case_when(
-        country == "zanzibar" ~ .data$mean_rpue * 0.00037,
+        country == "zanzibar" ~ .data$mean_rpue * 0.00038,
         country == "kenya" ~ .data$mean_rpue * 0.0077,
         country == "mozambique" ~ .data$mean_rpue * 0.016,
         TRUE ~ .data$mean_rpue
       ),
       # mean_rpua = dplyr::case_when(
-      #   country == "zanzibar" ~ .data$mean_rpua * 0.00037,
+      #   country == "zanzibar" ~ .data$mean_rpua * 0.00038,
       #   country == "kenya" ~ .data$mean_rpua * 0.0077,
       #   country == "mozambique" ~ .data$mean_rpue * 0.016,
       #   TRUE ~ .data$mean_rpue
       # ),
       mean_price_kg = dplyr::case_when(
-        country == "zanzibar" ~ .data$mean_price_kg * 0.00039,
-        country == "kenya" ~ .data$mean_price_kg * 0.0078,
+        country == "zanzibar" ~ .data$mean_price_kg * 0.00038,
+        country == "kenya" ~ .data$mean_price_kg * 0.0077,
         country == "mozambique" ~ .data$mean_price_kg * 0.016,
         TRUE ~ .data$mean_price_kg
       ),
@@ -500,25 +500,37 @@ export_fishers_stats <- function(package = "coasts") {
 #'
 #' @details
 #' The function performs the following operations:
-#' - Downloads six summary datasets from cloud storage:
+#' - Downloads nine summary datasets from cloud storage:
 #'   - Monthly summaries: Aggregated catch metrics by district and month
 #'   - All monthly summaries: as above but without the dashboard exclusions
 #'   - Taxa summaries: Species-specific metrics in long format
 #'   - Districts summaries: District-level indicators over time
 #'   - Gear summaries: Performance metrics by gear type
 #'   - Grid summaries: Spatial grid data from vessel tracking
+#'   - Taxa traits: FishBase traits per landed taxon
+#'   - Length summaries: recorded catch per length class
+#'   - Gear taxa summaries: recorded catch per gear and species
 #' - Downloads aggregated catch estimates from the modeling step
 #' - Creates geographic regional summaries from the unfiltered monthly data
 #'   (`all_monthly_summaries`), so the coasts portal keeps every survey form
 #'   while the MongoDB `dashboard` collections keep the filtered ones
-#' - Joins aggregated estimates (fishing trips, catch tonnage, revenue) to monthly summaries
+#' - Joins aggregated estimates (fishing trips, catch tonnage, revenue) and the
+#'   share of the fleet tracked behind them (`sampling_rate`) to the monthly
+#'   and district summaries
 #' - Transforms monthly summaries to long format for portal consumption
+#' - Adds the FAO ARTFISH catch by species to the taxa summaries, as the
+#'   metric `estimated_catch_tn_fao`, for a country that has it
+#'   ([fao_portal_taxa()])
 #' - Uploads all datasets to specified MongoDB collections
+#' - Writes the district summaries with both methods' estimates and their
+#'   GAUL codes to the API bucket as `<country>/aggregated/district-months`,
+#'   served by peskas-api's `/data/district-months` ([api_district_months()])
 #'
 #' The function expects the summary files to be named with the pattern:
 #' `{file_prefix}_{table_name}.parquet` where table_name is one of:
 #' monthly_summaries, all_monthly_summaries, taxa_summaries, districts_summaries,
-#' gear_summaries, grid_summaries
+#' gear_summaries, grid_summaries, taxa_traits, length_summaries,
+#' gear_taxa_summaries
 #'
 #' @param log_threshold The logging level threshold for the logger package (e.g., DEBUG, INFO)
 #'   See `logger::log_levels` for available options.
@@ -573,7 +585,10 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
     "taxa_summaries",
     "districts_summaries",
     "gear_summaries",
-    "grid_summaries"
+    "grid_summaries",
+    "taxa_traits",
+    "length_summaries",
+    "gear_taxa_summaries"
   )
 
   for (name in table_names) {
@@ -648,13 +663,28 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
       "date" = "date_month",
       "estimated_fishing_trips" = "estimated_total_trips",
       "estimated_catch_tn",
-      "estimated_revenue" = "estimated_total_revenue"
+      "estimated_revenue" = "estimated_total_revenue",
+      "sampling_rate"
     )
+  if (!is.null(aggregated_data$fao)) {
+    monthly_aggregated <- dplyr::full_join(
+      monthly_aggregated,
+      fao_portal_metrics(aggregated_data$fao),
+      by = c("gaul_2_name", "date")
+    )
+  }
+
+  # The ARTFISH errors go to the API only: the dashboard collections keep the
+  # metrics they had.
+  dashboard_aggregated <- dplyr::select(
+    monthly_aggregated,
+    -dplyr::starts_with("relative_error_")
+  )
 
   # Transform monthly summaries to long format for portal
   monthly_summaries <-
     data_summaries$monthly_summaries |>
-    dplyr::left_join(monthly_aggregated, by = c("gaul_2_name", "date")) |>
+    dplyr::left_join(dashboard_aggregated, by = c("gaul_2_name", "date")) |>
     dplyr::relocate(
       "estimated_fishing_trips",
       .after = "date"
@@ -668,8 +698,10 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 
   districts_summaries <-
     data_summaries$districts_summaries |>
-    dplyr::full_join(monthly_aggregated, by = c("gaul_2_name", "date")) |>
-    dplyr::select(dplyr::where(~ !all(is.na(.))), -"estimated_fishing_trips") |>
+    # The dashboard keys districts by name; the codes are for the API.
+    dplyr::select(-dplyr::any_of(c("gaul_1_code", "gaul_1_name", "gaul_2_code"))) |>
+    dplyr::full_join(dashboard_aggregated, by = c("gaul_2_name", "date")) |>
+    dplyr::select(dplyr::where(~ !all(is.na(.)))) |>
     tidyr::pivot_longer(
       -c("date", "gaul_2_name"),
       names_to = "indicator",
@@ -680,6 +712,12 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
   taxa_summaries_filtered <-
     data_summaries$taxa_summaries |>
     dplyr::filter(!is.na(.data$value))
+  if (!is.null(aggregated_data$fao_species)) {
+    taxa_summaries_filtered <- dplyr::bind_rows(
+      taxa_summaries_filtered,
+      fao_portal_taxa(aggregated_data$fao_species, data_summaries$taxa_traits)
+    )
+  }
 
   # Dataframes to upload
   dataframes_to_upload <- list(
@@ -687,16 +725,24 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
     taxa_summaries = taxa_summaries_filtered,
     districts_summaries = districts_summaries,
     gear_summaries = data_summaries$gear_summaries,
-    grid_summaries = data_summaries$grid_summaries
+    grid_summaries = data_summaries$grid_summaries,
+    taxa_traits = data_summaries$taxa_traits,
+    length_summaries = data_summaries$length_summaries,
+    gear_taxa_summaries = data_summaries$gear_taxa_summaries
   )
 
-  # Collection names
+  # Collection names. The tables added in 4.15.0 fall back to their own name,
+  # so a pipeline whose config predates them still publishes them.
+  collections <- conf$storage$mongodb$databases$dashboard$collections
   collection_names <- list(
-    monthly_summaries = conf$storage$mongodb$databases$dashboard$collections$monthly_summaries,
-    taxa_summaries = conf$storage$mongodb$databases$dashboard$collections$taxa_summaries,
-    districts_summaries = conf$storage$mongodb$databases$dashboard$collections$districts_summaries,
-    gear_summaries = conf$storage$mongodb$databases$dashboard$collections$gear_summaries,
-    grid_summaries = conf$storage$mongodb$databases$dashboard$collections$grid_summaries
+    monthly_summaries = collections$monthly_summaries,
+    taxa_summaries = collections$taxa_summaries,
+    districts_summaries = collections$districts_summaries,
+    gear_summaries = collections$gear_summaries,
+    grid_summaries = collections$grid_summaries,
+    taxa_traits = collections$taxa_traits %||% "taxa_traits",
+    length_summaries = collections$length_summaries %||% "length_summaries",
+    gear_taxa_summaries = collections$gear_taxa_summaries %||% "gear_taxa_summaries"
   )
 
   # Iterate over the dataframes and upload them
@@ -713,6 +759,101 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
       )
     }
   )
+
+  # The API's district-months, in the API bucket beside the country's trips
+  # (`<country>/aggregated/` next to `<country>/validated/`). Written last, so
+  # a failure here leaves the dashboard updated.
+  district_months <- api_district_months(
+    data_summaries$districts_summaries,
+    monthly_aggregated,
+    conf$country
+  )
+  filename <- add_version("district-months", extension = "parquet")
+  arrow::write_parquet(
+    district_months,
+    sink = filename,
+    compression = "lz4",
+    compression_level = 12
+  )
+  cloud_name <- file.path(
+    dirname(conf$api$trips$validated$cloud_path),
+    "aggregated",
+    filename
+  )
+  logger::log_info("Uploading {cloud_name} to the API bucket")
+  upload_cloud_file(
+    file = filename,
+    provider = conf$storage$google$key,
+    options = resolve_storage_opts(conf, "api", error_if_missing = TRUE),
+    name = cloud_name
+  )
+  file.remove(filename)
+}
+
+#' The API's district-months
+#'
+#' One row per district (by GAUL code) and month, for the peskas-api
+#' `/data/district-months` endpoint: the dashboard's district figures under the
+#' API's names, then both methods' estimates for the whole fleet. Months a
+#' district recorded nothing in are kept, with `n_submissions` 0, so gaps in
+#' data collection show. Landings with no district are left out. A country
+#' without the FAO ARTFISH method keeps its columns, empty, so every country
+#' has the same 23.
+#'
+#' @param districts_summaries The `districts_summaries` table of
+#'   [summarize_data()].
+#' @param aggregated The estimates per `gaul_2_name` and `date` that
+#'   [export_portal()] joins to the dashboard summaries.
+#' @param country The country as the API names it (`conf$country`).
+#' @return One row per district and month; the peskas-api field descriptions
+#'   (`/metadata/district-months`) say what each column means.
+#' @keywords internal
+api_district_months <- function(districts_summaries, aggregated, country) {
+  fao <- c(
+    "estimated_fishing_trips_fao",
+    "estimated_catch_tn_fao",
+    "estimated_revenue_fao",
+    "relative_error_catch_fao",
+    "relative_error_revenue_fao"
+  )
+  aggregated[setdiff(fao, names(aggregated))] <- NA_real_
+
+  districts_summaries |>
+    dplyr::filter(!is.na(.data$gaul_2_code)) |>
+    dplyr::left_join(
+      aggregated,
+      by = c("gaul_2_name", "date"),
+      relationship = "many-to-one"
+    ) |>
+    dplyr::mutate(
+      # A mean over no values is NaN; the API reads it as empty.
+      dplyr::across(dplyr::where(is.numeric), ~ replace(.x, is.nan(.x), NA)),
+      country = .env$country,
+      month = as.Date(.data$date),
+      n_submissions = dplyr::coalesce(.data$n_submissions, 0L)
+    ) |>
+    dplyr::select(
+      "country",
+      "month",
+      "gaul_1_code",
+      "gaul_1_name",
+      "gaul_2_code",
+      "gaul_2_name",
+      "n_submissions",
+      mean_n_fishers = "n_fishers",
+      mean_trip_duration_hrs = "trip_duration_hrs",
+      "mean_catch_kg",
+      "mean_catch_price",
+      "mean_price_kg",
+      "mean_cpue",
+      "mean_rpue",
+      "estimated_fishing_trips",
+      "estimated_catch_tn",
+      "estimated_revenue",
+      "sampling_rate",
+      dplyr::all_of(fao)
+    ) |>
+    dplyr::arrange(.data$gaul_2_code, .data$month)
 }
 
 
@@ -724,7 +865,7 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 #' fetched directly by a Next.js / DeckGL application.
 #'
 #' Versioned files are produced (following the package's `add_version()`
-#' convention, i.e. `prefix__YYYYMMDDHHMMSS__extension`):
+#' convention, i.e. `prefix__YYYYMMDDHHMMSS_<sha7>__extension`):
 #' - `pds-h3-effort-r{h3_res}__*__json`: all-fleet JSON array for
 #'   `H3HexagonLayer` (one row per `h3_index` × `year`)
 #' - `pds-h3-effort-gear-r{h3_res}__*__json`: same metrics broken down by
@@ -753,16 +894,24 @@ export_portal <- function(log_threshold = logger::DEBUG, package = "coasts") {
 #'   hours_per_trip, fishing_hours_per_km2, unique_trips_per_km2,
 #'   hours_per_day_per_km2}`
 #'
+#' When the effort grid carries `country`, the same cells and grounds also go
+#' to the coasts portal MongoDB database for the country dashboards, which
+#' filter them by `country`:
+#' - `pds_effort`: one document per `h3_index` × `country`, all years pooled,
+#'   `{h3_index, country, fishing_hours, unique_trips, n_active_days,
+#'   avg_hours_per_day, lng, lat}` (`lng`/`lat` is the cell centre)
+#' - `pds_fishing_grounds`: the fishing grounds GeoJSON, one document per ground
+#'
 #' @param h3_res Integer. H3 resolution of the effort grid to export.
 #'   Default is `9L`.
 #' @param min_trips_grounds Integer. Minimum unique trips per H3 cell to
-#'   include in fishing grounds derivation. Default is `3L`.
+#'   include in fishing grounds derivation and in `pds_effort`. Default is `3L`.
 #' @param log_threshold Logging threshold. Default is `logger::DEBUG`.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
 #'   to `"coasts"`.
 #'
 #' @return Invisibly `NULL`. Uploads the web-ready files described above to GCS
-#'   as a side effect.
+#'   and MongoDB as a side effect.
 #'
 #' @seealso [aggregate_pds_effort()], [model_cpue()], [derive_fishing_grounds()]
 #'
@@ -935,6 +1084,32 @@ export_pds_spatial <- function(
       options = coasts_opts
     )
     logger::log_info("Uploaded: {basename(effort_gear_filename)}")
+
+    # Country dashboards: all years pooled per country, ratio recomputed from
+    # the totals as in the coasts portal's "all years" view.
+    effort_country <- effort |>
+      dplyr::summarise(
+        fishing_hours = sum(.data$fishing_hours),
+        unique_trips = sum(.data$unique_trips),
+        n_active_days = dplyr::n_distinct(do.call(c, .data$active_dates)),
+        .by = c("h3_index", "country")
+      ) |>
+      dplyr::filter(.data$unique_trips >= min_trips_grounds) |>
+      dplyr::mutate(
+        avg_hours_per_day = .data$fishing_hours / .data$n_active_days
+      )
+    centres <- sf::st_coordinates(
+      h3jsr::cell_to_point(effort_country$h3_index, simple = TRUE)
+    )
+    effort_country$lng <- centres[, "X"]
+    effort_country$lat <- centres[, "Y"]
+    mdb_collection_push(
+      data = effort_country,
+      connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+      collection_name = conf$storage$mongodb$coasts_portal$collection$pds_effort,
+      db_name = conf$storage$mongodb$coasts_portal$database_name
+    )
+    logger::log_info("Pushed {nrow(effort_country)} country effort cells")
   }
 
   # -- CPUE ----------------------------------------------------------------------
@@ -1048,6 +1223,16 @@ export_pds_spatial <- function(
       options = coasts_opts
     )
     logger::log_info("Uploaded: {basename(grounds_filename)}")
+
+    if (has_gear) {
+      mdb_collection_push(
+        data = grounds_export,
+        connection_string = conf$storage$mongodb$coasts_portal$connection_string,
+        collection_name = conf$storage$mongodb$coasts_portal$collection$pds_fishing_grounds,
+        db_name = conf$storage$mongodb$coasts_portal$database_name,
+        geo = TRUE
+      )
+    }
   } else {
     logger::log_warn(
       "No fishing grounds passed min_trips = {min_trips_grounds}",
@@ -1350,10 +1535,14 @@ export_effort_gear_shapefiles <- function(
 #' the result as a versioned JSON file for portal consumption.
 #'
 #' @details
-#' The output JSON has one record per `(country, gaul1_name, gaul2_name,
-#' gear_name)` combination with `fishers_male` and `fishers_female` totals.
+#' The census is the snapshot's `frame_units` table. The output JSON has one
+#' record per `(country, gaul1_name, gaul2_name, gear_name)` combination with
+#' `fishers_male`, `fishers_female` and `n_boats` totals; foot fishers count as
+#' fishers but not as boats. Mozambique's census has no gear, so it has one
+#' record per district without `gear_name`. Timor-Leste's census counts boats
+#' only, so it is left out.
 #' Files follow the package's `add_version()` convention
-#' (`prefix__YYYYMMDDHHMMSS__extension`).
+#' (`prefix__YYYYMMDDHHMMSS_<sha7>__extension`).
 #'
 #' @param log_threshold Logging threshold. Default is `logger::DEBUG`.
 #' @param package Name of the package whose `inst/conf.yml` to read. Defaults
@@ -1387,44 +1576,24 @@ export_frame_data <- function(
       options = coasts_opts
     ) |>
     readr::read_rds() |>
-    purrr::pluck("frame") |>
+    purrr::pluck("frame_units")
+
+  # Mozambique's census has no gear, so its rows sum to one per district.
+  # Timor-Leste's counts boats only, so it is left out.
+  gears <- frame |>
+    dplyr::filter(!is.na(.data$fishers_male)) |>
+    dplyr::summarise(
+      fishers_male = sum(.data$fishers_male, na.rm = TRUE),
+      fishers_female = sum(.data$fishers_female, na.rm = TRUE),
+      # Foot fishers are fishers but not boats.
+      n_boats = sum(.data$n_boats[!.data$vessel_standard_name %in% "Feet"]),
+      .by = c("country", "gaul_1_name", "gaul_2_name", "gear_standard_name")
+    ) |>
     dplyr::rename(
       gaul1_name = "gaul_1_name",
       gaul2_name = "gaul_2_name",
-      gear_name = "standard_name"
+      gear_name = "gear_standard_name"
     )
-
-  #treated differently as there is no gear data
-  moz_frame <-
-    frame |>
-    dplyr::filter(.data$country == "Mozambique") |>
-    dplyr::group_by(
-      .data$country,
-      .data$gaul1_name,
-      .data$gaul2_name
-    ) |>
-    dplyr::summarise(
-      fishers_male = sum(.data$fishers_male),
-      fishers_female = sum(.data$fishers_female),
-      n_boats = sum(.data$n_boats),
-      .groups = "drop"
-    )
-
-  gears <- frame |>
-    dplyr::filter(.data$category_kind == "gear") |>
-    dplyr::group_by(
-      .data$country,
-      .data$gaul1_name,
-      .data$gaul2_name,
-      .data$gear_name
-    ) |>
-    dplyr::summarise(
-      fishers_male = sum(.data$fishers_male),
-      fishers_female = sum(.data$fishers_female),
-      n_boats = sum(.data$n_boats),
-      .groups = "drop"
-    ) |>
-    dplyr::bind_rows(moz_frame)
 
   logger::log_info("Frame gears: {nrow(gears)} rows")
 
@@ -1445,4 +1614,295 @@ export_frame_data <- function(
   logger::log_info("Uploaded: {basename(gears_filename)}")
 
   invisible(NULL)
+}
+
+#' Export Data Collection Statistics to Airtable
+#'
+#' @description
+#' Counts what Peskas has collected in each country and district (survey
+#' submissions, enumerators, landing sites, the dates covered and GPS-tracked
+#' trips) and writes the numbers as of today to the `collection_stats` table of
+#' the Airtable frame base, one row per country and one per district.
+#'
+#' @details
+#' Every number comes from an output that already exists:
+#' * Submissions, landing sites and dates: each country's `trips-raw` and
+#'   `trips-validated` files in the peskas-api bucket (`api.trips`), so survey
+#'   programmes the API does not publish are not counted.
+#' * Enumerators: the `surveys_flags-<form id>` collections of the validation
+#'   database, for the forms in those files. Kenya's WCS form records no
+#'   enumerator, so its submissions add none. Timor-Leste's enumerators share
+#'   logins and its flags name the reporting region instead, one enumerator
+#'   each, so there regions are counted.
+#' * GPS trips: the country's `pds-trips` file for the country row; for a
+#'   district row, the trips [generate_fleet_analysis()] places in it
+#'   (`<country>-aggregated`).
+#'
+#' Rows are matched on `key` (`kenya`, `kenya-103651`), so each run overwrites
+#' the previous numbers; a district that drops out keeps its last ones.
+#'
+#' @param log_threshold Logging threshold.
+#' @param package Name of the package whose `inst/conf.yml` to read.
+#'
+#' @return Invisibly, the tibble written to Airtable.
+#' @seealso [device_sync()]
+#' @keywords export
+#' @export
+export_collection_stats <- function(
+  log_threshold = logger::DEBUG,
+  package = "coasts"
+) {
+  logger::log_threshold(log_threshold)
+  conf <- read_config(package = package)
+  provider <- conf$storage$google$key
+  opts <- conf$storage$google$options
+  validation <- conf$storage$mongodb$validation
+
+  geo <- read_latest_rds(conf$metadata$airtable$name, provider, opts)$geo
+
+  stats <- purrr::map(names(conf$storage$google$buckets), function(country) {
+    logger::log_info("Collection stats for {country}")
+    country_opts <- opts
+    country_opts$bucket <- conf$storage$google$buckets[[country]]
+    read_api_trips <- function(type) {
+      download_parquet_from_cloud(
+        prefix = paste0(
+          conf$api$trips[[country]][[type]]$cloud_path,
+          "/",
+          conf$api$trips[[country]][[type]]$file_prefix
+        ),
+        provider = provider,
+        options = opts,
+        bucket_name = conf$api$trips$bucket
+      )
+    }
+    raw <- read_api_trips("raw")
+
+    # Only the forms this country publishes: submission ids repeat across
+    # KoBo servers, so another country's form could match by chance.
+    flags <- paste0(validation$collection$flags, "-", unique(raw$survey_id)) |>
+      purrr::map(
+        ~ mdb_collection_pull(
+          connection_string = validation$connection_string,
+          collection_name = .x,
+          db_name = validation$database_name
+        )
+      ) |>
+      purrr::keep(~ all(c("submission_id", "submitted_by") %in% names(.x))) |>
+      purrr::map(
+        ~ dplyr::transmute(
+          .x,
+          submission_id = as.character(.data$submission_id),
+          submitted_by = as.character(.data$submitted_by)
+        )
+      ) |>
+      dplyr::bind_rows(
+        dplyr::tibble(submission_id = character(), submitted_by = character())
+      )
+
+    summarise_collection(
+      country = country,
+      raw = raw,
+      validated_ids = unique(read_api_trips("validated")$trip_id),
+      flags = flags,
+      pds_trips = download_parquet_from_cloud(
+        prefix = conf$pds$pds_trips$file_prefix,
+        provider = provider,
+        options = country_opts
+      ),
+      fleet = read_latest_rds(
+        paste0(country, "-aggregated"),
+        provider,
+        country_opts
+      )$fleet_estimates,
+      geo = geo
+    )
+  }) |>
+    dplyr::bind_rows()
+
+  countries <- airtable_to_df(
+    base_id = conf$airtable$frame$base_id,
+    table_name = conf$airtable$frame$tables$countries,
+    token = conf$airtable$token
+  )
+  airtable_names <- c(
+    kenya = "Kenya",
+    zanzibar = "Zanzibar",
+    mozambique = "Mozambique",
+    timor = "Timor-Leste"
+  )
+  country_ids <- rlang::set_names(countries$airtable_id, countries$Country)
+
+  # `districts` holds one row per form and district, so a code can link to
+  # several of them.
+  # Country rows have no code; a district row without one must not match them.
+  district_ids <- geo |>
+    dplyr::filter(!is.na(.data$airtable_id), !is.na(.data$gaul_2_code)) |>
+    dplyr::group_by(.data$gaul_2_code) |>
+    dplyr::summarise(
+      districts = list(as.list(unique(.data$airtable_id))),
+      .groups = "drop"
+    )
+
+  stats <- stats |>
+    dplyr::left_join(district_ids, by = "gaul_2_code") |>
+    dplyr::mutate(
+      country = purrr::map(
+        .data$country,
+        ~ list(country_ids[[airtable_names[[.x]]]])
+      ),
+      # An empty link must be an empty list: a NULL would not serialise.
+      districts = purrr::map(.data$districts, ~ .x %||% list()),
+      updated = Sys.Date()
+    )
+
+  logger::log_info("Writing {nrow(stats)} rows to Airtable")
+  device_sync(
+    boats_df = stats,
+    base_id = conf$airtable$frame$base_id,
+    table_name = conf$airtable$frame$tables$collection_stats,
+    token = conf$airtable$token,
+    key_field = "key"
+  )
+
+  invisible(stats)
+}
+
+# One country's collection numbers, a row for the country and one per district.
+summarise_collection <- function(
+  country,
+  raw,
+  validated_ids,
+  flags,
+  pds_trips,
+  fleet,
+  geo
+) {
+  submissions <- raw |>
+    dplyr::filter(!duplicated(.data$trip_id)) |>
+    dplyr::mutate(landing_date = as.Date(.data$landing_date)) |>
+    # A landing with no date or one in the future is a typing error.
+    dplyr::filter(
+      !is.na(.data$landing_date),
+      .data$landing_date <= Sys.Date()
+    ) |>
+    dplyr::mutate(
+      validated = .data$trip_id %in% validated_ids,
+      submission_id = sub("^TRIP_", "", .data$trip_id)
+    ) |>
+    dplyr::left_join(
+      dplyr::filter(flags, !duplicated(.data$submission_id)),
+      by = "submission_id"
+    )
+
+  survey_stats <- function(x) {
+    dplyr::summarise(
+      x,
+      programmes = paste(
+        sort(unique(.data$survey_organization)),
+        collapse = ", "
+      ),
+      submissions = dplyr::n(),
+      submissions_validated = sum(.data$validated),
+      # Zero means no form recorded who collected, not that nobody did.
+      enumerators = dplyr::na_if(
+        dplyr::n_distinct(.data$submitted_by, na.rm = TRUE),
+        0L
+      ),
+      landing_sites = dplyr::n_distinct(.data$landing_site, na.rm = TRUE),
+      first_landing = min(.data$landing_date),
+      last_landing = max(.data$landing_date),
+      .groups = "drop"
+    ) |>
+      dplyr::mutate(
+        months = 12 *
+          (lubridate::year(.data$last_landing) -
+            lubridate::year(.data$first_landing)) +
+          lubridate::month(.data$last_landing) -
+          lubridate::month(.data$first_landing) +
+          1,
+        submissions_per_month = round(.data$submissions / .data$months, 1)
+      ) |>
+      dplyr::select(-"months")
+  }
+
+  # Monthly trips and boats, as generate_fleet_analysis() stores them.
+  gps_stats <- function(x) {
+    x |>
+      dplyr::filter(.data$sample_total_trips > 0) |>
+      # Timor-Leste stores months as date-times.
+      dplyr::mutate(date_month = as.Date(.data$date_month)) |>
+      dplyr::summarise(
+        gps_trips = sum(.data$sample_total_trips),
+        trackers_per_month = round(mean(.data$sample_boats_tracked), 1),
+        # first()/last() give NA on no rows, where min()/max() warn.
+        gps_first_month = dplyr::first(
+          .data$date_month,
+          order_by = .data$date_month
+        ),
+        gps_last_month = dplyr::last(
+          .data$date_month,
+          order_by = .data$date_month
+        ),
+        .groups = "drop"
+      )
+  }
+
+  country_gps <- pds_trips |>
+    dplyr::mutate(
+      date_month = lubridate::floor_date(as.Date(.data$Ended), "month")
+    ) |>
+    dplyr::group_by(.data$date_month) |>
+    dplyr::summarise(
+      sample_total_trips = dplyr::n_distinct(.data$Trip),
+      sample_boats_tracked = dplyr::n_distinct(.data$Boat),
+      .groups = "drop"
+    )
+
+  district_names <- geo |>
+    dplyr::select("gaul_2_code", "gaul_2_name") |>
+    dplyr::filter(!is.na(.data$gaul_2_code), !duplicated(.data$gaul_2_code))
+
+  districts <- dplyr::full_join(
+    submissions |>
+      dplyr::filter(!is.na(.data$gaul_2_code)) |>
+      dplyr::group_by(.data$gaul_2_code) |>
+      survey_stats(),
+    fleet |>
+      dplyr::inner_join(district_names, by = "gaul_2_name") |>
+      dplyr::group_by(.data$gaul_2_code) |>
+      gps_stats(),
+    by = "gaul_2_code"
+  ) |>
+    dplyr::left_join(district_names, by = "gaul_2_code") |>
+    dplyr::mutate(
+      key = paste0(country, "-", .data$gaul_2_code),
+      level = "district"
+    )
+
+  dplyr::bind_cols(survey_stats(submissions), gps_stats(country_gps)) |>
+    dplyr::mutate(key = country, level = "country") |>
+    dplyr::bind_rows(districts) |>
+    dplyr::mutate(country = country) |>
+    dplyr::relocate(
+      "key",
+      "level",
+      "country",
+      "gaul_2_code",
+      "gaul_2_name"
+    )
+}
+
+# Reads the latest version of an rds file and removes the local copy.
+read_latest_rds <- function(prefix, provider, options) {
+  file <- cloud_object_name(
+    prefix = prefix,
+    provider = provider,
+    version = "latest",
+    extension = "rds",
+    options = options
+  ) |>
+    download_cloud_file(provider = provider, options = options)
+  on.exit(unlink(file))
+  readr::read_rds(file)
 }

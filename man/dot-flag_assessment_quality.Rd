@@ -7,21 +7,21 @@
 .flag_assessment_quality(coverage, priors, ci_width = NA_real_)
 }
 \arguments{
-\item{coverage}{A one-row coverage tibble from [.length_coverage()].}
+\item{coverage}{A one-row coverage tibble from \code{\link[=.length_coverage]{.length_coverage()}}.}
 
-\item{priors}{A one-row life-history tibble (for `linf`).}
+\item{priors}{A one-row life-history tibble (for \code{linf}).}
 
 \item{ci_width}{Optional numeric relative uncertainty of the estimate
-(e.g. LBB credible-interval width or LBSPR CV). Default `NA`.}
+(e.g. LBB credible-interval width or LBSPR CV). Default \code{NA}.}
 }
 \value{
-A single character flag: `"pass"`, `"warn"`, `"fail"` or
-  `"unknown"`.
+A single character flag: \code{"pass"}, \code{"warn"}, \code{"fail"} or
+\code{"unknown"}.
 }
 \description{
-Mirrors the FAO estimator's vocabulary (`pass`, `warn`, `fail`, `unknown`)
+Mirrors the FAO estimator's vocabulary (\code{pass}, \code{warn}, \code{fail}, \code{unknown})
 so the assessment layer reads consistently with the catch estimates. The
-flag combines length-sample size, how representative the sampled records are,
+flag combines length-sample size (trips with a length), how representative the sampled records are,
 whether the sample reaches near-asymptotic sizes, and — when present — the
 width of the method's own uncertainty.
 }

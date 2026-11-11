@@ -8,7 +8,7 @@ withdraw_trips(state, seed, extra_files = character(0))
 }
 \arguments{
 \item{state}{The aggregation state, as returned by
-[load_aggregation_state()] or [empty_aggregation_state()].}
+\code{\link[=load_aggregation_state]{load_aggregation_state()}} or \code{\link[=empty_aggregation_state]{empty_aggregation_state()}}.}
 
 \item{seed}{Character vector of trip identifiers to withdraw.}
 
@@ -16,8 +16,8 @@ withdraw_trips(state, seed, extra_files = character(0))
 held -- used for files that have already been deleted or replaced upstream.}
 }
 \value{
-A list with the updated `state`, the `trips` withdrawn and the
-  `files` to read again.
+A list with the updated \code{state}, the \code{trips} withdrawn and the
+\code{files} to read again.
 }
 \description{
 Takes a set of trips out of the effort store, together with the trips that
@@ -35,6 +35,6 @@ are carried as one object and withdrawn in one call rather than filtered
 three times at each site that needs it.
 }
 \seealso{
-[aggregate_pds_effort()]
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 }
 \keyword{internal}

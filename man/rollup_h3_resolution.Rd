@@ -7,15 +7,15 @@
 rollup_h3_resolution(aggregated_df, target_res)
 }
 \arguments{
-\item{aggregated_df}{A data frame with columns `h3_index` and
-`fishing_pings`, as returned by [aggregate_h3_effort()].}
+\item{aggregated_df}{A data frame with columns \code{h3_index} and
+\code{fishing_pings}, as returned by \code{\link[=aggregate_h3_effort]{aggregate_h3_effort()}}.}
 
 \item{target_res}{Integer. The target H3 resolution. Must be lower (coarser)
-than the resolution used to create `aggregated_df`.}
+than the resolution used to create \code{aggregated_df}.}
 }
 \value{
-A data frame with columns `parent_h3_index` and
-  `total_fishing_pings`.
+A data frame with columns \code{parent_h3_index} and
+\code{total_fishing_pings}.
 }
 \description{
 Re-aggregates fishing effort from a fine H3 resolution to a coarser parent
@@ -24,6 +24,6 @@ ping counts. Useful for multi-scale analysis without rerunning the full
 spatial join.
 }
 \seealso{
-[assign_h3_indices()], [aggregate_h3_effort()]
+\code{\link[=assign_h3_indices]{assign_h3_indices()}}, \code{\link[=aggregate_h3_effort]{aggregate_h3_effort()}}
 }
 \keyword{preprocessing}

@@ -14,8 +14,8 @@
 \item{tol}{Log-likelihood convergence tolerance. Default 1e-6.}
 }
 \value{
-A list with `mu`, `sd`, `w` (each length-2, ordered by `mu`) and the
-  final log-likelihood `ll`.
+A list with \code{mu}, \code{sd}, \code{w} (each length-2, ordered by \code{mu}) and the
+final log-likelihood \code{ll}.
 }
 \description{
 Fits a two-component univariate Gaussian mixture by expectation-maximisation.

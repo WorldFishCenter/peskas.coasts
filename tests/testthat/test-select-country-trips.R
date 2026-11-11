@@ -197,3 +197,18 @@ test_that("a site with no device row left is named, not silently dropped", {
   expect_match(paste(log, collapse = " "), "belong to no device at all")
   expect_match(paste(log, collapse = " "), "Beto Tasi")
 })
+
+test_that("a customer name no device carries is reported", {
+  # Mozambique's "Syberintel - distributor" was renamed in PDS and silently
+  # dropped its 24 trackers for months.
+  log <- capture.output(
+    out <- select_country_trips(
+      trips,
+      devices,
+      customers = c("MAF / WorldFish", "Renamed Customer")
+    ),
+    type = "message"
+  )
+  expect_equal(out$Trip, c(3L, 4L, 5L, 6L))
+  expect_match(paste(log, collapse = " "), "No device .* Renamed Customer")
+})

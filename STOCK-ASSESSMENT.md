@@ -1,6 +1,6 @@
 # Stock assessment framework — technical reference
 
-Branch `stock-assessment` of `peskas.coasts` (package `coasts`), state at commit `e0228f2`.
+Branch `stock-assessment` of `peskas.coasts` (package `coasts`, 4.27.0).
 Each function's roxygen help page (`?function_name`) has the full argument and return documentation; this file is the map.
 
 ## 1. Entry point
@@ -15,7 +15,7 @@ run_stock_assessment(
   robustness    = FALSE,                  # LBB prior grid (~12 JAGS fits / species)
   production    = TRUE,                   # Kolding production layer
   by_gear       = FALSE,                  # per-gear reads + reference gear
-  min_gear_fish = 100L,
+  min_gear_trips = 100L,
   group_layer   = TRUE,                   # genus / family taxa
   n_groups      = 15L,
   fao_areas     = NULL,                   # NULL -> kenya/zanzibar/mozambique 51+57, timor 71
@@ -25,10 +25,10 @@ run_stock_assessment(
 )
 ```
 
-Recommended production call: `run_stock_assessment(robustness = TRUE, by_gear = TRUE)`, about 40 min for four countries. CI (`.github/workflows/data-pipeline.yaml`, job `stock-assessment`) currently calls `coasts::run_stock_assessment()` with defaults. Without `robustness = TRUE`, `robust_flag` is `NA` and `reliability` cannot become `borderline` on prior grounds.
+Recommended production call: `run_stock_assessment(robustness = TRUE, by_gear = TRUE)`, about 40 min for four countries. CI (`.github/workflows/data-pipeline.yaml`, job `stock-assessment`) currently calls `coasts::run_stock_assessment()` with defaults (only the log level set to INFO). Without `robustness = TRUE`, `robust_flag` is `NA` and `reliability` cannot become `borderline` on prior grounds.
 
 **Returns** (invisibly) the long results table. `attr(res, "summary")` holds the one-row-per-stock table.
-**Writes**, when `upload = TRUE`, two versioned parquets through `upload_parquet_to_cloud()`. Their names are `stock-assessment__<timestamp>_<sha>__.parquet` (long table) and `stock-assessment-summary__<timestamp>_<sha>__.parquet` (summary). The prefix comes from `conf$stock$assessment$file_prefix`, default `"stock-assessment"`.
+**Writes**, when `upload = TRUE`, two versioned parquets through `upload_parquet_to_cloud()`. Their names are `stock-assessment-results__<timestamp>_<sha>__.parquet` (long table) and `stock-assessment-summary__<timestamp>_<sha>__.parquet` (summary), set by `stock_assessment$results` and `stock_assessment$summary` in `inst/conf.yml`. The FAO areas for the group priors are `stock_assessment$fao_areas` there too.
 **Stops** with a condition of class `fishbase_unavailable`, uploading nothing, if FishBase cannot be reached.
 
 ## 2. Pipeline
@@ -36,7 +36,7 @@ Recommended production call: `run_stock_assessment(robustness = TRUE, by_gear = 
 | # | Stage | Function(s) | File |
 |---|---|---|---|
 | 1 | Download validated landings per country. Keep rows with `landing_date >= start_date` and `gaul_2_name` present. Harmonise column types (`catch_outcome` → character, `n_catch` → integer) | `download_parquet_from_cloud()` | `model-stock-assessment.R` |
-| 2 | Rank taxa by revenue per country, then keep species-level names with ≥ 30 records (`n_species * 5` candidates) | `.species_economic_rank()`, `select_priority_species()`, `.is_species_level()` | `model-stock-assessment.R` |
+| 2 | Rank taxa by revenue per country, then keep species-level names with ≥ 30 records, i.e. catches (`trip_id` × `n_catch`) (`n_species * 5` candidates) | `.species_economic_rank()`, `select_priority_species()`, `.is_species_level()` | `model-stock-assessment.R` |
 | 3 | Drop non-teleosts (sharks, rays, chimaeras, all SeaLifeBase taxa) | `.length_method_eligible()`, `.NON_TELEOST_CLASSES` | `model-stock-assessment.R` |
 | 4 | Fetch life-history priors: L∞, K, M/K, Lm, a, b. Keep the top `n_species` with an L∞ | `get_life_history_priors()`, `.m_then2015()` | `model-stock-assessment.R` |
 | 5 | Fetch trophic levels | `get_trophic_levels()` | `model-production.R` |
@@ -52,10 +52,11 @@ Every FishBase call in stages 3–5 and 7 goes through `.fb_retry()` (section 4.
 ### 2.1 `assess_species_stock()` — one species, one landings subset
 
 ```
-.length_coverage()         lengths repeated n_catch times; n_records, n_measured (fish),
-                           frac_measured (records), l_max, l_99, n_length_classes
-.clean_lengths()           drop lengths > 1.2 * Linf
-  -- if no priors or < 20 lengths: return rows with quality = "unknown" + advice --
+.length_coverage()         lengths repeated n_fish times, then .clean_lengths() drops
+                           lengths > 1.2 * Linf; n_records, n_measured (fish),
+                           n_trips_measured, frac_measured (catches), l_max, l_99,
+                           n_length_classes
+  -- if no priors or < 20 trips measured: return rows with quality = "unknown" + advice --
 assess_length_indicators() method "lbi"   (Froese indicators)
 assess_lbspr()             method "lbspr" (only if requested)
 assess_stock_lbb()         method "lbb"   -> lbb_engine_jags()
@@ -71,8 +72,8 @@ The function returns one row per method (`lbi`, `lbb`, `production`). The shared
 
 ### 2.2 `assess_group_stock()` — one coarse taxon
 
-1. Pool the lengths (weighted by `n_catch`, no 1.2×L∞ cull). Return `unknown` if there are fewer than `min_measured` (100) fish.
-2. Anchor the prior to the catch: `linf = max(member_median, L99/0.95)`. If it gets floored, Lm is recomputed with `.lm_from_linf()`.
+1. Pool the lengths (weighted by `n_fish`, no 1.2×L∞ cull). Return `unknown` if fish were measured on fewer than `min_measured` (100) trips.
+2. Anchor the prior to the catch: `linf = max(member_median, L99/0.95)`. If it gets floored, Lm is recomputed with `.lm_from_linf()`. The member pool can miss the species actually fished, so L∞ is never left below the fish measured (pools dominated by smaller species, such as Clupeidae). It is never shrunk when the pool overshoots the catch: an all-small catch may be a small species or heavy fishing of juveniles of a large one, and shrinking would erase a real overfishing signal. That case is flagged low-confidence instead (section 4.1).
 3. Compute the Froese indicators and `.group_status()`, then the quality flag (a `pass` is demoted to `warn` unless confidence is `high`).
 4. Run the production layer (Beverton–Holt leg only), then the 2-leg consensus (Froese + production), gear profile, reasons and advice.
 5. Size reach is measured against the FishBase member median L∞, not the anchored one.
@@ -95,7 +96,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 | `.fb_retry()` | Retry wrapper / outage stop (section 4.10) |
 | `.length_coverage()` | Length vector and coverage stats (section 2.1) |
 | `.clean_lengths()` | Drop lengths > `max_factor` × L∞ (default 1.2) |
-| `get_life_history_priors()` E | `rfishbase::estimate()` → `linf` (Loo, else MaxLengthTL), `k`, `mk`, `mk_source`, `lm`, `a`, `b` |
+| `get_life_history_priors()` E | `linf`, `lm` from FishBase growth and maturity studies (`get_length_traits_tl()`), else MaxLengthTL and Froese–Binohlan; `k`, `a`, `b` from `rfishbase::estimate()`; `mk`, `mk_source`, `linf_source`, `lm_source`, `prior_conflict` (L∞ above MaxLengthTL, or Lopt below Lm) |
 | `.m_then2015()` | M = 4.118 K^0.73 L∞^−0.33 |
 | `assess_length_indicators()` E | Froese 2004 indicators |
 | `assess_lbspr()` E | LBSPR wrapper (opt-in) |
@@ -106,14 +107,14 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 ### `R/model-lbb-engine.R`
 | Function | Purpose |
 |---|---|
-| `lbb_engine_jags()` E | Length-Based Bayesian model (Froese et al. 2018) in JAGS. Defaults: `bin_width = NULL`, `n_iter = 6000`, `n_burn = 3000`, `n_chains = 3`, `linf_sd_frac = 0.10`, `bmsy_b0 = 0.5`, `seed = 1L`. Returns `bb0` (posterior median), `bb0_lo`/`bb0_hi` (95% CrI), `bbmsy`, `fm`, `lc_lopt`, `ci_width`; `NULL` if fewer than 20 lengths, fewer than 6 occupied bins, or the fit fails |
+| `lbb_engine_jags()` E | Length-Based Bayesian model (Froese et al. 2018) in JAGS. Defaults: `n_eff = NULL`, `bin_width = NULL`, `n_iter = 6000`, `n_burn = 3000`, `n_chains = 3`, `linf_sd_frac = 0.10`, `bmsy_b0 = 0.5`, `seed = 1L`. Returns `bb0` (posterior median), `bb0_lo`/`bb0_hi` (95% CrI), `bbmsy`, `fm`, `lc_lopt`, `ci_width`; `NULL` if fewer than 20 lengths, fewer than 6 occupied bins, or the fit fails |
 | `.length_resolution()` | Most common gap between distinct recorded lengths (≈ 5 for 5-cm classes) |
 | `.lbb_numbers()`, `.lbb_bb0()`, `.LBB_JAGS` | Numbers-at-length, B/B0 from posterior draws, model string |
 
 ### `R/model-group-layer.R`
 | Function | Purpose |
 |---|---|
-| `assess_group_layer()` E | Group track. Defaults: `n_groups = 15`, `min_records = 30`, `min_measured = 100`, `fao_areas`, `version`, `production`, `by_gear`, `min_gear_fish` |
+| `assess_group_layer()` E | Group track. Defaults: `n_groups = 15`, `min_records = 30`, `min_measured = 100`, `fao_areas`, `version`, `production`, `by_gear`, `min_gear_trips` |
 | `get_group_priors()` E | Expand the name to member species (`expand_taxonomic_info(strip_parentheticals = TRUE)`), filter by FAO area (`filter_by_fao_area()`), take member-median `linf`/`mk`/`lm`. Also returns `n_species`, `linf_cv`, `source` and `confidence` |
 | `assess_group_stock()` E | Group read (section 2.2) |
 | `.group_rank()` | Genus / family / other |
@@ -150,9 +151,9 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 | Function | Purpose |
 |---|---|
 | `.gear_profile()` | `main_gear`, `main_gear_share`, `selective_gear_share`, `selectivity_flag` |
-| `.gears_with_fish()` | Gears with ≥ `min_fish` measured fish; returned only if ≥ 2 gears qualify |
+| `.gears_with_trips()` | Gears with measured fish on ≥ `min_trips` trips; returned only if ≥ 2 gears qualify |
 | `.mark_reference_gear()` | Adds `reference_gear` (section 4.9) |
-| `.n_fish()`, `.measured_rows()` | `n_catch` weights (NA or < 1 counts as 1) |
+| `.n_fish()`, `.measured_rows()` | `n_fish` weights (missing column, NA or < 1 counts as 1) |
 | `.SELECTIVE_GEAR_PATTERN` | `"trap\|gill\|tangle"` (matched case-insensitively) |
 
 ### `R/model-advice.R`
@@ -172,9 +173,9 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 ## 4. Rules and thresholds
 
 ### 4.1 Priors
-- **L∞:** FishBase `Loo`, else `MaxLengthTL`. Species without one are skipped.
+- **L∞:** median of the species' FishBase growth studies in total length, the same value the dashboard's species table uses (`linf_source = "growth_studies"`). Otherwise FishBase `MaxLengthTL` (`"max_length"`). Species without either are skipped.
 - **M/K:** FishBase M/K when FishBase has M (`mk_source = "fishbase_m"`). Otherwise Then et al. 2015 (`"then2015"`) when K and L∞ exist. Otherwise 1.5 (`"default"`). FishBase currently returns no M for these species, so most priors are `then2015`.
-- **Lm:** FishBase value, else Froese–Binohlan from L∞.
+- **Lm:** median of the species' FishBase maturity studies in total length (`lm_source = "maturity_studies"`), else Froese–Binohlan from L∞ (`"from_linf"`).
 - **Groups:** member medians across regional members (FAO 51+57 for WIO, 71 for Timor).
 - **Group confidence:**
   - genus with `linf_cv` < 0.35 (or a single member) → `high`;
@@ -184,15 +185,17 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
   - `catch_below_prior` (prior not floored and p_mature < 0.10) → forced to `low`.
 
 ### 4.2 Lengths
-- Each row counts `n_catch` times. `n_measured` counts fish; `frac_measured` is the share of records that have a length.
+- Each row counts `n_fish` times. `n_measured` counts fish. Fish from one catch are not independent, so the sample size is `n_trips_measured`, the trips with a length kept: it sets every minimum (sections 4.8, 4.9, 4.11, reliability) and the LBB likelihood (4.3). `n_records` counts catches (`trip_id` × `n_catch`, a catch has a row per length) and `frac_measured` is the share of them that have a length.
 - Bin width is `max(1, .length_resolution())`. When it is above 1 (classed data), bins are centred on the recorded class values.
 - `n_length_classes` < 6 lowers the quality score and produces the "record to nearest cm" advice.
 
 ### 4.3 LBB (`lbb_engine_jags()`)
 - The L∞ prior is centred on `max(prior L∞, largest occupied bin + 1)` with SD 10%. The M/K prior has SD 0.3. Lc is bounded between the smallest bin and mode + 0.5·(L∞ − mode).
 - Each chain gets `.RNG.seed = seed + chain` (Mersenne-Twister).
+- **Likelihood:** a multinomial on each bin's share of fish with sample size `n_eff` (the trips measured, passed by `assess_species_stock()`), written as `n_eff × Σ share × log p` and given to JAGS with the zeros trick, since `dmulti` needs whole counts. Counting every fish as an independent draw would make the credible interval too narrow. Scaling the counts and rounding them instead would drop the rare bins, usually the largest fish. Without `n_eff`, the likelihood is the plain multinomial on all fish.
 
 ### 4.4 Production layer
+- **Why:** Kolding's modified Cadima judges fishing against current production rather than a theoretical MSY. With P/B ≈ Z, the sustainable yield is SY = x·B·Z, where x is the share of production fishing may take. Current yield is Y = F·B, so the biomass cancels: SY = Y·x/E with E = F/Z. A stock's position then needs only E (from the lengths) and x (from its trophic level).
 - **Beverton–Holt:** Z/K from the mean length of fish ≥ Lc, where Lc is the modal class's lower limit.
 - **E:** `E_bh = 1 − mk/zk`; `E_lbb = fm/(1 + fm)`; `e` = median of the available estimates.
 - **Band:** BH with M/K × 0.75 and × 1.25; BH with the catch-implied L∞ (L99/0.95) when it differs from the prior by > 5%; the LBB `fm_lo`/`fm_hi` converted to E. `e_lo` and `e_hi` are the minimum and maximum of all these.
@@ -224,19 +227,24 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 - `misid_flag = TRUE` when either:
   - two modes with standardised separation ≥ 1.5, minor weight ≥ 0.15 and the upper mode above L∞; or
   - more than 1% of lengths above 1.1 × L∞.
+- **Why these rules:**
+  - Dip tests and BIC reject a single mode for any small deviation at thousands of fish, so the flag uses the separation and weight of the two modes, not a p-value.
+  - Genus and family aggregates are bimodal by construction, so the flag runs on species only.
+  - Two modes inside the plausible size range are read as cohorts, not misidentification.
+  - The EM fit is written in base R, so the flag adds no package.
 
 ### 4.8 Quality flag and reasons
 - **Score:**
-  - +1 each for n ≥ 200, n ≥ 100, `frac_measured` ≥ 0.3 and `frac_measured` ≥ 0.1;
+  - +1 each for trips ≥ 200, trips ≥ 100, `frac_measured` ≥ 0.3 and `frac_measured` ≥ 0.1;
   - +1 for `l_99 / L∞` ≥ 0.8;
   - −1 for `ci_width` > 0.5;
   - −1 for < 6 length classes.
-- **Flag:** `pass` if score ≥ 4, `warn` if ≥ 2, otherwise `fail`. `unknown` if there are no lengths.
-- **`quality_reasons`:** built from the same signals (classes < 6, n < 100, `frac_measured` < 0.1, reach < 0.8, CI > 0.5).
+- **Flag:** `pass` if score ≥ 4, `warn` if ≥ 2, otherwise `fail`. `unknown` if no trip has a length.
+- **`quality_reasons`:** built from the same signals (classes < 6, trips < 100, `frac_measured` < 0.1, reach < 0.8, CI > 0.5). Species reads also name stand-in FishBase values (`linf_source = "max_length"`, `lm_source = "from_linf"`) and any `prior_conflict`; these don't change the flag.
 
 ### 4.9 Gear
 - **`selectivity_flag`:** share of measured fish from gears matching `trap|gill|tangle` > 0.7.
-- **Per-gear reads:** only when ≥ 2 gears each have ≥ `min_gear_fish` fish.
+- **Per-gear reads:** only when ≥ 2 gears each have measured fish on ≥ `min_gear_trips` trips.
 - **`reference_gear`:** the highest `size_reach` among non-unknown per-gear reads, for species and `high`-confidence genera only. Mixed families get none, because gear differences there reflect which species each gear catches. Pooled rows have `reference_gear = NA`.
 
 ### 4.10 FishBase guard (`.fb_retry()`)
@@ -246,10 +254,10 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 - The group-layer `tryCatch` re-throws this condition and swallows all others, so a group error does not stop the run.
 
 ### 4.11 Advice (`.stock_advice()`) — first match wins
-1. n < `min_n` (20 for species, 100 for groups) → "Not assessable yet: measure at least 150 fish".
+1. trips < `min_n` (20 for species, 100 for groups) → "Not assessable yet: fish measured on N trips, at least `min_n` needed (aim for 150)".
 2. `misid_flag` → "Check species identification".
 3. < 6 length classes → "Record lengths to the nearest cm".
-4. n < 100 → "Measure more fish: aim for 150+".
+4. trips < 100 → "Measure fish on more trips: aim for 150+".
 5. Reach < 0.8 → names the gear if `selectivity_flag`, otherwise "Large fish are missing".
 6. `sensitive`, `straddles` or `mixed` → "Borderline status".
 7. Low-confidence group → "Record the catch at species level".
@@ -264,12 +272,12 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 - **`reliability`** (first match wins):
   1. `not assessable`: quality unknown;
   2. `borderline`: `sensitive`, or band `straddles`, or `mixed`;
-  3. `indicative`: quality `fail`, n < 100, `selectivity_flag`, < 6 length classes, or a `low`-confidence group;
+  3. `indicative`: quality `fail`, trips < 100, `selectivity_flag`, < 6 length classes, or a `low`-confidence group;
   4. otherwise `reliable`.
 
 ## 5. Outputs
 
-### 5.1 Long table (`res`, parquet `stock-assessment`)
+### 5.1 Long table (`res`, parquet `stock-assessment-results`)
 - One row per `country × scale × scientific_name × gear × method`.
 - `method` is `lbi`/`lbb`/`production` (plus `lbspr` if requested) for species, and `group-lbi` for groups.
 - Shared columns repeat across a species' method rows; method-specific columns are `NA` on the other rows.
@@ -277,7 +285,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 | Column group | Columns |
 |---|---|
 | Keys | `country`, `scale`, `scientific_name`, `gear` (`"all"` = pooled), `method`, `catch_taxon`, `rank`, `rank_basis` |
-| Coverage / quality | `n_measured`, `frac_measured`, `n_length_classes`, `size_reach`, `quality`, `quality_reasons`, `advice` |
+| Coverage / quality | `n_measured`, `n_trips_measured`, `frac_measured`, `n_length_classes`, `size_reach`, `quality`, `quality_reasons`, `linf_source`, `lm_source`, `prior_conflict`, `advice` |
 | Gear | `main_gear`, `main_gear_share`, `selective_gear_share`, `selectivity_flag`, `reference_gear` |
 | Consensus | `consensus`, `methods_agree`, `n_concern`, `n_methods` |
 | LBB (`method == "lbb"`) | `bb0`, `bbmsy`, `f_m`, `lc_lopt`, `ci_width` |
@@ -288,7 +296,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 | Groups | `n_species`, `confidence`, `group_status`, `prior_note` |
 | Catch | `catch_kg_sampled`, `catch_share` |
 
-### 5.2 Summary table (`attr(res, "summary")`, parquet `stock-assessment-summary`) — portal contract
+### 5.2 Summary table (`attr(res, "summary")`, parquet `stock-assessment-summary`)
 
 One row per `country × scale × scientific_name`. Sorted by country, scale, then descending `catch_share`.
 
@@ -308,7 +316,7 @@ One row per `country × scale × scientific_name`. Sorted by country, scale, the
 | `sy_ratio` | dbl | Sustainable catch / current catch (x/E) |
 | `production_status`, `production_band` | chr | Section 4.4 |
 | `p_mature`, `lmean_lopt` | dbl | Froese indicators |
-| `n_measured`, `n_length_classes` | int | Measured fish, distinct recorded lengths |
+| `n_measured`, `n_trips_measured`, `n_length_classes` | int | Measured fish, trips with a length (the sample size), distinct recorded lengths |
 | `size_reach` | dbl | 99th-percentile length / L∞ |
 | `catch_share` | dbl | Share of sampled catch weight in the country |
 | `trophic_level` | dbl | FishBase FoodTroph (member median for groups) |
@@ -327,7 +335,7 @@ To get catch volumes, join country totals (e.g. summed `estimated_total_catch_kg
 devtools::load_all()
 res <- run_stock_assessment(robustness = TRUE, by_gear = TRUE, upload = FALSE)
 s   <- attr(res, "summary")        # or summarise_stock_status(res)
-devtools::test(filter = "model-")  # 85 tests: production, gear, summary
+devtools::test(filter = "model-")  # production, gear, summary, FAO, fishery
 ```
 
 | Requirement | Detail |
@@ -344,7 +352,6 @@ The tests mock reachability for `.fb_retry()` and use a fake LBB engine for `lbb
   - cannot fit on samples with fewer than 6 occupied length bins (5-cm classes for small species); these fall back to Froese + production;
   - assumes equilibrium and asymptotic selectivity;
   - trap / gill-net samples bias Z, F/M and E upward, which is why `selectivity_flag` exists.
-- **E:** ~1 length per landing steepens the apparent mortality, so E reads high.
 - **x:** 0.25 / 0.5 are heuristics (Kolding), not estimates.
 - **Production layer:** needs approximate stationarity (P/B ≈ Z).
 - **Robustness grid:** varies priors only; it has not been validated against simulated data with known answers.

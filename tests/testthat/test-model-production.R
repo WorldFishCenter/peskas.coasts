@@ -72,15 +72,42 @@ test_that(".length_resolution detects length classes", {
   expect_true(is.na(.length_resolution(c(10, 10))))
 })
 
-test_that(".length_coverage repeats each length n_catch times", {
+test_that(".length_coverage repeats each length n_fish times", {
   land <- tibble::tibble(
     scientific_name = "Siganus sutor", trip_id = c("a", "a", "b", "c"),
-    length_cm = c(20, 25, NA, 30), n_catch = c(3L, 1L, 2L, NA)
+    length_cm = c(20, 25, NA, 30), n_fish = c(3L, 1L, 2L, NA),
+    n_catch = c(1L, 2L, 1L, 1L)
   )
   cov <- .length_coverage(land, "Siganus sutor")
   expect_equal(sort(cov$lengths), c(20, 20, 20, 25, 30))
   expect_equal(cov$coverage$n_measured, 5)
   expect_equal(cov$coverage$frac_measured, 3 / 4)
+  # n_catch is the catch's place on the form: a feed without n_fish counts each row once
+  cov <- .length_coverage(dplyr::select(land, -"n_fish"), "Siganus sutor")
+  expect_equal(sort(cov$lengths), c(20, 25, 30))
+})
+
+test_that(".length_coverage counts catches, not length rows", {
+  land <- tibble::tibble(
+    scientific_name = "Siganus sutor", trip_id = c("a", "a", "b"), n_catch = 1L,
+    length_cm = c(20, 25, NA), n_fish = c(2L, 3L, NA)
+  )
+  cov <- .length_coverage(land, "Siganus sutor")$coverage
+  expect_equal(cov$n_records, 2)
+  expect_equal(cov$frac_measured, 1 / 2)
+  expect_equal(cov$n_measured, 5)
+})
+
+test_that(".length_coverage measures size only on the lengths kept", {
+  land <- tibble::tibble(
+    scientific_name = "Siganus sutor", trip_id = c("a", "b", "c"),
+    length_cm = c(20, 25, 300), n_fish = NA_integer_, n_catch = 1L
+  )
+  cov <- .length_coverage(land, "Siganus sutor", linf = 40)
+  expect_equal(cov$lengths, c(20, 25))
+  expect_equal(cov$coverage$l_max, 25)
+  expect_equal(cov$coverage$n_length_classes, 2)
+  expect_equal(cov$coverage$n_trips_measured, 2)
 })
 
 test_that(".bh_zk uses the lower class limit as Lc for classed lengths", {
@@ -109,7 +136,7 @@ test_that(".ensemble_consensus uses up to three legs", {
 test_that(".stock_advice gives the highest-priority suggestion", {
   expect_match(.stock_advice(9), "Not assessable")
   expect_match(.stock_advice(300, misid = TRUE), "species identification")
-  expect_match(.stock_advice(60), "Measure more fish")
+  expect_match(.stock_advice(60), "more trips")
   expect_match(.stock_advice(300, reasons = "no fish near maximum size (largest < 80% of Linf)"),
     "Large fish")
   expect_match(.stock_advice(300, robust_flag = "sensitive"), "Borderline")
@@ -119,19 +146,32 @@ test_that(".stock_advice gives the highest-priority suggestion", {
 })
 
 test_that(".quality_reasons explains a weak sample", {
-  cov <- tibble::tibble(n_measured = 50, frac_measured = 0.05, l_max = 20)
+  cov <- tibble::tibble(n_trips_measured = 50, frac_measured = 0.05, l_max = 20)
   r <- .quality_reasons(cov, linf = 40, ci_width = 0.7)
-  expect_match(r, "few fish")
+  expect_match(r, "few trips")
   expect_match(r, "10% of records")
   expect_match(r, "maximum size")
   expect_match(r, "credible interval")
-  expect_equal(.quality_reasons(tibble::tibble(n_measured = 500, frac_measured = 0.5, l_max = 38), 40), "")
+  expect_equal(.quality_reasons(tibble::tibble(n_trips_measured = 500, frac_measured = 0.5, l_max = 38), 40), "")
+})
+
+test_that(".quality_reasons names stand-in and contradicting FishBase values", {
+  cov <- tibble::tibble(n_trips_measured = 500, frac_measured = 0.5, l_max = 38)
+  stand_in <- tibble::tibble(linf_source = "max_length", lm_source = "from_linf", prior_conflict = NA_character_)
+  r <- .quality_reasons(cov, 40, priors = stand_in)
+  expect_match(r, "no FishBase growth study")
+  expect_match(r, "no FishBase maturity study")
+  conflict <- tibble::tibble(
+    linf_source = "growth_studies", lm_source = "maturity_studies",
+    prior_conflict = "best size below size at maturity"
+  )
+  expect_equal(.quality_reasons(cov, 40, priors = conflict), "best size below size at maturity")
 })
 
 test_that(".stock_advice flags coarse length classes and method disagreement", {
   expect_match(.stock_advice(1000, n_classes = 4), "nearest cm")
   expect_match(.stock_advice(300, n_classes = 30, consensus = "mixed (methods disagree)"), "Borderline")
-  cov <- tibble::tibble(n_measured = 500, frac_measured = 0.5, l_max = 85, l_99 = 32, n_length_classes = 4)
+  cov <- tibble::tibble(n_trips_measured = 500, frac_measured = 0.5, l_max = 85, l_99 = 32, n_length_classes = 4)
   r <- .quality_reasons(cov, linf = 54.9)
   expect_match(r, "4 length classes")
   expect_match(r, "maximum size")
@@ -150,4 +190,33 @@ test_that("lbb_robustness adds the catch-implied Linf to the grid", {
   rb9 <- lbb_robustness(len, tibble::tibble(linf = 55, mk = 1.5, lm = 30), fake_engine,
     catch_linf = FALSE)
   expect_equal(rb9$n_fits, 9L)
+})
+
+test_that("assess_species_stock gives the LBB engine the trips as sample size", {
+  set.seed(6)
+  land <- tibble::tibble(
+    scientific_name = "Siganus sutor", trip_id = rep(paste0("t", 1:30), each = 2),
+    n_catch = 1L, length_cm = round(runif(60, 15, 35)), n_fish = 10L
+  )
+  got <- NULL
+  eng <- function(lengths, priors, n_eff) {
+    got <<- n_eff
+    list(bb0 = 0.5, fm = 1)
+  }
+  pr <- tibble::tibble(scientific_name = "Siganus sutor", linf = 40, mk = 1.5, lm = 25)
+  out <- assess_species_stock(land, "Siganus sutor", pr, methods = "lbb",
+    lbb_engine = eng, production = FALSE)
+  expect_equal(got, 30)
+  expect_equal(unique(out$n_trips_measured), 30)
+  expect_equal(unique(out$n_measured), 600)
+})
+
+test_that("lbb_engine_jags widens the interval when the sample size is the trips", {
+  skip_if_not_installed("rjags")
+  set.seed(7)
+  len <- rep(round(sim_lengths(400, linf = 40, lc = 15, zk = 3)), 50)
+  pr <- tibble::tibble(linf = 40, mk = 1.5)
+  all_fish <- lbb_engine_jags(len, pr, n_iter = 1000, n_burn = 500)
+  trips <- lbb_engine_jags(len, pr, n_eff = 400, n_iter = 1000, n_burn = 500)
+  expect_gt(trips$ci_width, 1.5 * all_fish$ci_width)
 })

@@ -8,17 +8,18 @@
 }
 \arguments{
 \item{landings}{A landing-feed tibble (one row per trip x species-record)
-with at least `scientific_name`, `catch_taxon`, `catch_kg`, `catch_price`,
-`tot_catch_price`, `trip_id` and a `country` column.}
+with at least \code{scientific_name}, \code{catch_taxon}, \code{catch_kg}, \code{catch_price},
+\code{tot_catch_price}, \code{trip_id} and a \code{country} column.}
 }
 \value{
-A tibble with one row per (`country`, `scientific_name`): columns
-  `catch_taxon`, `revenue`, `catch_kg`, `n_records`, `n_trips`, `rank` and
-  `rank_basis` (`"price"`, `"apportioned"` or `"weight"`).
+A tibble with one row per (\code{country}, \code{scientific_name}): columns
+\code{catch_taxon}, \code{revenue}, \code{catch_kg}, \code{n_records} (catches: \code{trip_id} x
+\code{n_catch}, as a catch has a row per length), \code{n_trips}, \code{rank} and
+\code{rank_basis} (\code{"price"}, \code{"apportioned"} or \code{"weight"}).
 }
 \description{
 Computes a per-country, per-species economic ranking from the landing feed.
-Revenue is taken from `catch_price` where the country populates it (Kenya);
+Revenue is taken from \code{catch_price} where the country populates it (Kenya);
 where it is empty (Mozambique, Zanzibar) the function falls back, in order,
 to trip-level revenue apportioned by weight, then to landed weight as a
 volume proxy. The basis actually used is logged and returned.

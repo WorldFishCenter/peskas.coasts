@@ -664,6 +664,78 @@ mdb_collection_push <- function(
 }
 
 
+#' Update the Tracks App's Device Users in Place
+#'
+#' Unlike [mdb_collection_push()], this never empties the collection: the
+#' tracks app keeps users of its own there (administrators, fishers who
+#' registered themselves) and lets fishers change their password, none of
+#' which Airtable knows about. Each device user is matched by IMEI and
+#' updated, so it keeps its `_id`, which the app's waypoints and feedback
+#' point to. Its password is written only when it is first created. Device
+#' users whose IMEI is no longer in `data` are removed; users with no IMEI
+#' are left alone.
+#'
+#' @param data Data frame of device users, one row per IMEI.
+#' @inheritParams mdb_collection_push
+#'
+#' @return A list with the number of device users matched, changed, added and
+#'   removed.
+#' @keywords internal
+#' @noRd
+mdb_users_upsert <- function(data, connection_string, collection_name, db_name) {
+  collection <- mongolite::mongo(
+    collection = collection_name,
+    db = db_name,
+    url = connection_string
+  )
+  data <- dplyr::filter(data, !is.na(.data$IMEI))
+
+  updates <- lapply(seq_len(nrow(data)), function(i) {
+    row <- as.list(data[i, ])
+    is_password <- names(row) == "password"
+    empty <- is.na(row) & !is_password
+    u <- list(
+      `$set` = row[!empty & !is_password],
+      `$setOnInsert` = list(password = row$password)
+    )
+    # Empty fields are left out, as an insert would
+    if (any(empty)) {
+      u$`$unset` <- as.list(
+        stats::setNames(rep("", sum(empty)), names(row)[empty])
+      )
+    }
+    list(q = list(IMEI = row$IMEI), u = u, upsert = TRUE)
+  })
+  updated <- collection$run(jsonlite::toJSON(
+    list(update = collection_name, updates = updates),
+    auto_unbox = TRUE
+  ))
+  if (!is.null(updated$writeErrors)) {
+    stop("Updating device users failed: ", jsonlite::toJSON(updated$writeErrors))
+  }
+
+  # $nin with null keeps the users that have no IMEI
+  removed <- collection$run(jsonlite::toJSON(
+    list(
+      delete = collection_name,
+      deletes = list(list(
+        q = list(IMEI = list(`$nin` = as.list(c(data$IMEI, NA)))),
+        limit = 0
+      ))
+    ),
+    auto_unbox = TRUE,
+    na = "null"
+  ))
+
+  list(
+    matched = updated$n - NROW(updated$upserted),
+    changed = updated$nModified,
+    added = NROW(updated$upserted),
+    removed = removed$n
+  )
+}
+
+
 #' Retrieve Trip Details from Pelagic Data API
 #'
 #' This function retrieves trip details from the Pelagic Data API for a specified time range,

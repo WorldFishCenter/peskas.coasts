@@ -611,30 +611,9 @@ get_length_length_coeffs <- function(
 #' )
 #' }
 convert_lw_to_tl <- function(length_weight, length_length, max_intercept = 1) {
-  ratios <- length_length |>
-    dplyr::filter(
-      !is.na(.data$bL),
-      .data$bL > 0,
-      !is.na(.data$aL),
-      abs(.data$aL) <= max_intercept
-    ) |>
-    dplyr::mutate(
-      Type = dplyr::case_when(
-        .data$Length2 == "TL" ~ .data$Length1,
-        .data$Length1 == "TL" ~ .data$Length2,
-        TRUE ~ NA_character_
-      ),
-      ratio = dplyr::case_when(
-        .data$Length2 == "TL" ~ .data$bL,
-        .data$Length1 == "TL" ~ 1 / .data$bL,
-        TRUE ~ NA_real_
-      )
-    ) |>
-    dplyr::filter(
-      !is.na(.data$Type),
-      .data$Type != "TL",
-      !is.na(.data$ratio)
-    ) |>
+  # `L_type ~= ratio * TL`, the fit's intercept set aside.
+  ratios <- tl_conversions(length_length, max_intercept) |>
+    dplyr::mutate(ratio = 1 / .data$slope) |>
     dplyr::group_by(.data$species_found, .data$server, .data$Type) |>
     dplyr::summarise(ratio = stats::median(.data$ratio), .groups = "drop")
 
@@ -656,6 +635,135 @@ convert_lw_to_tl <- function(length_weight, length_length, max_intercept = 1) {
   )
 
   dplyr::select(restated, -"ratio")
+}
+
+#' Total-length conversions from POPLL fits
+#'
+#' POPLL fits `Length1 = aL + bL * Length2`, the second column being the
+#' predictor. Each fit between total length and one other length type becomes
+#' `TL = intercept + slope * <Type>`, inverted when total length is the predictor.
+#'
+#' @param length_length Rows from [get_length_length_coeffs()].
+#' @param max_intercept Fits whose `aL` exceeds this in absolute value are dropped.
+#' @return `length_length` rows with `Type`, `intercept` and `slope` added.
+#' @noRd
+tl_conversions <- function(length_length, max_intercept = Inf) {
+  length_length |>
+    dplyr::filter(
+      !is.na(.data$bL),
+      .data$bL > 0,
+      !is.na(.data$aL),
+      abs(.data$aL) <= max_intercept,
+      xor(.data$Length1 == "TL", .data$Length2 == "TL")
+    ) |>
+    dplyr::mutate(
+      tl_predicts = .data$Length2 == "TL",
+      Type = dplyr::if_else(.data$tl_predicts, .data$Length1, .data$Length2),
+      intercept = dplyr::if_else(.data$tl_predicts, -.data$aL / .data$bL, .data$aL),
+      slope = dplyr::if_else(.data$tl_predicts, 1 / .data$bL, .data$bL)
+    ) |>
+    dplyr::select(-"tl_predicts")
+}
+
+#' Total-Length Conversions for Expanded Taxa
+#'
+#' One line `TL = intercept + slope * <Type>` per species and length type, for
+#' restating a length measured on fork, standard or another length type as total
+#' length. [enrich_taxa()] restates the FishBase lengths at maturity and optimum
+#' with it, so a survey that converts its own lengths with the same table puts
+#' both sides of the size-at-maturity comparison on one basis.
+#'
+#' @param expanded A table as returned by [expand_taxonomic_info()].
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
+#'
+#' @return A tibble with one row per `SpecCode`, `server` and `Type` (the length
+#'   type converted from, e.g. `"FL"`), carrying the `intercept` and `slope` of
+#'   the conversion. Species or types with no published fit are absent.
+#'
+#' @details
+#' Every length type is read from the POPLL table, and each fit is oriented so
+#' that total length is the response (see [get_length_length_coeffs()] for the
+#' direction of the table). Where a species has several fits for one type, the
+#' median intercept and the median slope are kept; identical fits published
+#' twice count once.
+#'
+#' @seealso [get_length_length_coeffs()], [convert_lw_to_tl()]
+#'
+#' @keywords taxa
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' taxa <- data.frame(alpha3_code = "YFT", scientific_name = "Thunnus albacares")
+#' taxa |>
+#'   expand_taxonomic_info() |>
+#'   get_tl_conversions()
+#' }
+get_tl_conversions <- function(expanded, version = "latest") {
+  get_length_length_coeffs(expanded, length_types = NULL, version = version) |>
+    tl_conversions() |>
+    dplyr::distinct(.data$SpecCode, .data$server, .data$Type, .data$intercept, .data$slope) |>
+    dplyr::group_by(.data$SpecCode, .data$server, .data$Type) |>
+    dplyr::summarise(
+      intercept = stats::median(.data$intercept),
+      slope = stats::median(.data$slope),
+      .groups = "drop"
+    )
+}
+
+#' Median Asymptotic Length and Length at Maturity in Total Length
+#'
+#' The median asymptotic length (`popgrowth`) and length at first maturity
+#' (`maturity`) across a species' FishBase / SeaLifeBase studies, on a
+#' total-length basis, which is what the landing surveys measure: a study on
+#' fork or standard length is restated with the species' POPLL fits
+#' ([get_tl_conversions()]), and left out when no fit converts it.
+#'
+#' @param expanded A table as returned by [expand_taxonomic_info()].
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
+#'
+#' @return A tibble with one row per `SpecCode` and `server` that has any
+#'   value: `LengthMaturityTL`, `LengthInfinityTL` and `LengthCommonTL` (common
+#'   length from `species`), in cm.
+#'
+#' @keywords internal
+get_length_traits_tl <- function(expanded, version = "latest") {
+  codes <- unique(expanded$SpecCode)
+  to_tl <- get_tl_conversions(expanded, version = version)
+  median_tl <- function(data, length, type, name) {
+    data |>
+      dplyr::select("SpecCode", "server", value = dplyr::all_of(length), Type = dplyr::all_of(type)) |>
+      dplyr::filter(!is.na(.data$value), !is.na(.data$Type)) |>
+      dplyr::left_join(to_tl, by = c("SpecCode", "server", "Type")) |>
+      dplyr::mutate(
+        tl = dplyr::if_else(
+          .data$Type == "TL",
+          .data$value,
+          .data$intercept + .data$slope * .data$value
+        )
+      ) |>
+      dplyr::filter(!is.na(.data$tl)) |>
+      dplyr::group_by(.data$SpecCode, .data$server) |>
+      dplyr::summarise({{ name }} := stats::median(.data$tl), .groups = "drop")
+  }
+
+  # Maturity studies are recorded per stock.
+  stocks <- get_combined_tbl("stocks", version = version) |>
+    dplyr::filter(.data$SpecCode %in% codes) |>
+    dplyr::select("SpecCode", "StockCode", "server")
+  maturity <- get_combined_tbl("maturity", version = version) |>
+    dplyr::inner_join(stocks, by = c("StockCode", "server")) |>
+    median_tl("Lm", "Type1", LengthMaturityTL)
+  growth <- get_combined_tbl("popgrowth", version = version) |>
+    dplyr::filter(.data$SpecCode %in% codes) |>
+    median_tl("Loo", "Type", LengthInfinityTL)
+  common <- get_combined_tbl("species", version = version) |>
+    dplyr::filter(.data$SpecCode %in% codes) |>
+    median_tl("CommonLength", "LTypeComM", LengthCommonTL)
+  list(maturity, growth, common) |>
+    purrr::reduce(dplyr::full_join, by = c("SpecCode", "server"))
 }
 
 #' Build Length-Weight and Length-Length Tables for a Set of Taxa
@@ -841,7 +949,17 @@ get_taxa_morphometrics <- function(
 #' 3. Restricts species to the resolved FAO area(s) via [filter_by_fao_area()],
 #'    always keeping species with no area assignment.
 #' 4. Joins species-level data from the `species`, `ecology`, and `estimate`
-#'    tables.
+#'    tables, the family, order and class, the IUCN and CITES codes from
+#'    `stocks`, the median length at first maturity from `maturity` and the
+#'    optimum length from the asymptotic length in `popgrowth`, both restated
+#'    to total length with the `popll` fits where a study used another length.
+#'    The optimum length is `3 Linf / (3 + M/K)`, as in [run_stock_assessment()],
+#'    with K from `estimate` and M from [.m_then2015()], or M/K = 1.5 without K.
+#'    The maximum length is FishBase's own total-length estimate in `estimate`
+#'    (`length_max_tl`); the common length from `species` is restated like the
+#'    two above (`length_common_tl`). For crabs, lobsters and cephalopods
+#'    SeaLifeBase's maximum is not comparable with a carapace or mantle length:
+#'    it gives the mud crab 9 cm.
 #' 5. Deduplicates by taking the first non-`NA` value per group.
 #' 6. Cleans column names with [janitor::clean_names()].
 #' 7. Uploads the result via [upload_parquet_to_cloud()] using the
@@ -949,9 +1067,16 @@ enrich_taxa <- function(
       "Dangerous",
       "MainCatchingMethod",
       "Importance",
-      "DemersPelag"
+      "DemersPelag",
+      "FamCode"
     ) |>
-    dplyr::distinct()
+    dplyr::distinct() |>
+    dplyr::left_join(
+      get_combined_tbl("families", version = version) |>
+        dplyr::select("FamCode", "Family", "Order", "Class", "server"),
+      by = c("FamCode", "server")
+    ) |>
+    dplyr::select(-"FamCode")
 
   trophic_tab <- get_combined_tbl("ecology", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes) |>
@@ -1000,9 +1125,33 @@ enrich_taxa <- function(
       "Protein",
       "Selenium",
       "VitaminA",
-      "Zinc"
+      "Zinc",
+      LengthMaxTL = "MaxLengthTL"
     ) |>
     dplyr::distinct()
+
+  # Conservation status lives per stock; step 5 keeps a species' first
+  # recorded status.
+  stocks_tab <- get_combined_tbl("stocks", version = version) |>
+    dplyr::filter(.data$SpecCode %in% target_codes) |>
+    dplyr::select("SpecCode", "StockCode", "server", "IUCN_Code", "CITES_Code")
+
+  # Optimum length, where a cohort's biomass peaks: 3 Linf / (3 + M/K), the
+  # stock assessment's formula, so the dashboard and the assessment agree.
+  growth_k <- get_combined_tbl("estimate", version = version) |>
+    dplyr::filter(.data$SpecCode %in% target_codes, .data$K > 0) |>
+    dplyr::distinct(.data$SpecCode, .data$server, .keep_all = TRUE) |>
+    dplyr::select("SpecCode", "server", "K")
+  length_tab <- expanded_assets_filtered |>
+    get_length_traits_tl(version = version) |>
+    dplyr::left_join(growth_k, by = c("SpecCode", "server")) |>
+    dplyr::mutate(
+      mk = dplyr::coalesce(
+        .m_then2015(.data$K, .data$LengthInfinityTL) / .data$K, 1.5
+      ),
+      LengthOptimumTL = .optimum_length(.data$LengthInfinityTL, .data$mk)
+    ) |>
+    dplyr::select("SpecCode", "server", "LengthMaturityTL", "LengthOptimumTL", "LengthCommonTL")
 
   # ── 5. Join and deduplicate ───────────────────────────────────────────────────
   logger::log_info("Joining and deduplicating biological data")
@@ -1010,7 +1159,9 @@ enrich_taxa <- function(
     expanded_assets_filtered,
     species_tab,
     trophic_tab,
-    nutrients_tab
+    nutrients_tab,
+    dplyr::select(stocks_tab, -"StockCode"),
+    length_tab
   ) |>
     purrr::reduce(dplyr::left_join, by = c("SpecCode", "server")) |>
     dplyr::group_by(
@@ -1049,3 +1200,75 @@ enrich_taxa <- function(
 
   invisible(NULL)
 }
+
+#' Length limits per taxon for validation
+#'
+#' The bounds the country pipelines check landed fish lengths against: a fish
+#' is too long above 1.2 times the 95th percentile of the maximum length of its
+#' taxon's species, and too short below a quarter of their smallest common
+#' length. The margin lets through fish at record size and size classes whose
+#' middle sits just above it.
+#' Zanzibar and Mozambique use the same rule for their alerts 4 and 3, from
+#' their own FishBase reads; Kenya uses this one for KEFS alerts 5.3 and 5.4.
+#'
+#' @param taxa_lengths The hub table [enrich_taxa()] writes, with
+#'   `alpha3_code`, `original_name`, `server`, `order`, `length_max_tl` and
+#'   `length_common_tl`.
+#'
+#' @return A tibble with one row per `alpha3_code` and `original_name`, and
+#'   `max_length` and `min_length` in cm of total length. A taxon whose
+#'   species have no length in FishBase has no row.
+#'
+#' @details
+#' Where FishBase gives no common length, it is estimated as
+#' [common_length_ratio()] times the maximum. Only FishBase species count:
+#' SeaLifeBase's maximum lengths for crabs, lobsters and cephalopods are not on
+#' the carapace or mantle length the surveys measure (it gives the mud crab
+#' 9 cm), so those taxa have no limits. Rays have none either: FishBase gives
+#' their maximum as disc width, and its total-length estimate for them is not
+#' usable (140 cm for the manta).
+#'
+#' @keywords taxa
+#' @export
+get_length_limits <- function(taxa_lengths) {
+  taxa_lengths |>
+    dplyr::filter(
+      .data$server == "fishbase",
+      !.data$order %in% c(
+        "Myliobatiformes",
+        "Rajiformes",
+        "Rhinopristiformes",
+        "Torpediniformes"
+      )
+    ) |>
+    dplyr::mutate(
+      length_common_tl = dplyr::coalesce(
+        .data$length_common_tl,
+        common_length_ratio() * .data$length_max_tl
+      )
+    ) |>
+    dplyr::filter(!is.na(.data$length_common_tl)) |>
+    dplyr::group_by(.data$alpha3_code, .data$original_name) |>
+    dplyr::summarise(
+      max_length = 1.2 *
+        stats::quantile(
+          .data$length_max_tl,
+          0.95,
+          na.rm = TRUE,
+          names = FALSE
+        ),
+      min_length = 0.25 * min(.data$length_common_tl),
+      .groups = "drop"
+    )
+}
+
+#' Median ratio of common length to maximum length in FishBase
+#'
+#' Measured over the 3,748 species in release 25.04 that carry both fields:
+#' median 0.625, IQR 0.50-0.72, 5-95% 0.341-0.857. Used by
+#' [get_length_limits()] to estimate a common length for the species FishBase
+#' leaves without one.
+#'
+#' @return A single numeric.
+#' @keywords internal
+common_length_ratio <- function() 0.625

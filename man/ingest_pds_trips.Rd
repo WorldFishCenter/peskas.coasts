@@ -9,8 +9,8 @@ ingest_pds_trips(log_threshold = logger::DEBUG, package = "coasts")
 \arguments{
 \item{log_threshold}{The logging threshold to use. Default is logger::DEBUG.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
@@ -19,21 +19,23 @@ None (invisible).
 \description{
 This function handles the automated ingestion of GPS boat trip data from Pelagic Data Systems (PDS).
 It performs the following operations:
-1. Retrieves device metadata from configured cloud storage
-2. Downloads all trip data from PDS API (2018-01-01 to present)
-3. Selects the trips belonging to the country's fleet
-4. Converts the data to parquet format
-5. Uploads the processed file to configured cloud storage
+\enumerate{
+\item Retrieves device metadata from configured cloud storage
+\item Downloads all trip data from PDS API (2018-01-01 to present)
+\item Selects the trips belonging to the country's fleet
+\item Converts the data to parquet format
+\item Uploads the processed file to configured cloud storage
+}
 }
 \section{Selecting the country's trips}{
 
-Set by `pds.customers` / `pds.exclude_customers` and `pds.select_by`, and
-applied by [select_country_trips()], which explains the three rules.
+Set by \code{pds.customers} / \code{pds.exclude_customers} and \code{pds.select_by}, and
+applied by \code{\link[=select_country_trips]{select_country_trips()}}, which explains the three rules.
 }
 
 \seealso{
-[get_trips()], [cloud_object_name()], [download_cloud_file()],
-  [upload_cloud_file()], [resolve_storage_opts()]
+\code{\link[=get_trips]{get_trips()}}, \code{\link[=cloud_object_name]{cloud_object_name()}}, \code{\link[=download_cloud_file]{download_cloud_file()}},
+\code{\link[=upload_cloud_file]{upload_cloud_file()}}, \code{\link[=resolve_storage_opts]{resolve_storage_opts()}}
 }
 \keyword{ingestion}
 \keyword{workflow}

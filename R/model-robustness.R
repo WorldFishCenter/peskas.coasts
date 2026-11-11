@@ -1,9 +1,8 @@
-# Generated with Claude (Cowork) — review before committing.
 # Prior-robustness band for the LBB stock estimate.
 #
-# The 2026-09-15 sensitivity work showed LBB's B/B0 and F/M move with the L-inf
-# and M/K priors (over-estimated L-inf overstates depletion/F; under-estimated
-# L-inf overstates health). This makes that routine: re-fit LBB over a small
+# LBB's B/B0 and F/M move with the L-inf and M/K priors (over-estimated L-inf
+# overstates depletion/F; under-estimated L-inf overstates health). This
+# re-fits LBB over a small
 # grid of prior multipliers and report the resulting band plus a stability flag
 # — does the *status category* hold across plausible priors, or flip? A single
 # number the status is robust to is worth far more than one that isn't.
