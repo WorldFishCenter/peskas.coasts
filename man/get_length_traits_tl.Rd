@@ -13,8 +13,9 @@ get_length_traits_tl(expanded, version = "latest")
 \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-A tibble with one row per \code{SpecCode} and \code{server} that has either
-value: \code{LengthMaturityTL} and \code{LengthInfinityTL}, in cm.
+A tibble with one row per \code{SpecCode} and \code{server} that has any
+value: \code{LengthMaturityTL}, \code{LengthInfinityTL} and \code{LengthCommonTL} (common
+length from \code{species}), in cm.
 }
 \description{
 The median asymptotic length (\code{popgrowth}) and length at first maturity

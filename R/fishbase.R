@@ -724,8 +724,9 @@ get_tl_conversions <- function(expanded, version = "latest") {
 #' @param version FishBase / SeaLifeBase release to read. See
 #'   [resolve_db_version()].
 #'
-#' @return A tibble with one row per `SpecCode` and `server` that has either
-#'   value: `LengthMaturityTL` and `LengthInfinityTL`, in cm.
+#' @return A tibble with one row per `SpecCode` and `server` that has any
+#'   value: `LengthMaturityTL`, `LengthInfinityTL` and `LengthCommonTL` (common
+#'   length from `species`), in cm.
 #'
 #' @keywords internal
 get_length_traits_tl <- function(expanded, version = "latest") {
@@ -758,7 +759,11 @@ get_length_traits_tl <- function(expanded, version = "latest") {
   growth <- get_combined_tbl("popgrowth", version = version) |>
     dplyr::filter(.data$SpecCode %in% codes) |>
     median_tl("Loo", "Type", LengthInfinityTL)
-  dplyr::full_join(maturity, growth, by = c("SpecCode", "server"))
+  common <- get_combined_tbl("species", version = version) |>
+    dplyr::filter(.data$SpecCode %in% codes) |>
+    median_tl("CommonLength", "LTypeComM", LengthCommonTL)
+  list(maturity, growth, common) |>
+    purrr::reduce(dplyr::full_join, by = c("SpecCode", "server"))
 }
 
 #' Build Length-Weight and Length-Length Tables for a Set of Taxa
@@ -950,6 +955,11 @@ get_taxa_morphometrics <- function(
 #'    to total length with the `popll` fits where a study used another length.
 #'    The optimum length is `3 Linf / (3 + M/K)`, as in [run_stock_assessment()],
 #'    with K from `estimate` and M from [.m_then2015()], or M/K = 1.5 without K.
+#'    The maximum length is FishBase's own total-length estimate in `estimate`
+#'    (`length_max_tl`); the common length from `species` is restated like the
+#'    two above (`length_common_tl`). For crabs, lobsters and cephalopods
+#'    SeaLifeBase's maximum is not comparable with a carapace or mantle length:
+#'    it gives the mud crab 9 cm.
 #' 5. Deduplicates by taking the first non-`NA` value per group.
 #' 6. Cleans column names with [janitor::clean_names()].
 #' 7. Uploads the result via [upload_parquet_to_cloud()] using the
@@ -1115,7 +1125,8 @@ enrich_taxa <- function(
       "Protein",
       "Selenium",
       "VitaminA",
-      "Zinc"
+      "Zinc",
+      LengthMaxTL = "MaxLengthTL"
     ) |>
     dplyr::distinct()
 
@@ -1140,7 +1151,7 @@ enrich_taxa <- function(
       ),
       LengthOptimumTL = 3 * .data$LengthInfinityTL / (3 + .data$mk)
     ) |>
-    dplyr::select("SpecCode", "server", "LengthMaturityTL", "LengthOptimumTL")
+    dplyr::select("SpecCode", "server", "LengthMaturityTL", "LengthOptimumTL", "LengthCommonTL")
 
   # ── 5. Join and deduplicate ───────────────────────────────────────────────────
   logger::log_info("Joining and deduplicating biological data")
@@ -1189,3 +1200,75 @@ enrich_taxa <- function(
 
   invisible(NULL)
 }
+
+#' Length limits per taxon for validation
+#'
+#' The bounds the country pipelines check landed fish lengths against: a fish
+#' is too long above 1.2 times the 95th percentile of the maximum length of its
+#' taxon's species, and too short below a quarter of their smallest common
+#' length. The margin lets through fish at record size and size classes whose
+#' middle sits just above it.
+#' Zanzibar and Mozambique use the same rule for their alerts 4 and 3, from
+#' their own FishBase reads; Kenya uses this one for KEFS alerts 5.3 and 5.4.
+#'
+#' @param taxa_lengths The hub table [enrich_taxa()] writes, with
+#'   `alpha3_code`, `original_name`, `server`, `order`, `length_max_tl` and
+#'   `length_common_tl`.
+#'
+#' @return A tibble with one row per `alpha3_code` and `original_name`, and
+#'   `max_length` and `min_length` in cm of total length. A taxon whose
+#'   species have no length in FishBase has no row.
+#'
+#' @details
+#' Where FishBase gives no common length, it is estimated as
+#' [common_length_ratio()] times the maximum. Only FishBase species count:
+#' SeaLifeBase's maximum lengths for crabs, lobsters and cephalopods are not on
+#' the carapace or mantle length the surveys measure (it gives the mud crab
+#' 9 cm), so those taxa have no limits. Rays have none either: FishBase gives
+#' their maximum as disc width, and its total-length estimate for them is not
+#' usable (140 cm for the manta).
+#'
+#' @keywords taxa
+#' @export
+get_length_limits <- function(taxa_lengths) {
+  taxa_lengths |>
+    dplyr::filter(
+      .data$server == "fishbase",
+      !.data$order %in% c(
+        "Myliobatiformes",
+        "Rajiformes",
+        "Rhinopristiformes",
+        "Torpediniformes"
+      )
+    ) |>
+    dplyr::mutate(
+      length_common_tl = dplyr::coalesce(
+        .data$length_common_tl,
+        common_length_ratio() * .data$length_max_tl
+      )
+    ) |>
+    dplyr::filter(!is.na(.data$length_common_tl)) |>
+    dplyr::group_by(.data$alpha3_code, .data$original_name) |>
+    dplyr::summarise(
+      max_length = 1.2 *
+        stats::quantile(
+          .data$length_max_tl,
+          0.95,
+          na.rm = TRUE,
+          names = FALSE
+        ),
+      min_length = 0.25 * min(.data$length_common_tl),
+      .groups = "drop"
+    )
+}
+
+#' Median ratio of common length to maximum length in FishBase
+#'
+#' Measured over the 3,748 species in release 25.04 that carry both fields:
+#' median 0.625, IQR 0.50-0.72, 5-95% 0.341-0.857. Used by
+#' [get_length_limits()] to estimate a common length for the species FishBase
+#' leaves without one.
+#'
+#' @return A single numeric.
+#' @keywords internal
+common_length_ratio <- function() 0.625

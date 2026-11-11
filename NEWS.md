@@ -1,3 +1,22 @@
+# coasts 4.26.0
+
+## Length limits leave room above the species' maximum
+
+* **CHANGED** A fish is flagged as too long only above 1.2 times the longest its species is known to grow, so fish at record size, and size classes whose middle sits just above it, are no longer flagged. On the data of 11 November 2026, about 120 Kenya, 110 Zanzibar and 440 Mozambique surveys come back into the validated data.
+
+# coasts 4.25.1
+
+## Rays have no species length limits
+
+* **FIXED** Rays get no longest or shortest plausible length from the shared rule, like crabs and lobsters: FishBase gives their size as disc width, and its total-length estimate for them is not usable (140 cm for a manta, which spans up to 7 m).
+
+# coasts 4.25.0
+
+## Species length limits for validation
+
+* **NEW** The shared species table now carries each species' maximum length and common length from FishBase, as total length, so a pipeline can flag fish too long or too short for their species.
+* **NEW** One shared rule turns those lengths into the longest and shortest plausible fish of each species, the rule Zanzibar and Mozambique already use, so every country can flag lengths the same way.
+
 # coasts 4.24.1
 
 ## The tracks app keeps its own users
