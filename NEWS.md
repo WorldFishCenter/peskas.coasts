@@ -1,3 +1,10 @@
+# coasts 4.25.0
+
+## Species length limits for validation
+
+* **NEW** The shared species table now carries each species' maximum length and common length from FishBase, as total length, so a pipeline can flag fish too long or too short for their species.
+* **NEW** One shared rule turns those lengths into the longest and shortest plausible fish of each species, the rule Zanzibar and Mozambique already use, so every country can flag lengths the same way.
+
 # coasts 4.24.1
 
 ## The tracks app keeps its own users
