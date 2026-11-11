@@ -18,8 +18,10 @@ species have no length in FishBase has no row.
 }
 \description{
 The bounds the country pipelines check landed fish lengths against: a fish
-is too long above the 95th percentile of the maximum length of its taxon's
-species, and too short below a quarter of their smallest common length.
+is too long above 1.2 times the 95th percentile of the maximum length of its
+taxon's species, and too short below a quarter of their smallest common
+length. The margin lets through fish at record size and size classes whose
+middle sits just above it.
 Zanzibar and Mozambique use the same rule for their alerts 4 and 3, from
 their own FishBase reads; Kenya uses this one for KEFS alerts 5.3 and 5.4.
 }

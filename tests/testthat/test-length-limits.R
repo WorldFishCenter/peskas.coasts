@@ -12,9 +12,9 @@ test_that("get_length_limits follows the siblings' rule on fish other than rays"
   expect_equal(nrow(limits), 3)
   expect_false(any(c("Scylla serrata", "Mobula birostris") %in% limits$original_name))
   sutor <- limits[limits$original_name == "Siganus sutor", ]
-  expect_equal(sutor$max_length, 54.9)
+  expect_equal(sutor$max_length, 1.2 * 54.9)
   expect_equal(sutor$min_length, 0.25 * 0.625 * 54.9)
   spp <- limits[limits$original_name == "Siganus spp", ]
-  expect_equal(spp$max_length, unname(stats::quantile(c(30, 50), 0.95)))
+  expect_equal(spp$max_length, 1.2 * unname(stats::quantile(c(30, 50), 0.95)))
   expect_equal(spp$min_length, 0.25 * 20)
 })

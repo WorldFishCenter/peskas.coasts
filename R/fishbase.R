@@ -1177,8 +1177,10 @@ enrich_taxa <- function(
 #' Length limits per taxon for validation
 #'
 #' The bounds the country pipelines check landed fish lengths against: a fish
-#' is too long above the 95th percentile of the maximum length of its taxon's
-#' species, and too short below a quarter of their smallest common length.
+#' is too long above 1.2 times the 95th percentile of the maximum length of its
+#' taxon's species, and too short below a quarter of their smallest common
+#' length. The margin lets through fish at record size and size classes whose
+#' middle sits just above it.
 #' Zanzibar and Mozambique use the same rule for their alerts 4 and 3, from
 #' their own FishBase reads; Kenya uses this one for KEFS alerts 5.3 and 5.4.
 #'
@@ -1221,12 +1223,13 @@ get_length_limits <- function(taxa_lengths) {
     dplyr::filter(!is.na(.data$length_common_tl)) |>
     dplyr::group_by(.data$alpha3_code, .data$original_name) |>
     dplyr::summarise(
-      max_length = stats::quantile(
-        .data$length_max_tl,
-        0.95,
-        na.rm = TRUE,
-        names = FALSE
-      ),
+      max_length = 1.2 *
+        stats::quantile(
+          .data$length_max_tl,
+          0.95,
+          na.rm = TRUE,
+          names = FALSE
+        ),
       min_length = 0.25 * min(.data$length_common_tl),
       .groups = "drop"
     )

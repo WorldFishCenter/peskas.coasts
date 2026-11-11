@@ -1,3 +1,9 @@
+# coasts 4.26.0
+
+## Length limits leave room above the species' maximum
+
+* **CHANGED** A fish is flagged as too long only above 1.2 times the longest its species is known to grow, so fish at record size, and size classes whose middle sits just above it, are no longer flagged. On the data of 11 November 2026, about 120 Kenya, 110 Zanzibar and 440 Mozambique surveys come back into the validated data.
+
 # coasts 4.25.1
 
 ## Rays have no species length limits
