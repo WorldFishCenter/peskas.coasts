@@ -899,6 +899,8 @@ get_taxa_morphometrics <- function(
 #'    `stocks`, the median length at first maturity from `maturity` and the
 #'    optimum length from the asymptotic length in `popgrowth`, both restated
 #'    to total length with the `popll` fits where a study used another length.
+#'    The optimum length is `3 Linf / (3 + M/K)`, as in [run_stock_assessment()],
+#'    with K from `estimate` and M from [.m_then2015()], or M/K = 1.5 without K.
 #' 5. Deduplicates by taking the first non-`NA` value per group.
 #' 6. Cleans column names with [janitor::clean_names()].
 #' 7. Uploads the result via [upload_parquet_to_cloud()] using the
@@ -1103,16 +1105,23 @@ enrich_taxa <- function(
     ) |>
     median_tl("Lm", "Type1", LengthMaturityTL)
 
-  # Optimum length, where a cohort's biomass peaks, from the asymptotic length
-  # (Froese & Binohlan 2000: log10 Lopt = 1.0421 log10 Linf - 0.2742).
+  # Optimum length, where a cohort's biomass peaks: 3 Linf / (3 + M/K), the
+  # stock assessment's formula, so the dashboard and the assessment agree.
+  growth_k <- get_combined_tbl("estimate", version = version) |>
+    dplyr::filter(.data$SpecCode %in% target_codes, .data$K > 0) |>
+    dplyr::distinct(.data$SpecCode, .data$server, .keep_all = TRUE) |>
+    dplyr::select("SpecCode", "server", "K")
   optimum_tab <- get_combined_tbl("popgrowth", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes) |>
     median_tl("Loo", "Type", LengthInfinityTL) |>
-    dplyr::transmute(
-      .data$SpecCode,
-      .data$server,
-      LengthOptimumTL = 10^(1.0421 * log10(.data$LengthInfinityTL) - 0.2742)
-    )
+    dplyr::left_join(growth_k, by = c("SpecCode", "server")) |>
+    dplyr::mutate(
+      mk = dplyr::coalesce(
+        .m_then2015(.data$K, .data$LengthInfinityTL) / .data$K, 1.5
+      ),
+      LengthOptimumTL = 3 * .data$LengthInfinityTL / (3 + .data$mk)
+    ) |>
+    dplyr::select("SpecCode", "server", "LengthOptimumTL")
 
   # ── 5. Join and deduplicate ───────────────────────────────────────────────────
   logger::log_info("Joining and deduplicating biological data")

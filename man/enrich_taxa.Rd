@@ -47,6 +47,8 @@ tables, the family, order and class, the IUCN and CITES codes from
 \code{stocks}, the median length at first maturity from \code{maturity} and the
 optimum length from the asymptotic length in \code{popgrowth}, both restated
 to total length with the \code{popll} fits where a study used another length.
+The optimum length is \verb{3 Linf / (3 + M/K)}, as in \code{\link[=run_stock_assessment]{run_stock_assessment()}},
+with K from \code{estimate} and M from \code{\link[=.m_then2015]{.m_then2015()}}, or M/K = 1.5 without K.
 \item Deduplicates by taking the first non-\code{NA} value per group.
 \item Cleans column names with \code{\link[janitor:clean_names]{janitor::clean_names()}}.
 \item Uploads the result via \code{\link[=upload_parquet_to_cloud]{upload_parquet_to_cloud()}} using the
