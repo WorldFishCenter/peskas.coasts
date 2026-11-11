@@ -95,7 +95,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 | `.fb_retry()` | Retry wrapper / outage stop (section 4.10) |
 | `.length_coverage()` | Length vector and coverage stats (section 2.1) |
 | `.clean_lengths()` | Drop lengths > `max_factor` × L∞ (default 1.2) |
-| `get_life_history_priors()` E | `rfishbase::estimate()` → `linf` (Loo, else MaxLengthTL), `k`, `mk`, `mk_source`, `lm`, `a`, `b` |
+| `get_life_history_priors()` E | `linf`, `lm` from FishBase growth and maturity studies (`get_length_traits_tl()`), else MaxLengthTL and Froese–Binohlan; `k`, `a`, `b` from `rfishbase::estimate()`; `mk`, `mk_source`, `linf_source`, `lm_source`, `prior_conflict` (L∞ above MaxLengthTL, or Lopt below Lm) |
 | `.m_then2015()` | M = 4.118 K^0.73 L∞^−0.33 |
 | `assess_length_indicators()` E | Froese 2004 indicators |
 | `assess_lbspr()` E | LBSPR wrapper (opt-in) |
@@ -172,9 +172,9 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 ## 4. Rules and thresholds
 
 ### 4.1 Priors
-- **L∞:** FishBase `Loo`, else `MaxLengthTL`. Species without one are skipped.
+- **L∞:** median of the species' FishBase growth studies in total length, the same value the dashboard's species table uses (`linf_source = "growth_studies"`). Otherwise FishBase `MaxLengthTL` (`"max_length"`). Species without either are skipped.
 - **M/K:** FishBase M/K when FishBase has M (`mk_source = "fishbase_m"`). Otherwise Then et al. 2015 (`"then2015"`) when K and L∞ exist. Otherwise 1.5 (`"default"`). FishBase currently returns no M for these species, so most priors are `then2015`.
-- **Lm:** FishBase value, else Froese–Binohlan from L∞.
+- **Lm:** median of the species' FishBase maturity studies in total length (`lm_source = "maturity_studies"`), else Froese–Binohlan from L∞ (`"from_linf"`).
 - **Groups:** member medians across regional members (FAO 51+57 for WIO, 71 for Timor).
 - **Group confidence:**
   - genus with `linf_cv` < 0.35 (or a single member) → `high`;
@@ -232,7 +232,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
   - −1 for `ci_width` > 0.5;
   - −1 for < 6 length classes.
 - **Flag:** `pass` if score ≥ 4, `warn` if ≥ 2, otherwise `fail`. `unknown` if there are no lengths.
-- **`quality_reasons`:** built from the same signals (classes < 6, n < 100, `frac_measured` < 0.1, reach < 0.8, CI > 0.5).
+- **`quality_reasons`:** built from the same signals (classes < 6, n < 100, `frac_measured` < 0.1, reach < 0.8, CI > 0.5). Species reads also name stand-in FishBase values (`linf_source = "max_length"`, `lm_source = "from_linf"`) and any `prior_conflict`; these don't change the flag.
 
 ### 4.9 Gear
 - **`selectivity_flag`:** share of measured fish from gears matching `trap|gill|tangle` > 0.7.
@@ -277,7 +277,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 | Column group | Columns |
 |---|---|
 | Keys | `country`, `scale`, `scientific_name`, `gear` (`"all"` = pooled), `method`, `catch_taxon`, `rank`, `rank_basis` |
-| Coverage / quality | `n_measured`, `frac_measured`, `n_length_classes`, `size_reach`, `quality`, `quality_reasons`, `advice` |
+| Coverage / quality | `n_measured`, `frac_measured`, `n_length_classes`, `size_reach`, `quality`, `quality_reasons`, `linf_source`, `lm_source`, `prior_conflict`, `advice` |
 | Gear | `main_gear`, `main_gear_share`, `selective_gear_share`, `selectivity_flag`, `reference_gear` |
 | Consensus | `consensus`, `methods_agree`, `n_concern`, `n_methods` |
 | LBB (`method == "lbb"`) | `bb0`, `bbmsy`, `f_m`, `lc_lopt`, `ci_width` |

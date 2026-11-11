@@ -22,16 +22,18 @@
 #' Reasons Behind a Data-Quality Flag
 #'
 #' Lists, in plain words, which sample properties weaken an assessment. The
-#' same signals feed [.flag_assessment_quality()].
+#' same signals feed [.flag_assessment_quality()]. It also lists stand-in or
+#' contradicting FishBase values from `priors`, which don't change the flag.
 #'
 #' @param coverage A one-row coverage tibble from [.length_coverage()].
 #' @param linf Asymptotic length (cm) used for the read.
 #' @param ci_width Optional relative width of the LBB credible interval.
+#' @param priors Optional one-row priors from [get_life_history_priors()].
 #'
 #' @return A single string of `"; "`-separated reasons (`""` when none).
 #'
 #' @keywords internal
-.quality_reasons <- function(coverage, linf, ci_width = NA_real_) {
+.quality_reasons <- function(coverage, linf, ci_width = NA_real_, priors = NULL) {
   n <- .col_or(coverage, "n_measured")
   frac <- .col_or(coverage, "frac_measured")
   l_top <- .col_or(coverage, "l_99", .col_or(coverage, "l_max"))
@@ -42,7 +44,14 @@
     if (isTRUE(n < 100)) "few fish measured (n < 100)",
     if (isTRUE(frac < 0.1)) "lengths on < 10% of records",
     if (isTRUE(reach < 0.8)) "no fish near maximum size (99th percentile < 80% of Linf)",
-    if (isTRUE(ci_width > 0.5)) "wide credible interval"
+    if (isTRUE(ci_width > 0.5)) "wide credible interval",
+    if (identical(.col_or(priors, "linf_source"), "max_length")) {
+      "no FishBase growth study (Linf is the largest fish recorded)"
+    },
+    if (identical(.col_or(priors, "lm_source"), "from_linf")) {
+      "no FishBase maturity study (size at maturity estimated from Linf)"
+    },
+    if (!is.na(.col_or(priors, "prior_conflict"))) .col_or(priors, "prior_conflict")
   )
   paste(reasons, collapse = "; ")
 }

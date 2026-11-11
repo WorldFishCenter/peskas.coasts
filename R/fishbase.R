@@ -712,6 +712,55 @@ get_tl_conversions <- function(expanded, version = "latest") {
     )
 }
 
+#' Median Asymptotic Length and Length at Maturity in Total Length
+#'
+#' The median asymptotic length (`popgrowth`) and length at first maturity
+#' (`maturity`) across a species' FishBase / SeaLifeBase studies, on a
+#' total-length basis, which is what the landing surveys measure: a study on
+#' fork or standard length is restated with the species' POPLL fits
+#' ([get_tl_conversions()]), and left out when no fit converts it.
+#'
+#' @param expanded A table as returned by [expand_taxonomic_info()].
+#' @param version FishBase / SeaLifeBase release to read. See
+#'   [resolve_db_version()].
+#'
+#' @return A tibble with one row per `SpecCode` and `server` that has either
+#'   value: `LengthMaturityTL` and `LengthInfinityTL`, in cm.
+#'
+#' @keywords internal
+get_length_traits_tl <- function(expanded, version = "latest") {
+  codes <- unique(expanded$SpecCode)
+  to_tl <- get_tl_conversions(expanded, version = version)
+  median_tl <- function(data, length, type, name) {
+    data |>
+      dplyr::select("SpecCode", "server", value = dplyr::all_of(length), Type = dplyr::all_of(type)) |>
+      dplyr::filter(!is.na(.data$value), !is.na(.data$Type)) |>
+      dplyr::left_join(to_tl, by = c("SpecCode", "server", "Type")) |>
+      dplyr::mutate(
+        tl = dplyr::if_else(
+          .data$Type == "TL",
+          .data$value,
+          .data$intercept + .data$slope * .data$value
+        )
+      ) |>
+      dplyr::filter(!is.na(.data$tl)) |>
+      dplyr::group_by(.data$SpecCode, .data$server) |>
+      dplyr::summarise({{ name }} := stats::median(.data$tl), .groups = "drop")
+  }
+
+  # Maturity studies are recorded per stock.
+  stocks <- get_combined_tbl("stocks", version = version) |>
+    dplyr::filter(.data$SpecCode %in% codes) |>
+    dplyr::select("SpecCode", "StockCode", "server")
+  maturity <- get_combined_tbl("maturity", version = version) |>
+    dplyr::inner_join(stocks, by = c("StockCode", "server")) |>
+    median_tl("Lm", "Type1", LengthMaturityTL)
+  growth <- get_combined_tbl("popgrowth", version = version) |>
+    dplyr::filter(.data$SpecCode %in% codes) |>
+    median_tl("Loo", "Type", LengthInfinityTL)
+  dplyr::full_join(maturity, growth, by = c("SpecCode", "server"))
+}
+
 #' Build Length-Weight and Length-Length Tables for a Set of Taxa
 #'
 #' Single entry point for the morphometric half of the taxa pipeline: expands a
@@ -1076,44 +1125,14 @@ enrich_taxa <- function(
     dplyr::filter(.data$SpecCode %in% target_codes) |>
     dplyr::select("SpecCode", "StockCode", "server", "IUCN_Code", "CITES_Code")
 
-  # Lengths on a total-length basis, which is what the landing surveys
-  # measure: a study on fork or standard length is restated with the species'
-  # POPLL fits, and left out when no fit converts it.
-  to_tl <- get_tl_conversions(expanded_assets_filtered, version = version)
-  median_tl <- function(data, length, type, name) {
-    data |>
-      dplyr::select("SpecCode", "server", value = dplyr::all_of(length), Type = dplyr::all_of(type)) |>
-      dplyr::filter(!is.na(.data$value), !is.na(.data$Type)) |>
-      dplyr::left_join(to_tl, by = c("SpecCode", "server", "Type")) |>
-      dplyr::mutate(
-        tl = dplyr::if_else(
-          .data$Type == "TL",
-          .data$value,
-          .data$intercept + .data$slope * .data$value
-        )
-      ) |>
-      dplyr::filter(!is.na(.data$tl)) |>
-      dplyr::group_by(.data$SpecCode, .data$server) |>
-      dplyr::summarise({{ name }} := stats::median(.data$tl), .groups = "drop")
-  }
-
-  # Length at first maturity, per stock in FishBase.
-  maturity_tab <- get_combined_tbl("maturity", version = version) |>
-    dplyr::inner_join(
-      dplyr::select(stocks_tab, "StockCode", "SpecCode", "server"),
-      by = c("StockCode", "server")
-    ) |>
-    median_tl("Lm", "Type1", LengthMaturityTL)
-
   # Optimum length, where a cohort's biomass peaks: 3 Linf / (3 + M/K), the
   # stock assessment's formula, so the dashboard and the assessment agree.
   growth_k <- get_combined_tbl("estimate", version = version) |>
     dplyr::filter(.data$SpecCode %in% target_codes, .data$K > 0) |>
     dplyr::distinct(.data$SpecCode, .data$server, .keep_all = TRUE) |>
     dplyr::select("SpecCode", "server", "K")
-  optimum_tab <- get_combined_tbl("popgrowth", version = version) |>
-    dplyr::filter(.data$SpecCode %in% target_codes) |>
-    median_tl("Loo", "Type", LengthInfinityTL) |>
+  length_tab <- expanded_assets_filtered |>
+    get_length_traits_tl(version = version) |>
     dplyr::left_join(growth_k, by = c("SpecCode", "server")) |>
     dplyr::mutate(
       mk = dplyr::coalesce(
@@ -1121,7 +1140,7 @@ enrich_taxa <- function(
       ),
       LengthOptimumTL = 3 * .data$LengthInfinityTL / (3 + .data$mk)
     ) |>
-    dplyr::select("SpecCode", "server", "LengthOptimumTL")
+    dplyr::select("SpecCode", "server", "LengthMaturityTL", "LengthOptimumTL")
 
   # ── 5. Join and deduplicate ───────────────────────────────────────────────────
   logger::log_info("Joining and deduplicating biological data")
@@ -1131,8 +1150,7 @@ enrich_taxa <- function(
     trophic_tab,
     nutrients_tab,
     dplyr::select(stocks_tab, -"StockCode"),
-    maturity_tab,
-    optimum_tab
+    length_tab
   ) |>
     purrr::reduce(dplyr::left_join, by = c("SpecCode", "server")) |>
     dplyr::group_by(

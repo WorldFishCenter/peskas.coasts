@@ -128,6 +128,19 @@ test_that(".quality_reasons explains a weak sample", {
   expect_equal(.quality_reasons(tibble::tibble(n_measured = 500, frac_measured = 0.5, l_max = 38), 40), "")
 })
 
+test_that(".quality_reasons names stand-in and contradicting FishBase values", {
+  cov <- tibble::tibble(n_measured = 500, frac_measured = 0.5, l_max = 38)
+  stand_in <- tibble::tibble(linf_source = "max_length", lm_source = "from_linf", prior_conflict = NA_character_)
+  r <- .quality_reasons(cov, 40, priors = stand_in)
+  expect_match(r, "no FishBase growth study")
+  expect_match(r, "no FishBase maturity study")
+  conflict <- tibble::tibble(
+    linf_source = "growth_studies", lm_source = "maturity_studies",
+    prior_conflict = "best size below size at maturity"
+  )
+  expect_equal(.quality_reasons(cov, 40, priors = conflict), "best size below size at maturity")
+})
+
 test_that(".stock_advice flags coarse length classes and method disagreement", {
   expect_match(.stock_advice(1000, n_classes = 4), "nearest cm")
   expect_match(.stock_advice(300, n_classes = 30, consensus = "mixed (methods disagree)"), "Borderline")

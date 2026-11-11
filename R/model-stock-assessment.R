@@ -371,9 +371,15 @@ select_priority_species <- function(
 #'
 #' Assembles the priors the length-based methods need — asymptotic length
 #' `linf`, growth `k`, natural-mortality ratio `mk`, and length-at-maturity
-#' `lm` — for a set of species. Values come from `rfishbase`; where maturity is
-#' missing it is filled with the Froese & Binohlan empirical relationship from
-#' `linf`; where FishBase has no M, `mk` comes from the Then et al. (2015)
+#' `lm` — for a set of species. `linf` and `lm` are the medians of the species'
+#' FishBase growth and maturity studies in total length
+#' ([get_length_traits_tl()], as on the dashboard). Without a growth study
+#' `linf` is FishBase's maximum length; without a maturity study `lm` comes
+#' from `linf` (Froese & Binohlan); `linf_source` and `lm_source` record which.
+#' `prior_conflict` notes values that contradict each other: `linf` above the
+#' maximum length, or the optimum length below `lm`.
+#' K and the length-weight `a`, `b` come from `rfishbase::estimate()`. Where
+#' FishBase has no M, `mk` comes from the Then et al. (2015)
 #' growth-based estimator ([.m_then2015()]) when K is known, and only otherwise
 #' defaults to the teleost value of 1.5. `mk_source` records which was used.
 #'
@@ -382,8 +388,9 @@ select_priority_species <- function(
 #'   FishBase has none. Default 1.5.
 #' @param version FishBase release. See [resolve_db_version()].
 #'
-#' @return A tibble with one row per species: `scientific_name`, `linf`, `k`,
-#'   `mk`, `mk_source`, `lm`, `a`, `b`, `source`.
+#' @return A tibble with one row per species: `scientific_name`, `linf`,
+#'   `linf_source`, `k`, `mk`, `mk_source`, `lm`, `lm_source`, `a`, `b`,
+#'   `source`, `prior_conflict`.
 #'
 #' @keywords workflow modeling
 #' @export
@@ -409,17 +416,39 @@ get_life_history_priors <- function(scientific_names, default_mk = 1.5,
   }
   est_std <- tibble::tibble(
     scientific_name = if ("Species" %in% names(est)) est$Species else NA,
-    linf = dplyr::coalesce(col("Loo"), col("MaxLengthTL")),
+    SpecCode = col("SpecCode"),
+    max_length = col("MaxLengthTL"),
     k = col("K"),
     m = col("M"),
-    lm = col("Lm"),
     a = col("a"),
     b = col("b")
   )
+  # Same study medians as the dashboard's species table (enrich_taxa()).
+  studies <- est_std |>
+    dplyr::filter(!is.na(.data$SpecCode)) |>
+    dplyr::transmute(
+      alpha3_code = NA_character_,
+      original_name = .data$scientific_name,
+      .data$SpecCode,
+      species_found = .data$scientific_name,
+      server = "fishbase"
+    ) |>
+    get_length_traits_tl(version = version) |>
+    dplyr::filter(.data$server == "fishbase") |>
+    dplyr::select("SpecCode", linf_studies = "LengthInfinityTL", lm = "LengthMaturityTL")
 
   priors <- tibble::tibble(scientific_name = scientific_names) |>
     dplyr::left_join(est_std, by = "scientific_name") |>
+    dplyr::left_join(studies, by = "SpecCode") |>
     dplyr::mutate(
+      linf_source = dplyr::case_when(
+        !is.na(.data$linf_studies) ~ "growth_studies",
+        !is.na(.data$max_length) ~ "max_length",
+        TRUE ~ NA_character_
+      ),
+      lm_source = dplyr::if_else(!is.na(.data$lm), "maturity_studies", "from_linf"),
+      linf = dplyr::coalesce(.data$linf_studies, .data$max_length),
+      lm = dplyr::coalesce(.data$lm, .lm_from_linf(.data$linf)),
       # M/K: FishBase M where present; otherwise Then et al. (2015) growth-based
       # M = 4.118 K^0.73 Linf^-0.33 (their recommended Pauly_nls-T form) when K
       # and Linf exist; the flat teleost default only as a last resort.
@@ -433,15 +462,20 @@ get_life_history_priors <- function(scientific_names, default_mk = 1.5,
         .data$mk_source == "then2015" ~ .m_then2015(.data$k, .data$linf) / .data$k,
         TRUE ~ .env$default_mk
       ),
-      lm = dplyr::if_else(
-        is.na(.data$lm) & !is.na(.data$linf),
-        10^(0.8979 * log10(.data$linf) - 0.0782),
-        .data$lm
-      ),
-      source = dplyr::if_else(is.na(.data$linf), "missing", "fishbase")
+      source = dplyr::if_else(is.na(.data$linf), "missing", "fishbase"),
+      above_max = .data$linf > .data$max_length,
+      below_lm = 3 * .data$linf / (3 + .data$mk) < .data$lm,
+      prior_conflict = dplyr::case_when(
+        .data$above_max & .data$below_lm ~
+          "Linf above the largest fish recorded; best size below size at maturity",
+        .data$above_max ~ "Linf above the largest fish recorded",
+        .data$below_lm ~ "best size below size at maturity",
+        TRUE ~ NA_character_
+      )
     ) |>
     dplyr::select(
-      "scientific_name", "linf", "k", "mk", "mk_source", "lm", "a", "b", "source"
+      "scientific_name", "linf", "linf_source", "k", "mk", "mk_source",
+      "lm", "lm_source", "a", "b", "source", "prior_conflict"
     )
 
   missing_linf <- priors |> dplyr::filter(is.na(.data$linf))
@@ -785,7 +819,7 @@ assess_species_stock <- function(
   # the large fish), why the quality flag is what it is, and the single most
   # useful next step.
   gear_prof <- .gear_profile(landings, scientific_name)
-  reasons <- .quality_reasons(cov$coverage, priors$linf, ci_width)
+  reasons <- .quality_reasons(cov$coverage, priors$linf, ci_width, priors = priors)
   advice <- .stock_advice(
     length(lengths),
     reasons = reasons,
@@ -804,6 +838,9 @@ assess_species_stock <- function(
       frac_measured = cov$coverage$frac_measured,
       quality = .env$flag,
       quality_reasons = .env$reasons,
+      linf_source = .col_or(priors, "linf_source"),
+      lm_source = .col_or(priors, "lm_source"),
+      prior_conflict = .col_or(priors, "prior_conflict"),
       advice = .env$advice,
       size_reach = cov$coverage$l_99 / priors$linf,
       n_length_classes = cov$coverage$n_length_classes,
