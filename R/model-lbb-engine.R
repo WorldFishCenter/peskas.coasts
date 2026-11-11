@@ -35,6 +35,8 @@
 
 # JAGS model. L-inf and M/K priors are informative and passed in as data
 # (Linf_mu/tau centred on FishBase; MK_mu/tau centred on the species' M/K).
+# The likelihood is the multinomial on the length-class shares with sample size
+# Neff, which can be fractional; JAGS takes it through the zeros trick.
 .LBB_JAGS <- "
 model {
   Linf  ~ dnorm(Linf_mu, Linf_tau) T(LmidMax, )
@@ -52,8 +54,11 @@ model {
   }
   for (i in 1:nL) { C[i] <- N[i] * S[i] }
   Csum <- sum(C[])
-  for (i in 1:nL) { p[i] <- C[i] / Csum }
-  LF[1:nL] ~ dmulti(p[1:nL], Ntot)
+  for (i in 1:nL) {
+    p[i] <- C[i] / Csum
+    ll[i] <- Neff * pobs[i] * log(p[i])
+  }
+  zero ~ dpois(10000 - sum(ll[]))
 }
 "
 
@@ -92,9 +97,10 @@ model {
 #' @param priors A one-row life-history tibble from [get_life_history_priors()]
 #'   (`linf`, `mk`, `lm`).
 #' @param n_eff Sample size for the likelihood. Fish from one catch are not
-#'   independent, so the length-frequency is scaled to sum to `n_eff` (the
-#'   trips measured) while keeping each length class's share. `NULL` (default)
-#'   or a value above the fish count uses every fish.
+#'   independent, so the likelihood weighs each length class's share of fish
+#'   by `n_eff` (the trips measured) instead of by the fish count; no class is
+#'   rounded away. `NULL` (default) or a value above the fish count uses every
+#'   fish.
 #' @param bin_width Length-bin width (cm). `NULL` (default) uses the recording
 #'   resolution of the data (see [.length_resolution()]), at least 1 cm, with
 #'   bins centred on the recorded class values — so 5-cm length classes are not
@@ -172,12 +178,10 @@ lbb_engine_jags <- function(
     1.5
   }
   mode_lc <- lmid[which.max(counts)]
-  if (isTRUE(n_eff < sum(counts))) {
-    counts <- round(counts * n_eff / sum(counts))
-  }
 
   dat <- list(
-    LF = counts, Lmid = lmid, nL = length(lmid), Ntot = sum(counts),
+    pobs = counts / sum(counts), Neff = min(n_eff, sum(counts)), zero = 0,
+    Lmid = lmid, nL = length(lmid),
     Linf_mu = linf_mu, Linf_tau = 1 / (linf_sd_frac * linf_mu)^2,
     MK_mu = mk_mu, MK_tau = 1 / 0.3^2,
     LmidMax = occ_max + 0.5,

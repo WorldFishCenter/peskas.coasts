@@ -192,7 +192,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 ### 4.3 LBB (`lbb_engine_jags()`)
 - The L∞ prior is centred on `max(prior L∞, largest occupied bin + 1)` with SD 10%. The M/K prior has SD 0.3. Lc is bounded between the smallest bin and mode + 0.5·(L∞ − mode).
 - Each chain gets `.RNG.seed = seed + chain` (Mersenne-Twister).
-- The length-frequency is scaled to sum to `n_eff` (the trips measured, passed by `assess_species_stock()`), rounded, keeping each bin's share. Without it the multinomial counts every fish as an independent draw and the credible interval is too narrow.
+- **Likelihood:** a multinomial on each bin's share of fish with sample size `n_eff` (the trips measured, passed by `assess_species_stock()`), written as `n_eff × Σ share × log p` and given to JAGS with the zeros trick, since `dmulti` needs whole counts. Counting every fish as an independent draw would make the credible interval too narrow. Scaling the counts and rounding them instead would drop the rare bins, usually the largest fish. Without `n_eff`, the likelihood is the plain multinomial on all fish.
 
 ### 4.4 Production layer
 - **Why:** Kolding's modified Cadima judges fishing against current production rather than a theoretical MSY. With P/B ≈ Z, the sustainable yield is SY = x·B·Z, where x is the share of production fishing may take. Current yield is Y = F·B, so the biomass cancels: SY = Y·x/E with E = F/Z. A stock's position then needs only E (from the lengths) and x (from its trophic level).
