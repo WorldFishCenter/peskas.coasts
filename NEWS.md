@@ -1,3 +1,9 @@
+# coasts 4.26.1
+
+## A broken survey download stops the run
+
+* **FIXED** If KoboToolbox fails partway through a survey download, the run now stops with an error. Before, it kept the surveys downloaded so far and saved them as if complete: on 19 November 2026 Kenya's WCS catch surveys came through with 19,000 of about 60,600 submissions.
+
 # coasts 4.26.0
 
 ## Length limits leave room above the species' maximum
