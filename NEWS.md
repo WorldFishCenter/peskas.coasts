@@ -1,3 +1,9 @@
+# coasts 4.27.0
+
+## Reviewers' decisions saved during a run are kept
+
+* **FIXED** A decision a reviewer saves in the management platform while a country's validation step is running is no longer undone when the step finishes: the step reads the reviewers' decisions again just before it writes the flags.
+
 # coasts 4.26.1
 
 ## A broken survey download stops the run

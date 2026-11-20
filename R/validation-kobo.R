@@ -202,7 +202,8 @@ list_validation_statuses <- function(
 #'   decisions are returned alone, so the run goes on. With no pipeline
 #'   account name it stops with an error, so nothing is overwritten.
 #'
-#' @seealso [list_validation_statuses()]
+#' @seealso [list_validation_statuses()], [refresh_review_decisions()] for
+#'   the decisions saved while the run goes on
 #'
 #' @keywords validation
 #' @export
@@ -282,6 +283,84 @@ review_decisions <- function(
     # collection's (bound first) is kept.
     dplyr::arrange(dplyr::desc(.data$validated_at)) |>
     dplyr::distinct(.data$submission_id, .keep_all = TRUE)
+}
+
+#' Keep the Reviewers' Decisions Saved During a Run
+#'
+#' @description
+#' A pipeline reads reviewers' decisions with [review_decisions()] when its
+#' validation step starts and replaces the flags collection when it ends, so a
+#' decision saved in the Peskas Management Platform in between would be lost.
+#' Called just before [mdb_collection_push()], this reads the collection again
+#' and carries into `flags` each reviewer's decision found there that `flags`
+#' lacks or holds in an older version.
+#'
+#' A decision is one made by any account other than the pipeline's own, as in
+#' [review_decisions()], and it keeps its status whatever the flags say.
+#'
+#' @param flags The flags about to be pushed: `submission_id`,
+#'   `validation_status`, `validated_by` and `validated_at`, one row per
+#'   submission.
+#' @inheritParams review_decisions
+#' @inheritParams mdb_collection_pull
+#'
+#' @return `flags`, with those decisions' `validation_status`, `validated_by`
+#'   and `validated_at`. No row is added or removed.
+#'
+#' @seealso [review_decisions()]
+#'
+#' @keywords validation
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' flags <- refresh_review_decisions(
+#'   flags,
+#'   pipeline_users = conf$ingestion$adnap$username,
+#'   connection_string = conf$storage$mongodb$connection_strings$validation,
+#'   db_name = conf$storage$mongodb$databases$validation$database_name,
+#'   collection_name = "surveys_flags-<asset_id>"
+#' )
+#' }
+refresh_review_decisions <- function(
+  flags,
+  pipeline_users,
+  connection_string,
+  db_name,
+  collection_name
+) {
+  latest <- review_decisions(
+    flags = mdb_collection_pull(
+      connection_string = connection_string,
+      collection_name = collection_name,
+      db_name = db_name
+    ),
+    pipeline_users = pipeline_users
+  )
+
+  i <- match(
+    as.character(flags$submission_id),
+    as.character(latest$submission_id)
+  )
+  by_reviewer <- !is.na(flags$validated_by) &
+    !flags$validated_by %in% pipeline_users
+  # An undated decision in the collection never replaces a reviewer's.
+  newer <- !is.na(i) &
+    (!by_reviewer |
+      dplyr::coalesce(
+        latest$validated_at[i] > flags$validated_at,
+        !is.na(latest$validated_at[i])
+      ))
+
+  for (col in c("validation_status", "validated_by", "validated_at")) {
+    flags[[col]][newer] <- latest[[col]][i[newer]]
+  }
+  if (any(newer)) {
+    logger::log_info(
+      "Kept {sum(newer)} decisions saved during the run in {collection_name}"
+    )
+  }
+  flags
 }
 
 #' Read One Submission's Validation Status From KoBoToolbox
