@@ -1,10 +1,22 @@
-# coasts 4.27.0
+# coasts 4.28.0
 
 ## Stock assessment from catch lengths
 
 * **NEW** Every day the pipeline reads the state of the main stocks in each country from the fish lengths measured at landing: the five most valuable species and the main fish groups. It writes two tables, one with each method's result and one with a single line per stock: its status, how far to trust it, and what to collect next.
 * **NEW** The assessment counts the real number of fish behind each length, and takes the number of trips with measured fish as its sample size, because fish from the same catch are not independent.
 * **CHANGED** The best size to catch shown on the dashboards uses the stock assessment's formula, which accounts for each species' growth and natural mortality. It is about 6% larger at the median.
+
+# coasts 4.27.0
+
+## Reviewers' decisions saved during a run are kept
+
+* **FIXED** A decision a reviewer saves in the management platform while a country's validation step is running is no longer undone when the step finishes: the step reads the reviewers' decisions again just before it writes the flags.
+
+# coasts 4.26.1
+
+## A broken survey download stops the run
+
+* **FIXED** If KoboToolbox fails partway through a survey download, the run now stops with an error. Before, it kept the surveys downloaded so far and saved them as if complete: on 19 November 2026 Kenya's WCS catch surveys came through with 19,000 of about 60,600 submissions.
 
 # coasts 4.26.0
 

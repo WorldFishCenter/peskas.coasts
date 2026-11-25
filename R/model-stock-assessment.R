@@ -822,7 +822,7 @@ assess_species_stock <- function(
   mix <- flag_length_mixture(lengths, priors)
 
   # Optional prior-robustness band on the LBB estimate (9x JAGS per species).
-  rb <- if (isTRUE(robustness) && "lbb" %in% methods) {
+  rb <- if (isTRUE(robustness) && !is.na(runs$lbb$bb0 %||% NA)) {
     lbb_robustness(lengths, priors, engine)
   } else {
     NULL
@@ -952,8 +952,9 @@ assess_species_stock <- function(
 #' @return Invisibly, the long tibble of per-taxon, per-method (and per-gear)
 #'   assessments with quality flags; its `"summary"` attribute holds the
 #'   one-row-per-stock table from [summarise_stock_status()]. With
-#'   `upload = TRUE` both are written as versioned parquets
-#'   (`<prefix>` and `<prefix>-summary`). Stops with a `fishbase_unavailable`
+#'   `upload = TRUE` both are written as versioned parquets, named by
+#'   `stock_assessment$results` and `stock_assessment$summary` in
+#'   `inst/conf.yml`. Stops with a `fishbase_unavailable`
 #'   error, uploading nothing, when FishBase cannot be read.
 #'
 #' @keywords workflow modeling

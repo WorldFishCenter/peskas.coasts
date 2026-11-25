@@ -1,12 +1,6 @@
-# Length-Based Bayesian (LBB, Froese et al. 2018) fitting engine for the
-# stock-assessment framework. Plugs into assess_stock_lbb() via the
-# `lbb_engine` hook: a function of (lengths, priors, n_eff) returning the list
-# that assess_stock_lbb() expects (bb0, bbmsy, fm, lc_lopt, ci_width).
-#
-# The L-infinity prior is centred on the FishBase value carried in `priors`
-# (from get_life_history_priors()), so the Bayesian fit is anchored to known
-# biology rather than letting L-inf run free on a single, often truncated,
-# length sample. Requires JAGS (system library) + rjags.
+# LBB (Froese et al. 2018) fitting engine for the `lbb_engine` hook of
+# assess_stock_lbb(), with the L-inf prior centred on FishBase. Needs JAGS and
+# rjags; see STOCK-ASSESSMENT.md, section 4.3.
 
 # ---- LBB forward model (base R) --------------------------------------------
 
@@ -160,6 +154,7 @@ lbb_engine_jags <- function(
   counts <- counts[keep]
   lmid <- lmid[keep]
   if (length(lmid) < 6) {
+    logger::log_info("LBB skipped: {length(lmid)} occupied length bins, 6 needed.")
     return(NULL)
   }
 

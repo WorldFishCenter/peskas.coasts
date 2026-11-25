@@ -1,11 +1,6 @@
-# Prior-robustness band for the LBB stock estimate.
-#
-# LBB's B/B0 and F/M move with the L-inf and M/K priors (over-estimated L-inf
-# overstates depletion/F; under-estimated L-inf overstates health). This
-# re-fits LBB over a small
-# grid of prior multipliers and report the resulting band plus a stability flag
-# — does the *status category* hold across plausible priors, or flip? A single
-# number the status is robust to is worth far more than one that isn't.
+# Prior-robustness band for the LBB estimate: LBB is re-fitted over a grid of
+# L-inf and M/K priors to see whether the status holds; see
+# STOCK-ASSESSMENT.md, section 4.5.
 
 #' Three-Class Stock Status from Relative Biomass
 #' @keywords internal

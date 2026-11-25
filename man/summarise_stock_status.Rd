@@ -51,6 +51,12 @@ straddles the sustainable line, or the methods disagree; \code{indicative} when
 the read stands but rests on a weak basis (failed quality, fish measured
 on fewer than 100 trips, a trap / gill net dominated sample, fewer than six length
 classes, or a low-confidence group prior); otherwise \code{reliable}.
+
+\code{reliability} does not check whether the sample reaches large fish
+(\code{size_reach}). Small-scale catches often hold only young fish, so a
+stock can read as overfished and \code{reliable} when its large fish are out
+of the boats' reach; \code{quality_reasons} and \code{advice} then say that large
+fish are missing. See STOCK-ASSESSMENT.md, section 7.
 }
 \keyword{modeling}
 \keyword{workflow}

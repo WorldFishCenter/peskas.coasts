@@ -86,6 +86,11 @@ get_group_priors <- function(
   version = "latest",
   default_mk = 1.5
 ) {
+  none <- tibble::tibble(
+    scientific_name = character(), rank = character(), n_species = integer(),
+    linf_cv = numeric(), linf = numeric(), mk = numeric(), lm = numeric(),
+    source = character(), confidence = character()
+  )
   coarse_taxa <- coarse_taxa |>
     dplyr::distinct(.data$scientific_name, .data$catch_taxon) |>
     dplyr::mutate(rank = .group_rank(.data$scientific_name))
@@ -93,7 +98,7 @@ get_group_priors <- function(
   assessable <- coarse_taxa |> dplyr::filter(.data$rank %in% c("genus", "family"))
   if (nrow(assessable) == 0) {
     logger::log_warn("No genus/family-level coarse taxa to prior.")
-    return(tibble::tibble())
+    return(none)
   }
 
   expanded <- tryCatch(
@@ -144,7 +149,7 @@ get_group_priors <- function(
   mem <- dplyr::distinct(mem)
   if (nrow(mem) == 0) {
     logger::log_warn("Group priors: no member species resolved for any taxon.")
-    return(tibble::tibble())
+    return(none)
   }
 
   sp_priors <- get_life_history_priors(

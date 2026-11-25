@@ -40,7 +40,8 @@ greater than or equal to this value. Useful for incremental data retrieval.}
 \item{progress}{Logical. Whether to show a progress message (default is TRUE).}
 }
 \value{
-A list containing all retrieved survey results.
+A list containing all retrieved survey results. Stops with an
+error if any page cannot be retrieved, so it never returns part of the data.
 }
 \description{
 This function retrieves survey data from Kobotoolbox API for a specific asset.

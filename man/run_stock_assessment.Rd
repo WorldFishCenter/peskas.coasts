@@ -80,8 +80,9 @@ network or credentials hiccup at the end cannot discard the results.}
 Invisibly, the long tibble of per-taxon, per-method (and per-gear)
 assessments with quality flags; its \code{"summary"} attribute holds the
 one-row-per-stock table from \code{\link[=summarise_stock_status]{summarise_stock_status()}}. With
-\code{upload = TRUE} both are written as versioned parquets
-(\verb{<prefix>} and \verb{<prefix>-summary}). Stops with a \code{fishbase_unavailable}
+\code{upload = TRUE} both are written as versioned parquets, named by
+\code{stock_assessment$results} and \code{stock_assessment$summary} in
+\code{inst/conf.yml}. Stops with a \code{fishbase_unavailable}
 error, uploading nothing, when FishBase cannot be read.
 }
 \description{

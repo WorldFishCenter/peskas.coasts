@@ -93,3 +93,66 @@ test_that("review_decisions stops without a pipeline account name", {
   expect_error(review_decisions(flags, pipeline_users = ""), "No pipeline account name")
   expect_error(review_decisions(flags, pipeline_users = NA_character_), "No pipeline account name")
 })
+
+test_that("refresh_review_decisions keeps decisions saved during the run", {
+  ok <- "validation_status_approved"
+  no <- "validation_status_not_approved"
+  flags <- tibble::tibble(
+    submission_id = c("1", "2", "3", "4", "5"),
+    alert_flag = c("5", NA, "6", "5", NA),
+    validation_status = c(no, ok, no, ok, ok),
+    validated_by = c(NA, "pipeline", "kobo_reviewer", "reviewer", "pipeline"),
+    validated_at = lubridate::as_datetime(
+      c(NA, NA, "2026-11-15", "2026-11-01", NA)
+    )
+  )
+  local_mocked_bindings(
+    mdb_collection_pull = function(...) {
+      data.frame(
+        submission_id = c(1, 2, 3, 4, 5, 6),
+        validation_status = c(ok, no, ok, no, no, ok),
+        validated_by = c(
+          "reviewer", "reviewer", "reviewer", "reviewer", "pipeline", "reviewer"
+        ),
+        validated_at = lubridate::as_datetime(
+          c(
+            "2026-11-20 10:00:00", "2026-11-20 10:05:00", "2026-11-10 00:00:00",
+            NA, NA, "2026-11-20 00:00:00"
+          )
+        )
+      )
+    }
+  )
+
+  out <- refresh_review_decisions(flags, "pipeline", "url", "db", "flags-a1")
+
+  # 1 and 2 were decided while the run was going.
+  expect_equal(out$validation_status, c(ok, no, no, ok, ok))
+  expect_equal(
+    out$validated_by,
+    c("reviewer", "reviewer", "kobo_reviewer", "reviewer", "pipeline")
+  )
+  expect_equal(
+    out$validated_at[1:2],
+    lubridate::as_datetime(c("2026-11-20 10:00:00", "2026-11-20 10:05:00"))
+  )
+  # 3: the run's KoBoToolbox decision is later; 4: the collection's is undated;
+  # 5: the pipeline's own; 6 is not in this run's flags.
+  expect_equal(out[3:5, ], flags[3:5, ])
+  expect_equal(names(out), names(flags))
+})
+
+test_that("refresh_review_decisions leaves the flags alone on an empty collection", {
+  flags <- tibble::tibble(
+    submission_id = 1L,
+    validation_status = "validation_status_approved",
+    validated_by = "pipeline",
+    validated_at = lubridate::as_datetime(NA)
+  )
+  local_mocked_bindings(mdb_collection_pull = function(...) data.frame())
+
+  expect_identical(
+    refresh_review_decisions(flags, "pipeline", "url", "db", "flags-a1"),
+    flags
+  )
+})

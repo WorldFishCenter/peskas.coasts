@@ -15,7 +15,8 @@
 #' @param retry_times Number of retry attempts for failed requests (default is 3).
 #' @param progress Logical. Whether to show a progress message (default is TRUE).
 #'
-#' @return A list containing all retrieved survey results.
+#' @return A list containing all retrieved survey results. Stops with an
+#'   error if any page cannot be retrieved, so it never returns part of the data.
 #' @keywords ingestion
 #' @details
 #' As of March 2026, the Kobotoolbox API enforces a maximum page size of 1,000
@@ -166,9 +167,15 @@ get_kobo_data <- function(
 
     page_data <- get_page(current_url)
 
+    # A partial download would be saved as if complete and replace the full raw file.
     if (is.null(page_data)) {
-      warning("Failed to retrieve page ", page_num, ". Stopping.")
-      break
+      stop(
+        "Failed to retrieve page ",
+        page_num,
+        " after ",
+        length(all_results),
+        " records."
+      )
     }
 
     new_results <- page_data$results

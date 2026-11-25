@@ -1,14 +1,6 @@
-# Gear resolution for the length-based assessments.
-#
-# Small-scale gears select sizes very differently. Traps and gill nets are
-# dome-shaped: they under-catch the largest fish, so a length sample from them
-# looks like heavy mortality even when the stock is lightly fished (Zanzibar
-# Siganus sutor: trap Z/K ~4.9 vs hand line ~1.3; Timor Lethrinidae: gill net
-# ~9.7 vs hand line ~2.7). Two tools follow:
-#  - a gear profile and selectivity flag on every read (which gear dominates the
-#    sample, and how much of it comes from dome-selective gears);
-#  - optional per-gear reads, with a reference gear = the gear whose catch
-#    reaches closest to Linf (least truncated by selectivity).
+# Gear resolution for the length-based assessments. Traps and gill nets
+# under-catch large fish, so each read carries a gear profile and, optionally,
+# per-gear reads with a reference gear; see STOCK-ASSESSMENT.md, section 4.9.
 
 #' Gears Treated as Dome-Selective (Regex)
 #' @keywords internal

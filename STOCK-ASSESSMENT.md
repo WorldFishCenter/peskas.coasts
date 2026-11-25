@@ -1,6 +1,6 @@
 # Stock assessment framework — technical reference
 
-Branch `stock-assessment` of `peskas.coasts` (package `coasts`, 4.27.0).
+Part of `peskas.coasts` (package `coasts`) since 4.28.0.
 Each function's roxygen help page (`?function_name`) has the full argument and return documentation; this file is the map.
 
 ## 1. Entry point
@@ -25,7 +25,7 @@ run_stock_assessment(
 )
 ```
 
-Recommended production call: `run_stock_assessment(robustness = TRUE, by_gear = TRUE)`, about 40 min for four countries. CI (`.github/workflows/data-pipeline.yaml`, job `stock-assessment`) currently calls `coasts::run_stock_assessment()` with defaults (only the log level set to INFO). Without `robustness = TRUE`, `robust_flag` is `NA` and `reliability` cannot become `borderline` on prior grounds.
+Production call (CI, `.github/workflows/data-pipeline.yaml`, job `stock-assessment`): `run_stock_assessment(robustness = TRUE, by_gear = TRUE, log_threshold = logger::INFO)`, about 8 minutes for four countries on the data of 25 November 2026. The function's own defaults leave both off.
 
 **Returns** (invisibly) the long results table. `attr(res, "summary")` holds the one-row-per-stock table.
 **Writes**, when `upload = TRUE`, two versioned parquets through `upload_parquet_to_cloud()`. Their names are `stock-assessment-results__<timestamp>_<sha>__.parquet` (long table) and `stock-assessment-summary__<timestamp>_<sha>__.parquet` (summary), set by `stock_assessment$results` and `stock_assessment$summary` in `inst/conf.yml`. The FAO areas for the group priors are `stock_assessment$fao_areas` there too.
@@ -204,12 +204,13 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 - **`production_band`:** `straddles` if `e_lo/x` and `e_hi/x` fall on different sides of 1, otherwise `clear`.
 
 ### 4.5 Robustness grid (`lbb_robustness()`)
+- **Why:** B/B0 and F/M move with the L∞ and M/K priors. Too high an L∞ overstates depletion and F; too low overstates health.
 - **L∞ axis:** prior × (0.85, 1, 1.15), plus the catch-implied L∞ (L99/0.95) when it falls outside that range.
 - **M/K axis:** prior × (0.75, 1, 1.25).
 - That gives 9–12 JAGS fits per species.
 - **`robust_flag`:** `robust` if `.stock_class()` and the `fm > 1` verdict are the same at every grid point, otherwise `sensitive`.
 - **Other outputs:** `bb0_lo`/`bb0_hi`/`fm_lo`/`fm_hi` (min/max across the grid), `linf_catch`, and `linf_ratio = prior L∞ / linf_catch`.
-- Runs on the pooled read only.
+- Runs on the pooled read only, and only when the main LBB fit worked.
 
 ### 4.6 Consensus (`.ensemble_consensus()`)
 - **Concern rules per leg:**
@@ -243,6 +244,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 - **`quality_reasons`:** built from the same signals (classes < 6, trips < 100, `frac_measured` < 0.1, reach < 0.8, CI > 0.5). Species reads also name stand-in FishBase values (`linf_source = "max_length"`, `lm_source = "from_linf"`) and any `prior_conflict`; these don't change the flag.
 
 ### 4.9 Gear
+- **Why:** traps and gill nets are dome-shaped: they under-catch the largest fish, so their samples look like heavy fishing even on a lightly fished stock (Zanzibar *Siganus sutor*: Z/K about 4.9 from traps against 1.3 from hand lines; Timor Lethrinidae: 9.7 from gill nets against 2.7 from hand lines).
 - **`selectivity_flag`:** share of measured fish from gears matching `trap|gill|tangle` > 0.7.
 - **Per-gear reads:** only when ≥ 2 gears each have measured fish on ≥ `min_gear_trips` trips.
 - **`reference_gear`:** the highest `size_reach` among non-unknown per-gear reads, for species and `high`-confidence genera only. Mixed families get none, because gear differences there reflect which species each gear catches. Pooled rows have `reference_gear = NA`.
@@ -352,6 +354,7 @@ The tests mock reachability for `.fb_retry()` and use a fake LBB engine for `lbb
   - cannot fit on samples with fewer than 6 occupied length bins (5-cm classes for small species); these fall back to Froese + production;
   - assumes equilibrium and asymptotic selectivity;
   - trap / gill-net samples bias Z, F/M and E upward, which is why `selectivity_flag` exists.
+- **Who the catch samples:** the length methods assume the measured fish show the sizes in the whole stock. Small-scale boats catch only part of it, often young fish near the coast, so a stock can read as overfished when its large fish are simply out of reach. `reliability` does not look at `size_reach`, so such a read can still be `reliable`; `quality_reasons` and `advice` say that large fish are missing. On the data of 25 November 2026 this hit the tuna: Kenya bigeye and yellowfin, whose largest fish reach 52–63% of L∞ and are almost all immature, read `overfished + overfishing` and `reliable`; Zanzibar yellowfin has the same sample but reads `borderline` because its status changes across the priors. Tuna are ocean-wide stocks, so a coastal length sample says little about them.
 - **x:** 0.25 / 0.5 are heuristics (Kolding), not estimates.
 - **Production layer:** needs approximate stationarity (P/B ≈ Z).
 - **Robustness grid:** varies priors only; it has not been validated against simulated data with known answers.

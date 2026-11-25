@@ -65,6 +65,12 @@ test_that(".fb_retry stops instead of returning an empty FishBase result", {
   expect_equal(nrow(out), 0)
 })
 
+test_that("group priors keep their columns when no member species resolves", {
+  local_mocked_bindings(expand_taxonomic_info = function(...) tibble::tibble())
+  gp <- get_group_priors(tibble::tibble(scientific_name = "Nemipteridae", catch_taxon = "NEX"))
+  expect_equal(nrow(dplyr::filter(gp, .data$scientific_name == "Nemipteridae")), 0)
+})
+
 test_that("species without an LBB fit fall back to the Froese status; small samples are indicative", {
   r <- tibble::tibble(
     country = "timor", scale = "species", scientific_name = "Hyporhamphus quoyi",

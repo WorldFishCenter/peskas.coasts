@@ -85,6 +85,12 @@
 #'   on fewer than 100 trips, a trap / gill net dominated sample, fewer than six length
 #'   classes, or a low-confidence group prior); otherwise `reliable`.
 #'
+#'   `reliability` does not check whether the sample reaches large fish
+#'   (`size_reach`). Small-scale catches often hold only young fish, so a
+#'   stock can read as overfished and `reliable` when its large fish are out
+#'   of the boats' reach; `quality_reasons` and `advice` then say that large
+#'   fish are missing. See STOCK-ASSESSMENT.md, section 7.
+#'
 #' @keywords workflow modeling
 #' @export
 summarise_stock_status <- function(results) {
