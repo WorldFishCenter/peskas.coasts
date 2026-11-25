@@ -8,23 +8,27 @@ process_trip_data(conf = NULL, devices_table = NULL, imei_list = NULL)
 }
 \arguments{
 \item{conf}{Configuration parameters containing:
-- pds$token: API token for PDS access
-- pds$secret: API secret for PDS access}
+\itemize{
+\item pds$token: API token for PDS access
+\item pds$secret: API secret for PDS access
+}}
 
 \item{devices_table}{Data frame containing device metadata with at minimum
-an `imei` column. Used to join district information to trips.}
+an \code{imei} column. Used to join district information to trips.}
 
 \item{imei_list}{Vector of IMEI numbers for devices to retrieve trip data for}
 }
 \value{
 A processed data frame with:
-  - district: District name (from community metadata)
-  - community: Community name
-  - trip: Trip identifier
-  - boat: Boat identifier
-  - landing_date: Date of trip landing
-  - date_month: First day of landing month
-  - duration_hrs: Trip duration in hours
+\itemize{
+\item district: District name (from community metadata)
+\item community: Community name
+\item trip: Trip identifier
+\item boat: Boat identifier
+\item landing_date: Date of trip landing
+\item date_month: First day of landing month
+\item duration_hrs: Trip duration in hours
+}
 }
 \description{
 Retrieves and processes trip data from the PDS API by adding district information
@@ -33,12 +37,14 @@ remove outliers and prepares data for monthly statistics calculation.
 }
 \details{
 The function:
-- Calls `get_trips()` API to retrieve trip data for specified IMEIs
-- Converts timestamps to landing dates and monthly periods
-- Calculates trip duration in hours from seconds
-- Joins with community metadata to add district information
-- Filters out unrealistic trips (>48 hours)
-- Standardizes column names and structure
+\itemize{
+\item Calls \code{get_trips()} API to retrieve trip data for specified IMEIs
+\item Converts timestamps to landing dates and monthly periods
+\item Calculates trip duration in hours from seconds
+\item Joins with community metadata to add district information
+\item Filters out unrealistic trips (>48 hours)
+\item Standardizes column names and structure
+}
 }
 \examples{
 \dontrun{
@@ -55,8 +61,10 @@ str(trips_stats)
 
 }
 \seealso{
-* [calculate_monthly_trip_stats()] for using processed trip data
-* [get_trips()] for the underlying API call
+\itemize{
+\item \code{\link[=calculate_monthly_trip_stats]{calculate_monthly_trip_stats()}} for using processed trip data
+\item \code{\link[=get_trips]{get_trips()}} for the underlying API call
+}
 }
 \keyword{preprocessing}
 \keyword{workflow}

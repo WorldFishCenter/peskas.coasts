@@ -7,15 +7,17 @@
 export_geos(package = "coasts")
 }
 \arguments{
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
 None (invisible). Creates and uploads data to three MongoDB collections:
-  - Regional boundary geometries (with 2dsphere index)
-  - Regional time series metrics (currency-converted)
-  - PDS track grid summaries
+\itemize{
+\item Regional boundary geometries (with 2dsphere index)
+\item Regional time series metrics (currency-converted)
+\item PDS track grid summaries
+}
 }
 \description{
 Downloads and processes geospatial data from different countries,
@@ -25,23 +27,25 @@ metrics, and exports all data to MongoDB collections with appropriate indexing.
 \details{
 This function performs several key operations:
 
-**Geospatial Data Processing:**
-1. Downloads GeoJSON files for Kenya, Mozambique and Zanzibar regions from cloud storage
-2. Reads and combines the regional boundary data into a single dataset
-3. Uploads combined geospatial data to MongoDB with 2dsphere indexing for spatial queries
+\strong{Geospatial Data Processing:}
+\enumerate{
+\item Downloads GeoJSON files for Kenya, Mozambique and Zanzibar regions from cloud storage
+\item Reads and combines the regional boundary data into a single dataset
+\item Uploads combined geospatial data to MongoDB with 2dsphere indexing for spatial queries
+}
 
-**Regional Metrics Processing:**
+\strong{Regional Metrics Processing:}
 4. Downloads monthly summary parquet files for both countries from cloud storage
 5. Applies currency conversion factors to monetary metrics
 6. Converts the following monetary fields: mean_rpue, mean_rpua, mean_price_kg
 7. Uploads regional metrics to MongoDB without geospatial indexing
 
-**PDS Track Grid Processing:**
+\strong{PDS Track Grid Processing:}
 8. Downloads PDS track grid summaries from cloud storage
 9. Uploads grid summaries to a separate MongoDB collection
 
 The function requires appropriate configuration parameters for cloud storage access
-and MongoDB connection details, typically loaded via `read_config()`.
+and MongoDB connection details, typically loaded via \code{read_config()}.
 }
 \examples{
 \dontrun{

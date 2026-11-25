@@ -7,20 +7,20 @@
 scale_sustainable_yield(results, total_catch)
 }
 \arguments{
-\item{results}{Output of [run_stock_assessment()] (needs `catch_share`,
-`sy_ratio`).}
+\item{results}{Output of \code{\link[=run_stock_assessment]{run_stock_assessment()}} (needs \code{catch_share},
+\code{sy_ratio}).}
 
-\item{total_catch}{A tibble with `country` and `total_catch_kg` for the
+\item{total_catch}{A tibble with \code{country} and \code{total_catch_kg} for the
 same period as the assessment.}
 }
 \value{
-`results` with `current_catch_kg` and `sustainable_yield_kg`.
+\code{results} with \code{current_catch_kg} and \code{sustainable_yield_kg}.
 }
 \description{
 Turns the relative production results into catch volumes using a country
 total from the Peskas fleet estimates (e.g. summed
-`estimated_total_catch_kg` from [calculate_district_totals()]): current
-catch = total x `catch_share`; sustainable yield = current x `sy_ratio`.
+\code{estimated_total_catch_kg} from \code{\link[=calculate_district_totals]{calculate_district_totals()}}): current
+catch = total x \code{catch_share}; sustainable yield = current x \code{sy_ratio}.
 }
 \keyword{modeling}
 \keyword{workflow}

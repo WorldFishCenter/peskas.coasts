@@ -7,8 +7,8 @@
 backup_tracks(package = "coasts")
 }
 \arguments{
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
@@ -16,10 +16,12 @@ None (invisible). Updates the cloud parquet with any new track data.
 }
 \description{
 Fallback pipeline to refresh the bound tracks parquet when the main ingestion is unavailable. It:
-1. Loads Airtable assets, keeping East Africa devices (Zanzibar, Kenya, Mozambique, Malawi, Tanzania) active since 2024-01-01
-2. Pulls the last 90 days of PDS trips and filters to those IMEIs
-3. Reads the latest bound tracks parquet from cloud, finds new trip IDs, and downloads missing tracks in parallel
-4. Aggregates points to 10-minute medians, binds with existing tracks, deduplicates, and uploads a versioned parquet back to cloud storage
+\enumerate{
+\item Loads Airtable assets, keeping East Africa devices (Zanzibar, Kenya, Mozambique, Malawi, Tanzania) active since 2024-01-01
+\item Pulls the last 90 days of PDS trips and filters to those IMEIs
+\item Reads the latest bound tracks parquet from cloud, finds new trip IDs, and downloads missing tracks in parallel
+\item Aggregates points to 10-minute medians, binds with existing tracks, deduplicates, and uploads a versioned parquet back to cloud storage
+}
 }
 \examples{
 \dontrun{

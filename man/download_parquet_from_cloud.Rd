@@ -23,8 +23,8 @@ download_parquet_from_cloud(
 Default is "latest", which returns the most recently updated object.}
 
 \item{bucket_name}{Optional character string specifying the GCS bucket name.
-If provided, overrides the bucket in `options`. If NULL (default), uses the
-bucket defined in `options`.}
+If provided, overrides the bucket in \code{options}. If NULL (default), uses the
+bucket defined in \code{options}.}
 }
 \value{
 A tibble containing the data from the Parquet file.

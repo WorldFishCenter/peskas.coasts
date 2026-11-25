@@ -17,26 +17,26 @@ assess_production(
 \arguments{
 \item{lengths}{Numeric vector of measured lengths (cm), already cleaned.}
 
-\item{priors}{A one-row life-history tibble (`linf`, `mk`).}
+\item{priors}{A one-row life-history tibble (\code{linf}, \code{mk}).}
 
-\item{trophic_level}{FishBase trophic level of the taxon (may be `NA`).}
+\item{trophic_level}{FishBase trophic level of the taxon (may be \code{NA}).}
 
 \item{fm, fm_lo, fm_hi}{Optional LBB F/M and its robustness band.}
 
-\item{...}{Passed to [.harvest_fraction()] (`x_low`, `x_top`, `tl_top`).}
+\item{...}{Passed to \code{\link[=.harvest_fraction]{.harvest_fraction()}} (\code{x_low}, \code{x_top}, \code{tl_top}).}
 }
 \value{
-A one-row tibble with `method = "production"`, the
-  [estimate_exploitation()] columns, `trophic_level`, `x`, `x_basis`,
-  `e_x`, `sy_ratio`, `production_status` and `production_band`.
+A one-row tibble with \code{method = "production"}, the
+\code{\link[=estimate_exploitation]{estimate_exploitation()}} columns, \code{trophic_level}, \code{x}, \code{x_basis},
+\code{e_x}, \code{sy_ratio}, \code{production_status} and \code{production_band}.
 }
 \description{
-Positions a stock against Kolding's modified Cadima rule. `e_x = E / x` is
+Positions a stock against Kolding's modified Cadima rule. \code{e_x = E / x} is
 the share of production taken relative to the sustainable share (above 1 =
-too much); `sy_ratio = x / E` is the sustainable catch as a multiple of the
-current catch (e.g. 0.4 = cut catch to 40\%; 1.6 = room for 60\% more).
-`production_band` says whether the whole E band lies on one side of the
-line (`"clear"`) or straddles it (`"straddles"`, i.e. borderline).
+too much); \code{sy_ratio = x / E} is the sustainable catch as a multiple of the
+current catch (e.g. 0.4 = cut catch to 40\\%; 1.6 = room for 60\\% more).
+\code{production_band} says whether the whole E band lies on one side of the
+line (\code{"clear"}) or straddles it (\code{"straddles"}, i.e. borderline).
 }
 \keyword{modeling}
 \keyword{workflow}

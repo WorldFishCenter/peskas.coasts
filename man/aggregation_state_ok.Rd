@@ -7,10 +7,10 @@
 aggregation_state_ok(state)
 }
 \arguments{
-\item{state}{An aggregation state, or `NULL`.}
+\item{state}{An aggregation state, or \code{NULL}.}
 }
 \value{
-`TRUE` when the state can be built on.
+\code{TRUE} when the state can be built on.
 }
 \description{
 Checks that every part carries the columns the aggregation reads, so that a

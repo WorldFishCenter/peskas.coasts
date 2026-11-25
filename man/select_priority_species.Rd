@@ -12,8 +12,8 @@ select_priority_species(
 )
 }
 \arguments{
-\item{landings}{A landing-feed tibble with a `country` column (see
-[.species_economic_rank()] for the required fields).}
+\item{landings}{A landing-feed tibble with a \code{country} column (see
+\code{\link[=.species_economic_rank]{.species_economic_rank()}} for the required fields).}
 
 \item{n_species}{Integer. Number of species to keep per country. Default 5.}
 
@@ -21,14 +21,14 @@ select_priority_species(
 eligible. Default 30.}
 
 \item{species_only}{Logical. Restrict eligibility to species-level taxa.
-Default `TRUE`.}
+Default \code{TRUE}.}
 }
 \value{
 A tibble of the selected species (the columns of
-  [.species_economic_rank()]), filtered and re-ranked per country.
+\code{\link[=.species_economic_rank]{.species_economic_rank()}}), filtered and re-ranked per country.
 }
 \description{
-Picks the `n_species` most economically important species in each country,
+Picks the \code{n_species} most economically important species in each country,
 subject to a minimum number of records. By default only species-level taxa
 are eligible, because the coarse family/order labels that dominate the
 revenue ranking (Clupeidae, Octopodidae, ...) have no species-specific growth

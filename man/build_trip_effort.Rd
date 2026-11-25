@@ -8,28 +8,28 @@ build_trip_effort(df)
 }
 \arguments{
 \item{df}{Prepared fishing points, as returned by
-[prepare_tracks_for_effort()], carrying `gear` and `country`.}
+\code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}, carrying \code{gear} and \code{country}.}
 }
 \value{
-A tibble with columns `trip`, `h3_index`, `year`, `gear`, `country`,
-  `date`, `cell_hours` and `cell_pings`.
+A tibble with columns \code{trip}, \code{h3_index}, \code{year}, \code{gear}, \code{country},
+\code{date}, \code{cell_hours} and \code{cell_pings}.
 }
 \description{
-Reduces prepared fishing points to the table [aggregate_pds_effort()] keeps
+Reduces prepared fishing points to the table \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}} keeps
 as its source of truth: one row per trip, cell, year, gear, country and
 calendar day.
 }
 \details{
 This is the smallest summary the H3 grid can still be derived from in full.
-Keeping `trip` means `unique_trips` can be counted rather than added up, and
-keeping `date` means active days can be counted rather than unioned from a
-list-column; keeping both means a trip's contribution can be *removed* when
+Keeping \code{trip} means \code{unique_trips} can be counted rather than added up, and
+keeping \code{date} means active days can be counted rather than unioned from a
+list-column; keeping both means a trip's contribution can be \emph{removed} when
 PDS revises it, which a grid of running totals cannot support. It is about
 one row per trip and cell visited on a day -- a few hundred thousand rows
 against five million pings -- so a rebuild reads it in seconds instead of
 re-downloading every predicted track.
 }
 \seealso{
-[derive_effort_grid()], [aggregate_pds_effort()]
+\code{\link[=derive_effort_grid]{derive_effort_grid()}}, \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 }
 \keyword{internal}

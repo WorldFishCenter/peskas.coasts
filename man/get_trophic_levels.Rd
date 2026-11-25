@@ -11,16 +11,16 @@ get_trophic_levels(scientific_names, fao_areas = NULL, version = "latest")
 
 \item{fao_areas}{Optional FAO area codes for coarse taxa.}
 
-\item{version}{FishBase / SeaLifeBase release. See [resolve_db_version()].}
+\item{version}{FishBase / SeaLifeBase release. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-A tibble: `scientific_name`, `trophic_level`, `n_species_tl`. Empty
-  when FishBase cannot be read (callers then fall back to `x_low`).
+A tibble: \code{scientific_name}, \code{trophic_level}, \code{n_species_tl}. Empty
+when FishBase cannot be read (callers then fall back to \code{x_low}).
 }
 \description{
 Resolves each name to its member species (a binomial to itself; a genus or
 family to its members, optionally restricted to FAO areas for coarse taxa),
-reads `FoodTroph` from the FishBase / SeaLifeBase `ecology` table and returns
+reads \code{FoodTroph} from the FishBase / SeaLifeBase \code{ecology} table and returns
 the member median. Families that resolve to no species use the same fallback
 members as the group layer.
 }

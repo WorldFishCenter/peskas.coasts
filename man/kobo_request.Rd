@@ -10,22 +10,22 @@ kobo_request(url, token = NULL, username = NULL, password = NULL)
 \item{url}{Character. The full request URL.}
 
 \item{token}{Character. A KoBoToolbox API token, with or without the
-`Token ` prefix. Ignored when `username` is supplied.}
+\code{Token } prefix. Ignored when \code{username} is supplied.}
 
 \item{username, password}{Character. Basic-auth credentials.}
 }
 \value{
-An `httr2` request object.
+An \code{httr2} request object.
 }
 \description{
 Accepts either a token or a username and password. Timor-Leste authenticates
-with basic auth because its `KOBO_TOKEN` belongs to a user with no data
-access to its assets (200 on `/assets/<id>/`, 404 on `/assets/<id>/data/`),
+with basic auth because its \code{KOBO_TOKEN} belongs to a user with no data
+access to its assets (200 on \verb{/assets/<id>/}, 404 on \verb{/assets/<id>/data/}),
 while the username and password ingestion already uses work on both. A
 country should not need a second credential for this.
 }
 \details{
-The request never throws on an HTTP error status. KoBoToolbox answers **404**
+The request never throws on an HTTP error status. KoBoToolbox answers \strong{404}
 for a submission that has never been validated, which is the normal case, so
 the status code has to reach the caller rather than being raised.
 }

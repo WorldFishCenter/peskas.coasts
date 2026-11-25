@@ -8,20 +8,20 @@ get_combined_tbl(tbl_name, version = "latest")
 }
 \arguments{
 \item{tbl_name}{A character string naming the rfishbase table to retrieve
-(e.g. `"species"`, `"families"`, `"ecology"`, `"estimate"`,
-`"faoareas"`).}
+(e.g. \code{"species"}, \code{"families"}, \code{"ecology"}, \code{"estimate"},
+\code{"faoareas"}).}
 
 \item{version}{The FishBase / SeaLifeBase data release to read, e.g.
-`"25.04"`. Defaults to `"latest"`, which follows whatever release the
-installed `rfishbase` points at and therefore changes underneath a
-pipeline without warning. See [resolve_db_version()].}
+\code{"25.04"}. Defaults to \code{"latest"}, which follows whatever release the
+installed \code{rfishbase} points at and therefore changes underneath a
+pipeline without warning. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
 A tibble combining rows from both servers with an additional
-  `server` column (`"fishbase"` or `"sealifebase"`).
+\code{server} column (\code{"fishbase"} or \code{"sealifebase"}).
 }
 \description{
 Downloads the same table from both the FishBase and SeaLifeBase servers and
-row-binds the results, adding a `server` column to identify the source.
+row-binds the results, adding a \code{server} column to identify the source.
 }
 \keyword{internal}

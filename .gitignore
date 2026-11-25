@@ -32,7 +32,8 @@ auth/*
 docs
 
 ## files
-CLAUDE.md
 app_usage_report.html
 Claude outputs/
 data-raw/
+.claude/settings.local.json
+CLAUDE.local.md

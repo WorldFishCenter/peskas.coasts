@@ -9,15 +9,15 @@ with_storage_retry(f, max_times = 10, pause_cap = 300, quiet = FALSE)
 \arguments{
 \item{f}{The function to wrap.}
 
-\item{max_times}{Maximum number of attempts. Default `10`.}
+\item{max_times}{Maximum number of attempts. Default \code{10}.}
 
-\item{pause_cap}{Longest pause between attempts, in seconds. Default `300`.}
+\item{pause_cap}{Longest pause between attempts, in seconds. Default \code{300}.}
 
-\item{quiet}{Logical. If `FALSE` (default), each retry is logged at WARN
+\item{quiet}{Logical. If \code{FALSE} (default), each retry is logged at WARN
 level.}
 }
 \value{
-A function with the same formals as `f` that retries on error.
+A function with the same formals as \code{f} that retries on error.
 }
 \description{
 Wraps a function so that transient failures — dropped connections, expired
@@ -25,8 +25,8 @@ tokens, HTTP 5xx from the storage backend — are retried with a randomised
 exponential backoff instead of failing the whole pipeline run.
 }
 \details{
-A thin wrapper over [purrr::insistently()] with
-[purrr::rate_backoff()], centralising the retry policy that the country
+A thin wrapper over \code{\link[purrr:insistently]{purrr::insistently()}} with
+\code{\link[purrr:rate-helpers]{purrr::rate_backoff()}}, centralising the retry policy that the country
 pipelines previously each maintained by hand.
 }
 \examples{
@@ -35,6 +35,6 @@ insistent_get <- with_storage_retry(get_trips, max_times = 5)
 }
 }
 \seealso{
-[insistent_upload_cloud_file()], [insistent_download_cloud_file()]
+\code{\link[=insistent_upload_cloud_file]{insistent_upload_cloud_file()}}, \code{\link[=insistent_download_cloud_file]{insistent_download_cloud_file()}}
 }
 \keyword{storage}

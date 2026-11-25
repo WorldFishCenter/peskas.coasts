@@ -355,6 +355,11 @@ device_sync <- function(
 
   # Get existing records
   existing_df <- airtable_to_df(base_id, table_name, token)
+  # A table with no records yet comes back without columns.
+  if (nrow(existing_df) == 0) {
+    existing_df <- dplyr::tibble(airtable_id = character())
+    existing_df[[key_field]] <- character()
+  }
 
   # Filter to writable fields only
   tryCatch(
@@ -439,7 +444,8 @@ device_sync <- function(
 #'   - total_users: Number of users synchronized to MongoDB
 #'   - new_passwords_generated: Number of new passwords created
 #'   - airtable_sync_result: Result of syncing users to Airtable (updates + creates)
-#'   - mongodb_result: Result of MongoDB data push
+#'   - mongodb_result: Device users matched, changed, added and removed in
+#'     MongoDB
 #'
 #' @details
 #' The function performs the following steps:
@@ -450,11 +456,16 @@ device_sync <- function(
 #' 5. Generates 8-character alphanumeric passwords for ALL users without passwords
 #' 6. Removes duplicate IMEI entries (keeps latest)
 #' 7. Syncs complete user dataset to Airtable users table (updates existing, creates new)
-#' 8. Pushes the complete dataset to MongoDB
+#' 8. Updates the device users in MongoDB in place, matched by IMEI, and
+#'    removes those whose IMEI is no longer in the list
 #'
 #' Password generation uses letters (upper/lower), numbers (0-9), and is
-#' reproducible when a seed is provided. The function ensures complete
-#' synchronization by updating both Airtable and MongoDB with the same data.
+#' reproducible when a seed is provided.
+#'
+#' MongoDB is never emptied: the tracks app keeps users of its own there
+#' (administrators, fishers who registered themselves), and fishers can change
+#' their password in the app. A password goes to MongoDB only when the device
+#' user is first created, so changing one in Airtable does not reach the app.
 #'
 #' @examples
 #' \dontrun{
@@ -540,12 +551,16 @@ sync_device_users <- function(conf = NULL, seed = 123) {
         TRUE ~ NA
       )
     ) |>
-    dplyr::full_join(
-      users,
-      by = c("IMEI", "Country", "Region", "Community")
+    # By IMEI alone: PDS and the users table do not always agree on region or
+    # community, and a device split in two got a new password on every run
+    dplyr::full_join(users, by = "IMEI") |>
+    dplyr::mutate(
+      Boat = dplyr::coalesce(.data$Boat.x, .data$Boat.y),
+      Country = dplyr::coalesce(.data$Country.x, .data$Country.y),
+      Region = dplyr::coalesce(.data$Region.x, .data$Region.y),
+      Community = dplyr::coalesce(.data$Community.x, .data$Community.y)
     ) |>
-    dplyr::mutate(Boat = dplyr::coalesce(.data$Boat.x, .data$Boat.y)) |>
-    dplyr::select(-"Boat.x", -"Boat.y")
+    dplyr::select(-dplyr::ends_with(c(".x", ".y")))
 
   logger::log_info("Filtered to {nrow(devices_joined)} Africa-timezone devices")
 
@@ -621,17 +636,18 @@ sync_device_users <- function(conf = NULL, seed = 123) {
       "Region",
       "password"
     )
-  # Push to MongoDB
-  push_result <- mdb_collection_push(
+  # Update in place: the collection also holds the app's own users
+  push_result <- mdb_users_upsert(
     data = devices_with_passwords,
     connection_string = conf$storage$mongodb$tracks_app$connection_string,
     collection_name = conf$storage$mongodb$tracks_app$collection$users,
-    db_name = conf$storage$mongodb$tracks_app$database_name,
-    geo = FALSE # No geospatial indexing needed
+    db_name = conf$storage$mongodb$tracks_app$database_name
   )
 
   logger::log_info(
-    "Successfully pushed {nrow(devices_with_passwords)} device users to MongoDB"
+    "Device users in MongoDB: {push_result$matched} matched, ",
+    "{push_result$changed} changed, {push_result$added} added, ",
+    "{push_result$removed} removed"
   )
 
   return(list(
@@ -666,7 +682,8 @@ fetch_asset <- function(
     token = conf$airtable$token
   ) |>
     janitor::clean_names() |>
-    dplyr::select(dplyr::all_of(select_cols))
+    dplyr::select(dplyr::all_of(select_cols)) |>
+    dplyr::mutate(dplyr::across(dplyr::where(is.character), trimws))
 }
 
 #' Build a Form-ID Match Pattern for Airtable Asset Tables
@@ -822,7 +839,9 @@ get_assets <- function(
     purrr::imap(function(tbl, nm) {
       if (nrow(tbl) == 0) {
         warning(
-          "Asset table '", nm, "' matched no rows for the given form id(s). ",
+          "Asset table '",
+          nm,
+          "' matched no rows for the given form id(s). ",
           "Downstream joins on it will yield NA.",
           call. = FALSE
         )

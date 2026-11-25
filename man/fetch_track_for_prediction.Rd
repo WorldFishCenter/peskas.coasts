@@ -9,11 +9,11 @@ fetch_track_for_prediction(trip_id, conf)
 \arguments{
 \item{trip_id}{Character. Trip ID to fetch.}
 
-\item{conf}{Configuration list, as returned by [read_config()].}
+\item{conf}{Configuration list, as returned by \code{\link[=read_config]{read_config()}}.}
 }
 \value{
-A cleaned data frame with columns `trip`, `timestamp`, `latitude`,
-  `longitude`, or `NULL` if the track is unavailable or too short.
+A cleaned data frame with columns \code{trip}, \code{timestamp}, \code{latitude},
+\code{longitude}, or \code{NULL} if the track is unavailable or too short.
 }
 \description{
 Fetch and Clean a Single PDS Track for Fishing Prediction

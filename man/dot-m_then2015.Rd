@@ -16,6 +16,6 @@ Natural mortality M (per year).
 }
 \description{
 The growth-based estimator recommended by Then et al. (2015, ICES J. Mar.
-Sci. 72: 82-92): `M = 4.118 K^0.73 Linf^-0.33`, Linf in cm, K per year.
+Sci. 72: 82-92): \verb{M = 4.118 K^0.73 Linf^-0.33}, Linf in cm, K per year.
 }
 \keyword{internal}

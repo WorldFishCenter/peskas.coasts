@@ -28,8 +28,8 @@ upload_parquet_to_cloud(
 \item{compression_level}{An integer specifying compression level. Default is 12.}
 
 \item{bucket_name}{Optional character string specifying the GCS bucket name.
-If provided, overrides the bucket in `options`. If NULL (default), uses the
-bucket defined in `options`.}
+If provided, overrides the bucket in \code{options}. If NULL (default), uses the
+bucket defined in \code{options}.}
 }
 \value{
 Invisible NULL (called for side effects).

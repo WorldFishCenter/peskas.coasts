@@ -11,11 +11,11 @@
 
 \item{p_mature, lmean_lopt}{Froese indicators.}
 
-\item{e_x}{Production-layer E/x. Default `NA` (leg not used).}
+\item{e_x}{Production-layer E/x. Default \code{NA} (leg not used).}
 }
 \value{
-A list: `consensus` (character), `agree` (logical or `NA`),
-  `n_concern` and `n_methods` (integers).
+A list: \code{consensus} (character), \code{agree} (logical or \code{NA}),
+\code{n_concern} and \code{n_methods} (integers).
 }
 \description{
 Collapses up to three independent reads to a concern/healthy verdict and

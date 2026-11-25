@@ -10,25 +10,25 @@ form_id_pattern(form_ids)
 \item{form_ids}{Character vector of Airtable form record IDs.}
 }
 \value{
-A length-1 character string: a regex matching any of `form_ids` as a
-  whole element of a comma-separated list.
+A length-1 character string: a regex matching any of \code{form_ids} as a
+whole element of a comma-separated list.
 }
 \description{
 Builds the regular expression used to select the rows of an Airtable asset
-table (`taxa`, `gear`, `vessels`, `sites`, `geo`) that belong to one or more
+table (\code{taxa}, \code{gear}, \code{vessels}, \code{sites}, \code{geo}) that belong to one or more
 forms.
 }
 \details{
-`form_id` in the assets snapshot is a *linked-record* field. [airtable_to_df()]
-collapses it with `paste(collapse = ", ")`, so a record shared by three forms
-arrives as a single string `"recA, recB, recC"`. Selecting a form's records
+\code{form_id} in the assets snapshot is a \emph{linked-record} field. \code{\link[=airtable_to_df]{airtable_to_df()}}
+collapses it with \code{paste(collapse = ", ")}, so a record shared by three forms
+arrives as a single string \code{"recA, recB, recC"}. Selecting a form's records
 therefore needs a whole-element match rather than a substring test.
 
 Both degenerate inputs are rejected rather than tolerated, because both fail
-silently downstream: a zero-length id makes `paste0()` recycle into a pattern
+silently downstream: a zero-length id makes \code{paste0()} recycle into a pattern
 that matches only empty strings — every asset table comes back empty and
-every join yields `NA`, with no error anywhere — and a multi-element pattern
-makes [stringr::str_detect()] recycle element-wise against the data instead
+every join yields \code{NA}, with no error anywhere — and a multi-element pattern
+makes \code{\link[stringr:str_detect]{stringr::str_detect()}} recycle element-wise against the data instead
 of testing alternatives.
 }
 \examples{

@@ -12,7 +12,7 @@
   selectivity_flag,
   n_length_classes,
   confidence,
-  n_measured = NA_real_
+  n_trips_measured = NA_real_
 )
 }
 \description{

@@ -9,15 +9,15 @@
 \arguments{
 \item{scientific_names}{Character vector of taxon names.}
 
-\item{version}{FishBase / SeaLifeBase release. See [resolve_db_version()].}
+\item{version}{FishBase / SeaLifeBase release. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-A tibble: `scientific_name`, `eligible` (logical).
+A tibble: \code{scientific_name}, \code{eligible} (logical).
 }
 \description{
 LBB, the Froese indicators and the production layer assume bony-fish
 (von Bertalanffy) growth. Sharks, rays and chimaeras (FishBase classes in
-`.NON_TELEOST_CLASSES`) and all SeaLifeBase taxa (cephalopods, crustaceans,
+\code{.NON_TELEOST_CLASSES}) and all SeaLifeBase taxa (cephalopods, crustaceans,
 molluscs) are screened out. Coarse names are eligible when at least half of
 their member species are bony fish. Names FishBase cannot resolve are kept
 (they drop out later for lack of priors), as are all names if FishBase cannot

@@ -4,26 +4,35 @@
 \alias{get_life_history_priors}
 \title{Fetch Life-History Priors from FishBase / SeaLifeBase}
 \usage{
-get_life_history_priors(scientific_names, default_mk = 1.5)
+get_life_history_priors(scientific_names, default_mk = 1.5, version = "latest")
 }
 \arguments{
 \item{scientific_names}{Character vector of scientific names.}
 
 \item{default_mk}{Numeric. Fallback natural-mortality-to-growth ratio when
 FishBase has none. Default 1.5.}
+
+\item{version}{FishBase release. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}
 }
 \value{
-A tibble with one row per species: `scientific_name`, `linf`, `k`,
-  `mk`, `mk_source`, `lm`, `a`, `b`, `source`.
+A tibble with one row per species: \code{scientific_name}, \code{linf},
+\code{linf_source}, \code{k}, \code{mk}, \code{mk_source}, \code{lm}, \code{lm_source}, \code{a}, \code{b},
+\code{source}, \code{prior_conflict}.
 }
 \description{
 Assembles the priors the length-based methods need — asymptotic length
-`linf`, growth `k`, natural-mortality ratio `mk`, and length-at-maturity
-`lm` — for a set of species. Values come from `rfishbase`; where maturity is
-missing it is filled with the Froese & Binohlan empirical relationship from
-`linf`; where FishBase has no M, `mk` comes from the Then et al. (2015)
-growth-based estimator ([.m_then2015()]) when K is known, and only otherwise
-defaults to the teleost value of 1.5. `mk_source` records which was used.
+\code{linf}, growth \code{k}, natural-mortality ratio \code{mk}, and length-at-maturity
+\code{lm} — for a set of species. \code{linf} and \code{lm} are the medians of the species'
+FishBase growth and maturity studies in total length
+(\code{\link[=get_length_traits_tl]{get_length_traits_tl()}}, as on the dashboard). Without a growth study
+\code{linf} is FishBase's maximum length; without a maturity study \code{lm} comes
+from \code{linf} (Froese & Binohlan); \code{linf_source} and \code{lm_source} record which.
+\code{prior_conflict} notes values that contradict each other: \code{linf} above the
+maximum length, or the optimum length below \code{lm}.
+K and the length-weight \code{a}, \code{b} come from \code{rfishbase::estimate()}. Where
+FishBase has no M, \code{mk} comes from the Then et al. (2015)
+growth-based estimator (\code{\link[=.m_then2015]{.m_then2015()}}) when K is known, and only otherwise
+defaults to the teleost value of 1.5. \code{mk_source} records which was used.
 }
 \keyword{modeling}
 \keyword{workflow}

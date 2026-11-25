@@ -9,27 +9,27 @@ select_effort_batch(files, trip_lookup, max_files)
 \arguments{
 \item{files}{Character vector of candidate object names.}
 
-\item{trip_lookup}{Trip metadata with columns `trip` and `started`.}
+\item{trip_lookup}{Trip metadata with columns \code{trip} and \code{started}.}
 
-\item{max_files}{Integer, or `NULL` to take everything.}
+\item{max_files}{Integer, or \code{NULL} to take everything.}
 }
 \value{
-A character vector of at most `max_files` object names.
+A character vector of at most \code{max_files} object names.
 }
 \description{
-Takes the first `max_files` objects of the queue in trip start order, so that
+Takes the first \code{max_files} objects of the queue in trip start order, so that
 a backlog is worked through a batch at a time instead of being held in memory
 at once.
 }
 \details{
 The cap exists because peak memory is set by the number of points held at
 once, and a store that has just gained a region's full history is not the
-small daily delta the pipeline is otherwise sized for. [aggregate_pds_effort()]
+small daily delta the pipeline is otherwise sized for. \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 calls this once per batch until its queue is empty.
 
 Ordering is by the trip's start time rather than by object name, and this is
 what keeps the cap cheap rather than merely correct. Both orders are
-deterministic, but [recall_overlapping_trips()] pre-filters the aggregated
+deterministic, but \code{\link[=recall_overlapping_trips]{recall_overlapping_trips()}} pre-filters the aggregated
 registry on the batch's own minimum and maximum span before joining on the
 device. A batch drawn in name order is scattered across every year the store
 covers, so that span is the whole store, the pre-filter stops discriminating,
@@ -38,12 +38,12 @@ history against its incoming trips. Ordering by time keeps a batch inside a
 narrow window, which is the shape that pre-filter was written for.
 
 Correctness does not rest on the order. A capped batch is judged exactly as a
-full one is: the cap is applied *before* the recall step, so trips already
+full one is: the cap is applied \emph{before} the recall step, so trips already
 aggregated that might share pings with it are still pulled back in, and the
 grid is re-derived from the whole store every run --- which is what makes the
 result independent of how trips were batched.
 }
 \seealso{
-[recall_overlapping_trips()], [aggregate_pds_effort()]
+\code{\link[=recall_overlapping_trips]{recall_overlapping_trips()}}, \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 }
 \keyword{internal}

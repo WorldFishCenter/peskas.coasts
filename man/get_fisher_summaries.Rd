@@ -14,11 +14,13 @@ tripId, date, imei, fishGroup, and quantity (kg)}
 }
 \value{
 A tibble with aggregated catch data containing:
-  - tripId: Trip identifier
-  - date: Landing date
-  - fishGroup: Fish species group
-  - imei: Device IMEI
-  - catch_kg: Total catch weight in kilograms per trip and fish group
+\itemize{
+\item tripId: Trip identifier
+\item date: Landing date
+\item fishGroup: Fish species group
+\item imei: Device IMEI
+\item catch_kg: Total catch weight in kilograms per trip and fish group
+}
 }
 \description{
 Summarizes catch events for a specific fisher by trip, date, and fish group.

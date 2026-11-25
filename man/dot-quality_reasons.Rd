@@ -4,20 +4,23 @@
 \alias{.quality_reasons}
 \title{Reasons Behind a Data-Quality Flag}
 \usage{
-.quality_reasons(coverage, linf, ci_width = NA_real_)
+.quality_reasons(coverage, linf, ci_width = NA_real_, priors = NULL)
 }
 \arguments{
-\item{coverage}{A one-row coverage tibble from [.length_coverage()].}
+\item{coverage}{A one-row coverage tibble from \code{\link[=.length_coverage]{.length_coverage()}}.}
 
 \item{linf}{Asymptotic length (cm) used for the read.}
 
 \item{ci_width}{Optional relative width of the LBB credible interval.}
+
+\item{priors}{Optional one-row priors from \code{\link[=get_life_history_priors]{get_life_history_priors()}}.}
 }
 \value{
-A single string of `"; "`-separated reasons (`""` when none).
+A single string of \code{"; "}-separated reasons (\code{""} when none).
 }
 \description{
 Lists, in plain words, which sample properties weaken an assessment. The
-same signals feed [.flag_assessment_quality()].
+same signals feed \code{\link[=.flag_assessment_quality]{.flag_assessment_quality()}}. It also lists stand-in or
+contradicting FishBase values from \code{priors}, which don't change the flag.
 }
 \keyword{internal}

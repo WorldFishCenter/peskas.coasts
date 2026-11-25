@@ -15,9 +15,9 @@ A character vector of binomial species names (possibly empty).
 \description{
 Some families resolve to no species under current FishBase / SeaLifeBase
 releases even though they are real and important in the catch — 26.06/26.07
-keep `Caesionidae` and `Scaridae` as family names but attach no species, so
-[expand_taxonomic_info()] drops them. This supplies a small, hand-picked set
+keep \code{Caesionidae} and \code{Scaridae} as family names but attach no species, so
+\code{\link[=expand_taxonomic_info]{expand_taxonomic_info()}} drops them. This supplies a small, hand-picked set
 of common Indo-Pacific members so those taxa still get a group prior. Extend
-as needed; names must be ones `rfishbase::estimate()` resolves.
+as needed; names must be ones \code{rfishbase::estimate()} resolves.
 }
 \keyword{internal}

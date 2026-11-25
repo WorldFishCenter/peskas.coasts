@@ -13,23 +13,22 @@ select_country_trips(
 )
 }
 \arguments{
-\item{trips}{Trip table from [get_trips()], fetched with `deviceInfo =
-TRUE`. Without that there is no `IMEI` or `Community` column.}
+\item{trips}{Trip table from \code{\link[=get_trips]{get_trips()}}, fetched with \code{deviceInfo = TRUE}. Without that there is no \code{IMEI} or \code{Community} column.}
 
-\item{devices}{The `devices` table from the assets snapshot. Needs `imei`,
-`customer_name`, and `community` for the community rule.}
+\item{devices}{The \code{devices} table from the assets snapshot. Needs \code{imei},
+\code{customer_name}, and \code{community} for the community rule.}
 
-\item{customers}{Allowlist of `customer_name` values.}
+\item{customers}{Allowlist of \code{customer_name} values.}
 
-\item{exclude_customers}{Denylist of `customer_name` values. `character(0)`
+\item{exclude_customers}{Denylist of \code{customer_name} values. \code{character(0)}
 means "exclude nothing", which is different from leaving it unset.}
 
-\item{select_by}{`"device"` (who owns it now) or `"community"` (where the
-trip happened). Applies to `customers` only.}
+\item{select_by}{\code{"device"} (who owns it now) or \code{"community"} (where the
+trip happened). Applies to \code{customers} only.}
 }
 \value{
-`trips`, filtered. Keeping nothing is an error, because an empty
-  parquet becomes the latest version and empties the portal.
+\code{trips}, filtered. Keeping nothing is an error, because an empty
+parquet becomes the latest version and empties the portal.
 }
 \description{
 Decides which of the trips a PDS token returns are this country's. It does
@@ -38,25 +37,27 @@ see what a config change would do before making it.
 }
 \section{The three rules}{
 
-* `select_by = "device"` with `customers` — keep trips whose device is
-  under those customers *now*. The default, and lossy: a tracker sold on or
-  shipped abroad takes its whole trip history with it.
-* `exclude_customers` — keep everything except devices under those
-  customers. Redeployed hardware keeps its history, but nothing here can
-  reject another country's trips, so use it only on a country-scoped token.
-* `select_by = "community"` with `customers` — keep trips that *happened*
-  at one of those customers' communities. Recommended: a trip's community
-  does not change when the hardware is reassigned.
+\itemize{
+\item \code{select_by = "device"} with \code{customers} — keep trips whose device is
+under those customers \emph{now}. The default, and lossy: a tracker sold on or
+shipped abroad takes its whole trip history with it.
+\item \code{exclude_customers} — keep everything except devices under those
+customers. Redeployed hardware keeps its history, but nothing here can
+reject another country's trips, so use it only on a country-scoped token.
+\item \code{select_by = "community"} with \code{customers} — keep trips that \emph{happened}
+at one of those customers' communities. Recommended: a trip's community
+does not change when the hardware is reassigned.
+}
 }
 
 \section{Measure before switching a country to "community"}{
 
-Communities come from *current* device records, so a landing site with no
+Communities come from \emph{current} device records, so a landing site with no
 device left on it drops out and takes its trips with it. Run both rules
 over one trip table and compare the counts before changing a config.
 }
 
 \seealso{
-[ingest_pds_trips()], [get_trips()]
+\code{\link[=ingest_pds_trips]{ingest_pds_trips()}}, \code{\link[=get_trips]{get_trips()}}
 }
 \keyword{ingestion}

@@ -55,11 +55,11 @@ Default is TRUE.}
 
 \item{max_tries}{Integer. Maximum number of attempts before giving up.
 Default is 5. Set to 1 to disable retrying. Transport failures and HTTP
-429/5xx are retried with exponential backoff via [httr2::req_retry()].}
+429/5xx are retried with exponential backoff via \code{\link[httr2:req_retry]{httr2::req_retry()}}.}
 }
 \value{
 If path is NULL, returns a tibble containing the trip points data.
-  If path is provided, returns the file path as a character string.
+If path is provided, returns the file path as a character string.
 }
 \description{
 Retrieves trip points data from the Pelagic Data Systems API. The function can either

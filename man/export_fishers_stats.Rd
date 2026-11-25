@@ -7,14 +7,16 @@
 export_fishers_stats(package = "coasts")
 }
 \arguments{
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`. Pass your own package name when calling from a downstream
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}. Pass your own package name when calling from a downstream
 package with a compatible configuration.}
 }
 \value{
 None (invisible). Creates and uploads data to two MongoDB collections:
-  - Fisher catch statistics (aggregated summaries)
-  - Trip-level performance metrics
+\itemize{
+\item Fisher catch statistics (aggregated summaries)
+\item Trip-level performance metrics
+}
 }
 \description{
 Combines catch event data with GPS tracking trips to create fisher performance
@@ -22,17 +24,21 @@ metrics and exports them to MongoDB for analysis.
 }
 \details{
 This function integrates two data sources:
-1. Downloads catch events from tracks-app MongoDB (fisher-reported landings)
-2. Retrieves corresponding GPS tracking data from PDS API
-3. Matches catch events to tracking trips by date and device ID
-4. Calculates fishing efficiency metrics (CPUE, fuel efficiency, search patterns)
-5. Exports fisher statistics and performance metrics to MongoDB collections
+\enumerate{
+\item Downloads catch events from tracks-app MongoDB (fisher-reported landings)
+\item Retrieves corresponding GPS tracking data from PDS API
+\item Matches catch events to tracking trips by date and device ID
+\item Calculates fishing efficiency metrics (CPUE, fuel efficiency, search patterns)
+\item Exports fisher statistics and performance metrics to MongoDB collections
+}
 
 Performance metrics include:
-- CPUE (kg per hour, kg per km traveled)
-- Search efficiency (distance vs range ratios)
-- Fuel efficiency estimates
-- Trip categorization (nearshore/mid-range/offshore)
+\itemize{
+\item CPUE (kg per hour, kg per km traveled)
+\item Search efficiency (distance vs range ratios)
+\item Fuel efficiency estimates
+\item Trip categorization (nearshore/mid-range/offshore)
+}
 }
 \examples{
 \dontrun{

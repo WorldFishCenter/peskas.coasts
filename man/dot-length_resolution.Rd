@@ -10,7 +10,7 @@
 \item{lengths}{Numeric vector of lengths (cm).}
 }
 \value{
-A single number (cm), or `NA` with fewer than two distinct lengths.
+A single number (cm), or \code{NA} with fewer than two distinct lengths.
 }
 \description{
 The most common gap between distinct recorded lengths: about 5 for data

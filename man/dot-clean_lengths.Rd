@@ -9,10 +9,10 @@
 \arguments{
 \item{lengths}{Numeric vector of measured lengths (cm).}
 
-\item{linf}{Asymptotic length (cm); if `NA` only non-positive values are
+\item{linf}{Asymptotic length (cm); if \code{NA} only non-positive values are
 dropped.}
 
-\item{max_factor}{Numeric. Keep lengths up to `max_factor * linf`.
+\item{max_factor}{Numeric. Keep lengths up to \code{max_factor * linf}.
 Default 1.2.}
 }
 \value{

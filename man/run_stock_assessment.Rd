@@ -13,7 +13,7 @@ run_stock_assessment(
   robustness = FALSE,
   production = TRUE,
   by_gear = FALSE,
-  min_gear_fish = 100L,
+  min_gear_trips = 100L,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
@@ -25,60 +25,64 @@ run_stock_assessment(
 \arguments{
 \item{n_species}{Integer. Priority species per country. Default 5.}
 
-\item{countries}{Character vector of country keys under `conf$api$trips`.
+\item{countries}{Character vector of country keys under \code{conf$api$trips}.
 Default Kenya, Mozambique, Zanzibar, Timor-Leste.}
 
-\item{methods}{Character vector of methods (`"lbi"`, `"lbspr"`, `"lbb"`).
-Default `c("lbi", "lbb")` (LBSPR opt-in).}
+\item{methods}{Character vector of methods (\code{"lbi"}, \code{"lbspr"}, \code{"lbb"}).
+Default \code{c("lbi", "lbb")} (LBSPR opt-in).}
 
 \item{start_date}{Earliest landing date to include, aligning with the
-PDS-covered window. Default `"2024-01-01"`.}
+PDS-covered window. Default \code{"2024-01-01"}.}
 
-\item{lbb_engine}{Optional LBB fitting routine (see [assess_stock_lbb()]).}
+\item{lbb_engine}{Optional LBB fitting routine, a function of
+\verb{(lengths, priors, n_eff)} with \code{n_eff} the trips measured (see
+\code{\link[=assess_stock_lbb]{assess_stock_lbb()}}). \code{NULL} uses \code{\link[=lbb_engine_jags]{lbb_engine_jags()}} when \code{"lbb"} is in
+\code{methods}.}
 
 \item{robustness}{Logical. Also compute the LBB prior-robustness band
-(`bb0_lo/hi`, `fm_lo/hi`, `robust_flag`) per fitted species. Costs ~9x the
-JAGS time, so it is off by default. See [lbb_robustness()].}
+(\code{bb0_lo/hi}, \code{fm_lo/hi}, \code{robust_flag}) per fitted species. Costs ~9x the
+JAGS time, so it is off by default. See \code{\link[=lbb_robustness]{lbb_robustness()}}.}
 
 \item{production}{Logical. Add the production-based exploitation read
 (Kolding's modified Cadima estimator: E = F/Z against the sustainable share
 of production by trophic level) to species and group rows, plus each
-taxon's `catch_share` of sampled catch. See [assess_production()].
-Default `TRUE`.}
+taxon's \code{catch_share} of sampled catch. See \code{\link[=assess_production]{assess_production()}}.
+Default \code{TRUE}.}
 
 \item{by_gear}{Logical. Also assess each taxon separately for every gear
-with at least `min_gear_fish` measured fish (when two or more gears
-qualify), and mark the `reference_gear`: the gear whose catch reaches
+with measured fish on at least \code{min_gear_trips} trips (when two or more gears
+qualify), and mark the \code{reference_gear}: the gear whose catch reaches
 closest to Linf, least distorted by gear selectivity. Robustness runs on
-the pooled read only. Pooled rows carry `gear = "all"`. Default `FALSE`.}
+the pooled read only. Pooled rows carry \code{gear = "all"}. Default \code{FALSE}.}
 
-\item{min_gear_fish}{Minimum measured fish for a per-gear read. Default 100.}
+\item{min_gear_trips}{Minimum trips with measured fish for a per-gear read.
+Default 100.}
 
 \item{group_layer}{Logical. Also assess coarse (genus/family) taxa with the
-group-level layer and append them to the output. Default `TRUE`.}
+group-level layer and append them to the output. Default \code{TRUE}.}
 
 \item{n_groups}{Integer. Coarse taxa to assess per country. Default 15.}
 
 \item{fao_areas}{Named list mapping country key to FAO area codes for the
-regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
-uses a built-in WIO/Pacific default.}
+regional group priors (e.g. \code{list(kenya = c(51, 57), timor = 71)}). \code{NULL}
+reads \code{stock_assessment$fao_areas} from the configuration.}
 
 \item{upload}{Logical. Upload the versioned parquet to cloud storage.
-Default `TRUE` (the pipeline); set `FALSE` for local analysis runs so a
+Default \code{TRUE} (the pipeline); set \code{FALSE} for local analysis runs so a
 network or credentials hiccup at the end cannot discard the results.}
 
-\item{log_threshold}{The logging threshold. Default `logger::DEBUG`.}
+\item{log_threshold}{The logging threshold. Default \code{logger::DEBUG}.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Default
-`"coasts"`.}
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Default
+\code{"coasts"}.}
 }
 \value{
 Invisibly, the long tibble of per-taxon, per-method (and per-gear)
-  assessments with quality flags; its `"summary"` attribute holds the
-  one-row-per-stock table from [summarise_stock_status()]. With
-  `upload = TRUE` both are written as versioned parquets
-  (`<prefix>` and `<prefix>-summary`). Stops with a `fishbase_unavailable`
-  error, uploading nothing, when FishBase cannot be read.
+assessments with quality flags; its \code{"summary"} attribute holds the
+one-row-per-stock table from \code{\link[=summarise_stock_status]{summarise_stock_status()}}. With
+\code{upload = TRUE} both are written as versioned parquets
+(\verb{<prefix>} and \verb{<prefix>-summary}). Stops with a \code{fishbase_unavailable}
+error, uploading nothing, when FishBase cannot be read.
 }
 \description{
 Workflow orchestrator. For each country it downloads the validated landing

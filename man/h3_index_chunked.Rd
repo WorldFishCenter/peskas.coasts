@@ -9,21 +9,21 @@ h3_index_chunked(xy, res, chunk = 100000L)
 \arguments{
 \item{xy}{Two-column numeric matrix of longitude and latitude, in that order.
 Every row must be a valid position; blocking does not make
-[h3jsr::point_to_cell()] any more tolerant of one that is not.}
+\code{\link[h3jsr:point_to_cell]{h3jsr::point_to_cell()}} any more tolerant of one that is not.}
 
 \item{res}{Integer (0--15). H3 resolution.}
 
-\item{chunk}{Integer. Maximum points per call. Default `100000`.}
+\item{chunk}{Integer. Maximum points per call. Default \code{100000}.}
 }
 \value{
-Character vector of H3 cell identifiers, one per row of `xy`.
+Character vector of H3 cell identifiers, one per row of \code{xy}.
 }
 \description{
 Maps coordinates to H3 cell identifiers a block at a time, so that peak
 memory is set by the block size rather than by the number of points.
 }
 \details{
-[h3jsr::point_to_cell()] is a bridge to a JavaScript H3 build, not compiled
+\code{\link[h3jsr:point_to_cell]{h3jsr::point_to_cell()}} is a bridge to a JavaScript H3 build, not compiled
 code: it pushes the whole coordinate set into a V8 heap as one object per
 point, loops over them in JavaScript, and ships the strings back. The heap
 that requires grows with the input and is not returned to the operating
@@ -40,13 +40,13 @@ the memory curve has flattened but the round trips are still few.
 Blocking does not change the result: each point's cell depends only on its
 own coordinates, so the concatenated output is identical to the single call
 (verified byte-for-byte up to 4M points). The one deliberate departure is the
-empty input, which [h3jsr::point_to_cell()] errors on rather than answering;
-here it returns `character(0)`.
+empty input, which \code{\link[h3jsr:point_to_cell]{h3jsr::point_to_cell()}} errors on rather than answering;
+here it returns \code{character(0)}.
 
 Coordinates are assumed to have been checked already --- see
-[valid_coordinates()] for what happens if they have not been.
+\code{\link[=valid_coordinates]{valid_coordinates()}} for what happens if they have not been.
 }
 \seealso{
-[prepare_tracks_for_effort()]
+\code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}
 }
 \keyword{internal}

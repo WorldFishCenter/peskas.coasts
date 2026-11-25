@@ -7,20 +7,20 @@
 create_spatial_grid(h3_summary_df = NULL)
 }
 \arguments{
-\item{h3_summary_df}{A data frame with an `h3_index` column, as returned by
-[aggregate_h3_effort()] or [rollup_h3_resolution()]. All other columns are
+\item{h3_summary_df}{A data frame with an \code{h3_index} column, as returned by
+\code{\link[=aggregate_h3_effort]{aggregate_h3_effort()}} or \code{\link[=rollup_h3_resolution]{rollup_h3_resolution()}}. All other columns are
 preserved in the output.}
 }
 \value{
-An `sf` polygon object in WGS84 (EPSG 4326) with one row per H3
-  cell and a `geometry` column containing the hexagon boundaries.
+An \code{sf} polygon object in WGS84 (EPSG 4326) with one row per H3
+cell and a \code{geometry} column containing the hexagon boundaries.
 }
 \description{
 Attaches hexagonal polygon geometries to an H3 effort summary table,
-returning an `sf` object ready for mapping or further spatial analysis.
-Polygons are derived from the `h3_index` column using WGS84 (EPSG 4326).
+returning an \code{sf} object ready for mapping or further spatial analysis.
+Polygons are derived from the \code{h3_index} column using WGS84 (EPSG 4326).
 }
 \seealso{
-[aggregate_h3_effort()], [rollup_h3_resolution()]
+\code{\link[=aggregate_h3_effort]{aggregate_h3_effort()}}, \code{\link[=rollup_h3_resolution]{rollup_h3_resolution()}}
 }
 \keyword{preprocessing}

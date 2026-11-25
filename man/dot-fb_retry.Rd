@@ -9,7 +9,7 @@
 \arguments{
 \item{fetch}{A function of no arguments performing the lookup.}
 
-\item{ok}{A function of the result returning `TRUE` when it is complete.}
+\item{ok}{A function of the result returning \code{TRUE} when it is complete.}
 
 \item{what}{Label for log messages.}
 
@@ -18,13 +18,13 @@
 \item{tries, wait}{Attempts and seconds between them.}
 }
 \value{
-The result of `fetch()`.
+The result of \code{fetch()}.
 }
 \description{
-FishBase is read remotely; a dropped connection mid-run used to leave
+FishBase is read remotely; a dropped connection mid-run would leave
 priors or trophic levels silently empty, so whole groups were written as
-"unknown" (twice on 2026-11-09). This wrapper retries an incomplete fetch
-and, if FishBase is unreachable, stops with a `fishbase_unavailable` error so
+"unknown". This wrapper retries an incomplete fetch
+and, if FishBase is unreachable, stops with a \code{fishbase_unavailable} error so
 no partial results are uploaded. An incomplete result is accepted only when
 it repeats while FishBase is reachable (a genuine data gap, e.g. a name with
 no FishBase match).

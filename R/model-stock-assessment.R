@@ -11,7 +11,8 @@
 #'   `tot_catch_price`, `trip_id` and a `country` column.
 #'
 #' @return A tibble with one row per (`country`, `scientific_name`): columns
-#'   `catch_taxon`, `revenue`, `catch_kg`, `n_records`, `n_trips`, `rank` and
+#'   `catch_taxon`, `revenue`, `catch_kg`, `n_records` (catches: `trip_id` x
+#'   `n_catch`, as a catch has a row per length), `n_trips`, `rank` and
 #'   `rank_basis` (`"price"`, `"apportioned"` or `"weight"`).
 #'
 #' @keywords internal
@@ -50,7 +51,7 @@
         catch_taxon = .data$catch_taxon[[1]],
         revenue = sum(.data$revenue, na.rm = TRUE),
         catch_kg = sum(.data$catch_kg, na.rm = TRUE),
-        n_records = dplyr::n(),
+        n_records = dplyr::n_distinct(.data$trip_id, .data$n_catch),
         n_trips = dplyr::n_distinct(.data$trip_id),
         .groups = "drop"
       ) |>
@@ -152,9 +153,9 @@
 
 #' Fetch from FishBase, Retrying, and Stop Rather Than Continue Half-Empty
 #'
-#' FishBase is read remotely; a dropped connection mid-run used to leave
+#' FishBase is read remotely; a dropped connection mid-run would leave
 #' priors or trophic levels silently empty, so whole groups were written as
-#' "unknown" (twice on 2026-11-09). This wrapper retries an incomplete fetch
+#' "unknown". This wrapper retries an incomplete fetch
 #' and, if FishBase is unreachable, stops with a `fishbase_unavailable` error so
 #' no partial results are uploaded. An incomplete result is accepted only when
 #' it repeats while FishBase is reachable (a genuine data gap, e.g. a name with
@@ -279,13 +280,19 @@ select_priority_species <- function(
 #' Length-based methods run only on the subset of records that carry a
 #' `length_cm` value. This helper reports how much length information exists for
 #' one species and returns the length vector for downstream fitting. A record
-#' with `n_catch` > 1 stands for that many fish of the recorded length (the
-#' validated feeds log a length class with its count), so its length is
-#' repeated `n_catch` times; `n_measured` therefore counts fish, while
-#' `frac_measured` stays a share of records.
+#' stands for `n_fish` fish of the recorded length (the validated feeds log a
+#' length class with its count), so its length is repeated `n_fish` times
+#' ([.n_fish()]); `n_measured` therefore counts fish. Fish from one catch are
+#' not independent, so the sample size the reads use is `n_trips_measured`,
+#' the trips with a length kept. `n_records` and
+#' `frac_measured` count catches (`trip_id` x `n_catch`), not rows, since a
+#' catch has a row per length. With `linf`, implausible lengths
+#' are dropped first ([.clean_lengths()]), so the size checks see only the
+#' lengths the read uses.
 #'
 #' @param landings A landing-feed tibble for a single country.
 #' @param scientific_name A single scientific name to summarise.
+#' @param linf Optional asymptotic length (cm). Default `NA` (no cut).
 #'
 #' @return A list with `lengths` (numeric vector of measured lengths) and
 #'   `coverage` (a one-row tibble: `n_records`, `n_measured`, `frac_measured`,
@@ -293,21 +300,26 @@ select_priority_species <- function(
 #'   `n_length_classes`).
 #'
 #' @keywords internal
-.length_coverage <- function(landings, scientific_name) {
+.length_coverage <- function(landings, scientific_name, linf = NA_real_) {
   sp <- landings |>
     dplyr::filter(.data$scientific_name == .env$scientific_name)
 
   measured <- sp |>
     dplyr::filter(!is.na(.data$length_cm), .data$length_cm > 0)
 
-  lengths <- rep(measured$length_cm, .n_fish(measured))
+  lengths <- .clean_lengths(rep(measured$length_cm, .n_fish(measured)), linf)
+  n_catches <- dplyr::n_distinct(sp$trip_id, sp$n_catch)
 
   coverage <- tibble::tibble(
     scientific_name = scientific_name,
-    n_records = nrow(sp),
+    n_records = n_catches,
     n_measured = length(lengths),
-    frac_measured = if (nrow(sp) > 0) nrow(measured) / nrow(sp) else NA_real_,
-    n_trips_measured = dplyr::n_distinct(measured$trip_id),
+    frac_measured = if (n_catches > 0) {
+      dplyr::n_distinct(measured$trip_id, measured$n_catch) / n_catches
+    } else {
+      NA_real_
+    },
+    n_trips_measured = dplyr::n_distinct(measured$trip_id[measured$length_cm %in% lengths]),
     l_min = if (length(lengths) > 0) min(lengths) else NA_real_,
     l_max = if (length(lengths) > 0) max(lengths) else NA_real_,
     l_99 = if (length(lengths) > 0) {
@@ -367,33 +379,55 @@ select_priority_species <- function(
 #' @keywords internal
 .m_then2015 <- function(k, linf) 4.118 * k^0.73 * linf^-0.33
 
+#' Optimum Length
+#'
+#' The length at which a cohort's biomass peaks, `3 Linf / (3 + M/K)`. The
+#' assessment and the dashboards' species table both use it, so they agree.
+#'
+#' @param linf Asymptotic length (cm).
+#' @param mk Natural mortality over the growth rate, M/K.
+#'
+#' @return Optimum length (cm), one per input.
+#'
+#' @keywords internal
+.optimum_length <- function(linf, mk) 3 * linf / (3 + mk)
+
 #' Fetch Life-History Priors from FishBase / SeaLifeBase
 #'
 #' Assembles the priors the length-based methods need — asymptotic length
 #' `linf`, growth `k`, natural-mortality ratio `mk`, and length-at-maturity
-#' `lm` — for a set of species. Values come from `rfishbase`; where maturity is
-#' missing it is filled with the Froese & Binohlan empirical relationship from
-#' `linf`; where FishBase has no M, `mk` comes from the Then et al. (2015)
+#' `lm` — for a set of species. `linf` and `lm` are the medians of the species'
+#' FishBase growth and maturity studies in total length
+#' ([get_length_traits_tl()], as on the dashboard). Without a growth study
+#' `linf` is FishBase's maximum length; without a maturity study `lm` comes
+#' from `linf` (Froese & Binohlan); `linf_source` and `lm_source` record which.
+#' `prior_conflict` notes values that contradict each other: `linf` above the
+#' maximum length, or the optimum length below `lm`.
+#' K and the length-weight `a`, `b` come from `rfishbase::estimate()`. Where
+#' FishBase has no M, `mk` comes from the Then et al. (2015)
 #' growth-based estimator ([.m_then2015()]) when K is known, and only otherwise
 #' defaults to the teleost value of 1.5. `mk_source` records which was used.
 #'
 #' @param scientific_names Character vector of scientific names.
 #' @param default_mk Numeric. Fallback natural-mortality-to-growth ratio when
 #'   FishBase has none. Default 1.5.
+#' @param version FishBase release. See [resolve_db_version()].
 #'
-#' @return A tibble with one row per species: `scientific_name`, `linf`, `k`,
-#'   `mk`, `mk_source`, `lm`, `a`, `b`, `source`.
+#' @return A tibble with one row per species: `scientific_name`, `linf`,
+#'   `linf_source`, `k`, `mk`, `mk_source`, `lm`, `lm_source`, `a`, `b`,
+#'   `source`, `prior_conflict`.
 #'
 #' @keywords workflow modeling
 #' @export
-get_life_history_priors <- function(scientific_names, default_mk = 1.5) {
+get_life_history_priors <- function(scientific_names, default_mk = 1.5,
+                                    version = "latest") {
   scientific_names <- unique(scientific_names[!is.na(scientific_names)])
   if (length(scientific_names) == 0) {
     return(tibble::tibble())
   }
 
   est <- tryCatch(
-    rfishbase::estimate(scientific_names),
+    rfishbase::estimate(scientific_names, version = version),
     error = function(e) {
       logger::log_warn("rfishbase::estimate() failed: {conditionMessage(e)}")
       tibble::tibble(Species = scientific_names)
@@ -402,22 +436,41 @@ get_life_history_priors <- function(scientific_names, default_mk = 1.5) {
 
   # rfishbase column names drift between versions and servers, so pull each
   # field defensively rather than assuming a fixed schema.
-  col <- function(name) {
-    if (name %in% names(est)) est[[name]] else rep(NA_real_, nrow(est))
-  }
   est_std <- tibble::tibble(
-    scientific_name = if ("Species" %in% names(est)) est$Species else NA,
-    linf = dplyr::coalesce(col("Loo"), col("MaxLengthTL")),
-    k = col("K"),
-    m = col("M"),
-    lm = col("Lm"),
-    a = col("a"),
-    b = col("b")
+    scientific_name = .col_or(est, "Species"),
+    SpecCode = .col_or(est, "SpecCode", NA_real_),
+    max_length = .col_or(est, "MaxLengthTL", NA_real_),
+    k = .col_or(est, "K", NA_real_),
+    m = .col_or(est, "M", NA_real_),
+    a = .col_or(est, "a", NA_real_),
+    b = .col_or(est, "b", NA_real_)
   )
+  # Same study medians as the dashboard's species table (enrich_taxa()).
+  studies <- est_std |>
+    dplyr::filter(!is.na(.data$SpecCode)) |>
+    dplyr::transmute(
+      alpha3_code = NA_character_,
+      original_name = .data$scientific_name,
+      .data$SpecCode,
+      species_found = .data$scientific_name,
+      server = "fishbase"
+    ) |>
+    get_length_traits_tl(version = version) |>
+    dplyr::filter(.data$server == "fishbase") |>
+    dplyr::select("SpecCode", linf_studies = "LengthInfinityTL", lm = "LengthMaturityTL")
 
   priors <- tibble::tibble(scientific_name = scientific_names) |>
     dplyr::left_join(est_std, by = "scientific_name") |>
+    dplyr::left_join(studies, by = "SpecCode") |>
     dplyr::mutate(
+      linf_source = dplyr::case_when(
+        !is.na(.data$linf_studies) ~ "growth_studies",
+        !is.na(.data$max_length) ~ "max_length",
+        TRUE ~ NA_character_
+      ),
+      lm_source = dplyr::if_else(!is.na(.data$lm), "maturity_studies", "from_linf"),
+      linf = dplyr::coalesce(.data$linf_studies, .data$max_length),
+      lm = dplyr::coalesce(.data$lm, .lm_from_linf(.data$linf)),
       # M/K: FishBase M where present; otherwise Then et al. (2015) growth-based
       # M = 4.118 K^0.73 Linf^-0.33 (their recommended Pauly_nls-T form) when K
       # and Linf exist; the flat teleost default only as a last resort.
@@ -431,15 +484,20 @@ get_life_history_priors <- function(scientific_names, default_mk = 1.5) {
         .data$mk_source == "then2015" ~ .m_then2015(.data$k, .data$linf) / .data$k,
         TRUE ~ .env$default_mk
       ),
-      lm = dplyr::if_else(
-        is.na(.data$lm) & !is.na(.data$linf),
-        10^(0.8979 * log10(.data$linf) - 0.0782),
-        .data$lm
-      ),
-      source = dplyr::if_else(is.na(.data$linf), "missing", "fishbase")
+      source = dplyr::if_else(is.na(.data$linf), "missing", "fishbase"),
+      above_max = .data$linf > .data$max_length,
+      below_lm = .optimum_length(.data$linf, .data$mk) < .data$lm,
+      prior_conflict = dplyr::case_when(
+        .data$above_max & .data$below_lm ~
+          "Linf above the largest fish recorded; best size below size at maturity",
+        .data$above_max ~ "Linf above the largest fish recorded",
+        .data$below_lm ~ "best size below size at maturity",
+        TRUE ~ NA_character_
+      )
     ) |>
     dplyr::select(
-      "scientific_name", "linf", "k", "mk", "mk_source", "lm", "a", "b", "source"
+      "scientific_name", "linf", "linf_source", "k", "mk", "mk_source",
+      "lm", "lm_source", "a", "b", "source", "prior_conflict"
     )
 
   missing_linf <- priors |> dplyr::filter(is.na(.data$linf))
@@ -468,7 +526,7 @@ get_life_history_priors <- function(scientific_names, default_mk = 1.5) {
 #' @keywords workflow modeling
 #' @export
 assess_length_indicators <- function(lengths, priors) {
-  lopt <- priors$linf * 3 / (3 + priors$mk)
+  lopt <- .optimum_length(priors$linf, priors$mk)
   lm <- priors$lm
 
   tibble::tibble(
@@ -582,7 +640,10 @@ assess_lbspr <- function(lengths, priors, bin_width = NULL) {
 #' @param priors A one-row life-history tibble (`linf`, `mk`, `lm`).
 #' @param lbb_engine A function of `(lengths, priors)` returning a list with at
 #'   least `bb0` (B/B0), `bbmsy` (B/Bmsy), `fm` (F/M), `lc_lopt` and their
-#'   credible-interval widths. Default `NULL`.
+#'   credible-interval widths. Default `NULL`. An engine passed to
+#'   [assess_species_stock()] or [run_stock_assessment()] is also called with
+#'   `n_eff` (the trips measured), so it must accept that argument, as
+#'   [lbb_engine_jags()] does.
 #'
 #' @return A one-row tibble: `method`, `bb0`, `bbmsy`, `f_m`, `lc_lopt`,
 #'   `ci_width`, `n`.
@@ -629,7 +690,7 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
 #'
 #' Mirrors the FAO estimator's vocabulary (`pass`, `warn`, `fail`, `unknown`)
 #' so the assessment layer reads consistently with the catch estimates. The
-#' flag combines length-sample size, how representative the sampled records are,
+#' flag combines length-sample size (trips with a length), how representative the sampled records are,
 #' whether the sample reaches near-asymptotic sizes, and — when present — the
 #' width of the method's own uncertainty.
 #'
@@ -643,7 +704,8 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
 #'
 #' @keywords internal
 .flag_assessment_quality <- function(coverage, priors, ci_width = NA_real_) {
-  if (is.na(coverage$n_measured) || coverage$n_measured == 0) {
+  n_trips <- coverage$n_trips_measured
+  if (is.na(n_trips) || n_trips == 0) {
     return("unknown")
   }
 
@@ -657,7 +719,7 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
   }
 
   score <- 0L
-  score <- score + (coverage$n_measured >= 200) + (coverage$n_measured >= 100)
+  score <- score + (n_trips >= 200) + (n_trips >= 100)
   score <- score + (isTRUE(coverage$frac_measured >= 0.3)) +
     (isTRUE(coverage$frac_measured >= 0.1))
   score <- score + (isTRUE(reach >= 0.8))
@@ -685,7 +747,9 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
 #' @param methods Character vector of methods to run; any of `"lbi"`,
 #'   `"lbspr"`, `"lbb"`. Default `c("lbi", "lbb")`: LBSPR is opt-in until its
 #'   fit stops failing on the Peskas length data.
-#' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
+#' @param lbb_engine Optional LBB fitting routine, a function of
+#'   `(lengths, priors, n_eff)` with `n_eff` the trips measured (see
+#'   [assess_stock_lbb()] and [lbb_engine_jags()]).
 #' @param robustness Logical. Attach the LBB prior-robustness band. Default
 #'   `FALSE`. See [lbb_robustness()].
 #' @param production Logical. Add a `"production"` method row (exploitation
@@ -695,8 +759,8 @@ assess_stock_lbb <- function(lengths, priors, lbb_engine = NULL) {
 #'   harvestable share `x`. Default `NA` (conservative `x`).
 #'
 #' @return A tibble with one row per method, carrying the estimate columns of
-#'   each method plus `scientific_name`, `n_measured`, `frac_measured` and
-#'   `quality`.
+#'   each method plus `scientific_name`, `n_measured`, `n_trips_measured`,
+#'   `frac_measured` and `quality`.
 #'
 #' @keywords workflow modeling
 #' @export
@@ -710,15 +774,16 @@ assess_species_stock <- function(
   production = TRUE,
   trophic_level = NA_real_
 ) {
-  cov <- .length_coverage(landings, scientific_name)
   linf <- if (nrow(priors) > 0) priors$linf else NA_real_
-  lengths <- .clean_lengths(cov$lengths, linf)
+  cov <- .length_coverage(landings, scientific_name, linf)
+  lengths <- cov$lengths
+  n_trips <- cov$coverage$n_trips_measured
   logger::log_info(
-    "Assessing {scientific_name}: {length(lengths)} measured lengths ",
+    "Assessing {scientific_name}: {length(lengths)} measured fish on {n_trips} trips ",
     "({round(100 * (cov$coverage$frac_measured %||% 0))}% of records)."
   )
 
-  if (nrow(priors) == 0 || is.na(priors$linf) || length(lengths) < 20) {
+  if (nrow(priors) == 0 || is.na(priors$linf) || n_trips < 20) {
     logger::log_warn(
       "Insufficient length data or priors for {scientific_name}; ",
       "flagging unknown."
@@ -727,10 +792,14 @@ assess_species_stock <- function(
       scientific_name = scientific_name,
       method = methods,
       n_measured = length(lengths),
+      n_trips_measured = n_trips,
       frac_measured = cov$coverage$frac_measured,
       quality = "unknown",
-      advice = .stock_advice(length(lengths))
+      advice = .stock_advice(n_trips)
     ))
+  }
+  engine <- if (!is.null(lbb_engine)) {
+    function(lengths, priors) lbb_engine(lengths, priors, n_eff = n_trips)
   }
 
   runs <- list()
@@ -741,7 +810,7 @@ assess_species_stock <- function(
     runs$lbspr <- assess_lbspr(lengths, priors)
   }
   if ("lbb" %in% methods) {
-    runs$lbb <- assess_stock_lbb(lengths, priors, lbb_engine = lbb_engine)
+    runs$lbb <- assess_stock_lbb(lengths, priors, lbb_engine = engine)
   }
 
   ci_width <- runs$lbb$ci_width %||% NA_real_
@@ -754,7 +823,7 @@ assess_species_stock <- function(
 
   # Optional prior-robustness band on the LBB estimate (9x JAGS per species).
   rb <- if (isTRUE(robustness) && "lbb" %in% methods) {
-    lbb_robustness(lengths, priors, lbb_engine)
+    lbb_robustness(lengths, priors, engine)
   } else {
     NULL
   }
@@ -783,9 +852,9 @@ assess_species_stock <- function(
   # the large fish), why the quality flag is what it is, and the single most
   # useful next step.
   gear_prof <- .gear_profile(landings, scientific_name)
-  reasons <- .quality_reasons(cov$coverage, priors$linf, ci_width)
+  reasons <- .quality_reasons(cov$coverage, priors$linf, ci_width, priors = priors)
   advice <- .stock_advice(
-    length(lengths),
+    n_trips,
     reasons = reasons,
     gear_profile = gear_prof,
     n_classes = cov$coverage$n_length_classes,
@@ -799,9 +868,13 @@ assess_species_stock <- function(
     dplyr::mutate(
       scientific_name = .env$scientific_name,
       n_measured = length(lengths),
+      n_trips_measured = .env$n_trips,
       frac_measured = cov$coverage$frac_measured,
       quality = .env$flag,
       quality_reasons = .env$reasons,
+      linf_source = .col_or(priors, "linf_source"),
+      lm_source = .col_or(priors, "lm_source"),
+      prior_conflict = .col_or(priors, "prior_conflict"),
       advice = .env$advice,
       size_reach = cov$coverage$l_99 / priors$linf,
       n_length_classes = cov$coverage$n_length_classes,
@@ -844,7 +917,10 @@ assess_species_stock <- function(
 #'   Default `c("lbi", "lbb")` (LBSPR opt-in).
 #' @param start_date Earliest landing date to include, aligning with the
 #'   PDS-covered window. Default `"2024-01-01"`.
-#' @param lbb_engine Optional LBB fitting routine (see [assess_stock_lbb()]).
+#' @param lbb_engine Optional LBB fitting routine, a function of
+#'   `(lengths, priors, n_eff)` with `n_eff` the trips measured (see
+#'   [assess_stock_lbb()]). `NULL` uses [lbb_engine_jags()] when `"lbb"` is in
+#'   `methods`.
 #' @param robustness Logical. Also compute the LBB prior-robustness band
 #'   (`bb0_lo/hi`, `fm_lo/hi`, `robust_flag`) per fitted species. Costs ~9x the
 #'   JAGS time, so it is off by default. See [lbb_robustness()].
@@ -854,17 +930,18 @@ assess_species_stock <- function(
 #'   taxon's `catch_share` of sampled catch. See [assess_production()].
 #'   Default `TRUE`.
 #' @param by_gear Logical. Also assess each taxon separately for every gear
-#'   with at least `min_gear_fish` measured fish (when two or more gears
+#'   with measured fish on at least `min_gear_trips` trips (when two or more gears
 #'   qualify), and mark the `reference_gear`: the gear whose catch reaches
 #'   closest to Linf, least distorted by gear selectivity. Robustness runs on
 #'   the pooled read only. Pooled rows carry `gear = "all"`. Default `FALSE`.
-#' @param min_gear_fish Minimum measured fish for a per-gear read. Default 100.
+#' @param min_gear_trips Minimum trips with measured fish for a per-gear read.
+#'   Default 100.
 #' @param group_layer Logical. Also assess coarse (genus/family) taxa with the
 #'   group-level layer and append them to the output. Default `TRUE`.
 #' @param n_groups Integer. Coarse taxa to assess per country. Default 15.
 #' @param fao_areas Named list mapping country key to FAO area codes for the
 #'   regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
-#'   uses a built-in WIO/Pacific default.
+#'   reads `stock_assessment$fao_areas` from the configuration.
 #' @param upload Logical. Upload the versioned parquet to cloud storage.
 #'   Default `TRUE` (the pipeline); set `FALSE` for local analysis runs so a
 #'   network or credentials hiccup at the end cannot discard the results.
@@ -890,7 +967,7 @@ run_stock_assessment <- function(
   robustness = FALSE,
   production = TRUE,
   by_gear = FALSE,
-  min_gear_fish = 100L,
+  min_gear_trips = 100L,
   group_layer = TRUE,
   n_groups = 15L,
   fao_areas = NULL,
@@ -916,7 +993,11 @@ run_stock_assessment <- function(
   landings <- purrr::map_dfr(countries, function(country) {
     logger::log_info("Downloading validated landings for {country} ...")
     download_parquet_from_cloud(
-      prefix = conf$api$trips[[country]]$validated$cloud_path,
+      prefix = paste0(
+        conf$api$trips[[country]]$validated$cloud_path,
+        "/",
+        conf$api$trips[[country]]$validated$file_prefix
+      ),
       provider = conf$storage$google$key,
       options = conf$storage$google$options,
       bucket_name = conf$api$trips$bucket
@@ -954,7 +1035,7 @@ run_stock_assessment <- function(
   candidates <- candidates |>
     dplyr::semi_join(dplyr::filter(eligible, .data$eligible), by = "scientific_name")
   priors <- .fb_retry(
-    function() get_life_history_priors(candidates$scientific_name),
+    function() get_life_history_priors(candidates$scientific_name, version = fb_version),
     ok = function(x) any(!is.na(x$linf)),
     what = "species priors", version = fb_version
   )
@@ -1008,13 +1089,13 @@ run_stock_assessment <- function(
   ) |>
     dplyr::mutate(gear = "all", .after = "country")
 
-  # Per-gear reads where at least two gears each have enough measured fish.
+  # Per-gear reads where at least two gears each have enough trips measured.
   if (isTRUE(by_gear)) {
     gear_rows <- purrr::pmap_dfr(
       list(priority$country, priority$scientific_name),
       function(country, sci) {
         land_c <- dplyr::filter(landings, .data$country == .env$country)
-        gears <- .gears_with_fish(land_c, sci, min_fish = min_gear_fish)
+        gears <- .gears_with_trips(land_c, sci, min_trips = min_gear_trips)
         purrr::map_dfr(gears, function(g) {
           logger::log_info("Per-gear read: {sci} | {g}")
           assess_species_stock(
@@ -1054,13 +1135,7 @@ run_stock_assessment <- function(
   results <- dplyr::mutate(assessments, scale = "species")
 
   if (isTRUE(group_layer)) {
-    # Regional FishBase priors: WIO countries are FAO areas 51/57, Timor is 71.
-    if (is.null(fao_areas)) {
-      fao_areas <- list(
-        kenya = c(51L, 57L), zanzibar = c(51L, 57L),
-        mozambique = c(51L, 57L), timor = 71L
-      )
-    }
+    fao_areas <- fao_areas %||% conf$stock_assessment$fao_areas
     group_assessments <- tryCatch(
       assess_group_layer(
         landings,
@@ -1069,7 +1144,7 @@ run_stock_assessment <- function(
         version = resolve_db_version(conf),
         production = production,
         by_gear = by_gear,
-        min_gear_fish = min_gear_fish
+        min_gear_trips = min_gear_trips
       ),
       error = function(e) {
         # A FishBase outage must stop the run, not quietly drop the groups.
@@ -1102,24 +1177,23 @@ run_stock_assessment <- function(
     results <- .mark_reference_gear(results)
   }
 
-  # One row per stock: the table the portal and reports read.
+  # One row per stock, for dashboards and reports.
   summary <- summarise_stock_status(results)
   logger::log_info(
     "Stock summary: {nrow(summary)} stocks | reliability ",
     "{paste(names(table(summary$reliability)), table(summary$reliability), sep = ':', collapse = ' ')}."
   )
 
-  prefix <- conf$stock$assessment$file_prefix %||% "stock-assessment"
   if (isTRUE(upload)) {
     upload_parquet_to_cloud(
       data = results,
-      prefix = prefix,
+      prefix = conf$stock_assessment$results$file_prefix,
       provider = conf$storage$google$key,
       options = conf$storage$google$options
     )
     upload_parquet_to_cloud(
       data = summary,
-      prefix = paste0(prefix, "-summary"),
+      prefix = conf$stock_assessment$summary$file_prefix,
       provider = conf$storage$google$key,
       options = conf$storage$google$options
     )

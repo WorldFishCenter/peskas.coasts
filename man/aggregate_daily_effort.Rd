@@ -7,14 +7,14 @@
 aggregate_daily_effort(points_sf, reference_grid_sf)
 }
 \arguments{
-\item{points_sf}{Projected `sf` POINT object, as returned by
-[prep_fishing_points()].}
+\item{points_sf}{Projected \code{sf} POINT object, as returned by
+\code{\link[=prep_fishing_points]{prep_fishing_points()}}.}
 
-\item{reference_grid_sf}{`sf` polygon grid, as returned by
-[create_reference_grid()].}
+\item{reference_grid_sf}{\code{sf} polygon grid, as returned by
+\code{\link[=create_reference_grid]{create_reference_grid()}}.}
 }
 \value{
-A data frame with columns `cell_id` and `fishing_pings`.
+A data frame with columns \code{cell_id} and \code{fishing_pings}.
 }
 \description{
 Spatially joins projected GPS fishing points to a reference grid and counts
@@ -22,6 +22,6 @@ the number of fishing pings per cell. Points that fall outside the grid
 extent are silently dropped.
 }
 \seealso{
-[prep_fishing_points()], [create_reference_grid()]
+\code{\link[=prep_fishing_points]{prep_fishing_points()}}, \code{\link[=create_reference_grid]{create_reference_grid()}}
 }
 \keyword{preprocessing}

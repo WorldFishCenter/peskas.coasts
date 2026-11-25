@@ -10,15 +10,15 @@ predicted_track_trip_id(names)
 \item{names}{Character vector of cloud object names.}
 }
 \value{
-Character vector of trip identifiers, `NA` where a name does not
-  follow the convention.
+Character vector of trip identifiers, \code{NA} where a name does not
+follow the convention.
 }
 \description{
-The counterpart to the `trip_{id}_v{version}.parquet` names
-[predict_and_upload_track()] writes, kept beside them so that the convention
+The counterpart to the \verb{trip_\{id\}_v\{version\}.parquet} names
+\code{\link[=predict_and_upload_track]{predict_and_upload_track()}} writes, kept beside them so that the convention
 is stated once rather than re-derived by every reader.
 }
 \seealso{
-[aggregate_pds_effort()], [download_predicted_tracks()]
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}, \code{\link[=download_predicted_tracks]{download_predicted_tracks()}}
 }
 \keyword{internal}

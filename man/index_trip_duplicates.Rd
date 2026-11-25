@@ -7,20 +7,20 @@
 index_trip_duplicates(df, prefer = character(0), seen = NULL)
 }
 \arguments{
-\item{df}{Prepared fishing points with one row per ping and columns `trip`,
-`timestamp`, `latitude`, `longitude`.}
+\item{df}{Prepared fishing points with one row per ping and columns \code{trip},
+\code{timestamp}, \code{latitude}, \code{longitude}.}
 
 \item{prefer}{Character vector of trip identifiers to keep in preference to
 others -- normally the trips PDS still lists, which are the ones carrying
 device metadata. Defaults to none.}
 
 \item{seen}{Optional data frame of trips aggregated in earlier runs, with
-columns `trip` and `fingerprint`.}
+columns \code{trip} and \code{fingerprint}.}
 }
 \value{
-A tibble with one row per trip in `df`: `trip`, `fingerprint`,
-  `n_points`, `duplicate_of` (the surviving trip, `NA` when the trip is
-  itself the survivor) and `keep`.
+A tibble with one row per trip in \code{df}: \code{trip}, \code{fingerprint},
+\code{n_points}, \code{duplicate_of} (the surviving trip, \code{NA} when the trip is
+itself the survivor) and \code{keep}.
 }
 \description{
 Flags trips whose GPS track is identical to another trip's, so the same
@@ -28,30 +28,29 @@ fishing event is not counted once per trip identifier.
 }
 \details{
 Pelagic Data Systems re-segments trips retroactively. A trip identifier can
-be **retired** (its points reappear under a new identifier) or **reassigned**
+be \strong{retired} (its points reappear under a new identifier) or \strong{reassigned}
 (its points move to a new trip while the old identifier comes to describe a
-different window). Since [predict_pds_tracks()] writes one file per trip,
+different window). Since \code{\link[=predict_pds_tracks]{predict_pds_tracks()}} writes one file per trip,
 the predicted-track store ends up holding several identifiers that describe
-the very same track, and [aggregate_pds_effort()] counts each of them as a
+the very same track, and \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}} counts each of them as a
 separate vessel: fishing hours, unique trips and pings are multiplied by the
-number of copies, while `n_active_days` (a set union of dates) is not, so
-the per-day rates in [add_cell_effort_metrics()] explode.
+number of copies, while \code{n_active_days} (a set union of dates) is not, so
+the per-day rates in \code{\link[=add_cell_effort_metrics]{add_cell_effort_metrics()}} explode.
 
-Each trip is reduced to a fingerprint of its `(timestamp, latitude,
-longitude)` triples, order-independent so that two files listing the same
+Each trip is reduced to a fingerprint of its \verb{(timestamp, latitude, longitude)} triples, order-independent so that two files listing the same
 points always agree. Trips sharing a fingerprint -- with each other, or with
-a trip aggregated in an earlier run (`seen`) -- collapse to one survivor: a
-trip listed in `prefer` wins, then the trip with the most points, then the
+a trip aggregated in an earlier run (\code{seen}) -- collapse to one survivor: a
+trip listed in \code{prefer} wins, then the trip with the most points, then the
 lowest identifier, so the choice is stable across runs.
 
 A trip already in the effort store always outranks a new duplicate of it, so
 that a run cannot move effort between trips that are known to be the same.
 When a retired identifier is aggregated before the trip that supersedes it,
-the retired one therefore survives and its cells keep `gear`/`country` =
-`"unknown"`; the deletion pass in [predict_pds_tracks()] is what stops that
+the retired one therefore survives and its cells keep \code{gear}/\code{country} =
+\code{"unknown"}; the deletion pass in \code{\link[=predict_pds_tracks]{predict_pds_tracks()}} is what stops that
 happening.
 }
 \seealso{
-[drop_overlapping_pings()], [aggregate_pds_effort()]
+\code{\link[=drop_overlapping_pings]{drop_overlapping_pings()}}, \code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}
 }
 \keyword{internal}

@@ -7,16 +7,16 @@
 load_matched_trips(conf)
 }
 \arguments{
-\item{conf}{Configuration list, as returned by [read_config()].}
+\item{conf}{Configuration list, as returned by \code{\link[=read_config]{read_config()}}.}
 }
 \value{
-A tibble with columns including `country`, `pds_trip`,
-  `landing_date`, `catch_taxon`, `catch_kg`.
+A tibble with columns including \code{country}, \code{pds_trip},
+\code{landing_date}, \code{catch_taxon}, \code{catch_kg}.
 }
 \description{
-Downloads the `trips-matched` parquet (produced by [merge_survey_trips()])
+Downloads the \code{trips-matched} parquet (produced by \code{\link[=merge_survey_trips]{merge_survey_trips()}})
 for all countries, retaining only rows with a valid PDS trip ID and
-non-zero catch weight. The `country` column is preserved so that downstream
+non-zero catch weight. The \code{country} column is preserved so that downstream
 consumers can filter if needed.
 }
 \keyword{internal}

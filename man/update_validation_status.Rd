@@ -21,25 +21,25 @@ update_validation_status(
 \item{asset_id}{Character. The KoBoToolbox asset id.}
 
 \item{token}{Character. A KoBoToolbox API token, with or without the
-`Token ` prefix. Ignored when `username` is supplied.}
+\code{Token } prefix. Ignored when \code{username} is supplied.}
 
 \item{username, password}{Character. Basic-auth credentials.}
 
-\item{status}{Character. One of `validation_status_approved`,
-`validation_status_not_approved` or `validation_status_on_hold`.}
+\item{status}{Character. One of \code{validation_status_approved},
+\code{validation_status_not_approved} or \code{validation_status_on_hold}.}
 
 \item{url}{Character. The KoBoToolbox host.}
 
 \item{debug}{Logical. Print the request before performing it.}
 }
 \value{
-A one-row tibble as [get_validation_status()] returns, with
-  `fetch_error` replaced by `update_success`.
+A one-row tibble as \code{\link[=get_validation_status]{get_validation_status()}} returns, with
+\code{fetch_error} replaced by \code{update_success}.
 }
 \description{
-**This mutates the live form.** There is no development KoBoToolbox
+\strong{This mutates the live form.} There is no development KoBoToolbox
 instance, so the assets a pipeline reads are the only targets in either
-environment — `R_CONFIG_ACTIVE` does not isolate this call.
+environment — \code{R_CONFIG_ACTIVE} does not isolate this call.
 }
 \examples{
 \dontrun{
@@ -54,6 +54,6 @@ update_validation_status(
 }
 }
 \seealso{
-[get_validation_status()], [list_validation_statuses()]
+\code{\link[=get_validation_status]{get_validation_status()}}, \code{\link[=list_validation_statuses]{list_validation_statuses()}}
 }
 \keyword{validation}

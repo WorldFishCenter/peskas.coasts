@@ -9,11 +9,11 @@ assess_length_indicators(lengths, priors)
 \arguments{
 \item{lengths}{Numeric vector of measured lengths (cm).}
 
-\item{priors}{A one-row life-history tibble (`linf`, `mk`, `lm`).}
+\item{priors}{A one-row life-history tibble (\code{linf}, \code{mk}, \code{lm}).}
 }
 \value{
-A one-row tibble: `lopt`, `lm`, `p_mature`, `p_opt`, `p_mega`,
-  `lmean_lopt`, `n`.
+A one-row tibble: \code{lopt}, \code{lm}, \code{p_mature}, \code{p_opt}, \code{p_mega},
+\code{lmean_lopt}, \code{n}.
 }
 \description{
 The three "keep it simple" indicators (Froese 2004): the share of the catch

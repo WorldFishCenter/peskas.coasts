@@ -7,24 +7,24 @@
 add_cell_effort_metrics(df, study_start, study_end)
 }
 \arguments{
-\item{df}{A data frame with the raw effort columns `year`, `fishing_hours`,
-`unique_trips`, `n_active_days`, `avg_fidelity_sum`, and
-`n_trips_for_fidelity`.}
+\item{df}{A data frame with the raw effort columns \code{year}, \code{fishing_hours},
+\code{unique_trips}, \code{n_active_days}, \code{avg_fidelity_sum}, and
+\code{n_trips_for_fidelity}.}
 
 \item{study_start, study_end}{Dates bounding the study period. Each year's
-`constancy` denominator is clipped to them.}
+\code{constancy} denominator is clipped to them.}
 }
 \value{
-`df` with the five metric columns appended.
+\code{df} with the five metric columns appended.
 }
 \description{
-Adds the normalised, dashboard-facing effort metrics (`avg_fidelity`,
-`constancy`, `avg_hours_per_day`, `avg_visits_per_day`, `hours_per_trip`) to
+Adds the normalised, dashboard-facing effort metrics (\code{avg_fidelity},
+\code{constancy}, \code{avg_hours_per_day}, \code{avg_visits_per_day}, \code{hours_per_trip}) to
 an H3 effort table. Shared by the all-fleet and per-gear/country exports in
-[export_pds_spatial()] so both use identical formulas.
+\code{\link[=export_pds_spatial]{export_pds_spatial()}} so both use identical formulas.
 
-`constancy` is the share of the available days on which the cell was fished.
-Rows are per `(cell, year)`, so the denominator is the days of that row's
+\code{constancy} is the share of the available days on which the cell was fished.
+Rows are per \verb{(cell, year)}, so the denominator is the days of that row's
 year that fall inside the study period -- not the length of the whole series,
 which would compare one year's activity against three years of calendar and
 put every value in the third decimal. A cell fished every available day of

@@ -8,7 +8,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-Behind the maps and charts on Peskas.org is an automated system. Every two days, a schedule is triggered via GitHub Actions that runs the **Peskas Coasts Pipeline**. 
+Behind the maps and charts on [Peskas Coasts](https://coasts.peskas.org) is an automated system. Every day, a schedule is triggered via GitHub Actions that runs the **Peskas Coasts Pipeline**. 
 
 This article breaks down exactly what happens during that automated run, step-by-step.
 
@@ -19,7 +19,7 @@ Before we can look at GPS tracks, we need to know who is fishing and what they a
 * **`ingest_assets()`**: The pipeline starts by downloading metadata—the "registry" of known boats, gear types, and landing sites.
 * **`enrich_taxa()`**: It standardizes fish species data, ensuring that local fish names match global scientific databases (like FishBase).
 * **`ingest_pds_trips()`**: We connect to Pelagic Data Systems (PDS) to get a high-level list of all recent boat trips.
-* **`merge_survey_trips()`**: Here, we match the digital GPS trips with human-conducted surveys on the ground. If a surveyor recorded a catch at the dock, we link it to the GPS device that was on that specific boat.
+* **`merge_survey_trips()`**: Here, we collect the landing surveys that each country pipeline has already checked and matched to GPS trips. If a surveyor recorded a catch at the dock, it is now linked to the GPS device that was on that specific boat.
 
 ## Phase 2: Tracking and Machine Learning
 
@@ -45,4 +45,4 @@ Finally, the data must be packaged so the Peskas website can display it instantl
 ---
 
 ### Summary
-Every two days, the pipeline processes raw pings from ocean trackers and paper surveys into an updated spatial dataset.
+Every day, the pipeline processes raw pings from ocean trackers and landing surveys into an updated spatial dataset.

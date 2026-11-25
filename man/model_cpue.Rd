@@ -17,67 +17,69 @@ model_cpue(
 }
 \arguments{
 \item{h3_res}{Integer (0-15). H3 resolution for spatial aggregation.
-Default is `9L` (~174 m edge). Use `5`-`6` for very sparse data.}
+Default is \code{9L} (~174 m edge). Use \code{5}-\code{6} for very sparse data.}
 
 \item{top_n}{Integer. Number of top species (by total catch) to model.
-Default is `5L`.}
+Default is \code{5L}.}
 
 \item{min_trips}{Integer. Minimum unique trips per H3 cell x country
-required to retain a cell in the CPUE output. Default is `3L`.}
+required to retain a cell in the CPUE output. Default is \code{3L}.}
 
-\item{method}{Character. CPUE estimation method: `"weighted"` (default)
-or `"nnls"`. See Details.}
+\item{method}{Character. CPUE estimation method: \code{"weighted"} (default)
+or \code{"nnls"}. See Details.}
 
 \item{max_gap_hours, gap_policy}{How silent stretches of a track are counted
 when building the effort denominator, passed to
-[prepare_tracks_for_effort()]. Pass the same values used for
-[aggregate_pds_effort()]: CPUE is catch per hour of effort, so measuring
+\code{\link[=prepare_tracks_for_effort]{prepare_tracks_for_effort()}}. Pass the same values used for
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}: CPUE is catch per hour of effort, so measuring
 hours differently from the H3 grid would publish two incompatible views of
 the same fishing.}
 
 \item{log_threshold}{The logging threshold to use. Default is
-`logger::DEBUG`.}
+\code{logger::DEBUG}.}
 
-\item{package}{Name of the package whose `inst/conf.yml` to read. Defaults
-to `"coasts"`.}
+\item{package}{Name of the package whose \code{inst/conf.yml} to read. Defaults
+to \code{"coasts"}.}
 }
 \value{
 Invisibly returns a named list:
-  \describe{
-    \item{`effort_matched`}{Per-trip H3 effort for matched trips.}
-    \item{`cpue`}{CPUE table (tibble with `h3_index`, `country`, `cpue`,
-      `species`, `n_trips`, `lon`, `lat`).}
-    \item{`trips`}{Combined effort + catch matrix.}
-  }
+\describe{
+\item{\code{effort_matched}}{Per-trip H3 effort for matched trips.}
+\item{\code{cpue}}{CPUE table (tibble with \code{h3_index}, \code{country}, \code{cpue},
+\code{species}, \code{n_trips}, \code{lon}, \code{lat}).}
+\item{\code{trips}}{Combined effort + catch matrix.}
+}
 }
 \description{
 Estimates spatial Catch Per Unit Effort (CPUE) by combining:
-- **Matched trips** (`trips-matched` parquet, from [merge_survey_trips()]):
-  validated catch records already linked to PDS trip IDs (all countries).
-- **Predicted track files** (from [predict_pds_tracks()]): downloaded only
-  for matched trips, to build the per-trip H3 effort matrix for the CPUE
-  model.
+\itemize{
+\item \strong{Matched trips} (\code{trips-matched} parquet, from \code{\link[=merge_survey_trips]{merge_survey_trips()}}):
+validated catch records already linked to PDS trip IDs (all countries).
+\item \strong{Predicted track files} (from \code{\link[=predict_pds_tracks]{predict_pds_tracks()}}): downloaded only
+for matched trips, to build the per-trip H3 effort matrix for the CPUE
+model.
+}
 }
 \details{
 Two CPUE estimation methods are available:
+\itemize{
+\item \strong{\code{"weighted"}} (default, recommended for sparse data): direct
+catch-to-effort ratio per H3 cell and country. Robust when trips are few.
+\code{CPUE_h = sum(catch_kg) / sum(fishing_hours)} across all trips
+visiting cell \code{h} within each country.
+\item \strong{\code{"nnls"}} (for denser data, >= ~200 trips): solves
+\verb{min ||Xq - y||^2 s.t. q >= 0} across all cells simultaneously.
+More statistically rigorous but requires an overdetermined system
+(rule of thumb: trips >> H3 cells).
+}
 
-- **`"weighted"`** (default, recommended for sparse data): direct
-  catch-to-effort ratio per H3 cell and country. Robust when trips are few.
-  `CPUE_h = sum(catch_kg) / sum(fishing_hours)` across all trips
-  visiting cell `h` within each country.
-
-- **`"nnls"`** (for denser data, >= ~200 trips): solves
-  `min ||Xq - y||^2 s.t. q >= 0` across all cells simultaneously.
-  More statistically rigorous but requires an overdetermined system
-  (rule of thumb: trips >> H3 cells).
-
-The CPUE result table includes a `country` column so users can filter by
+The CPUE result table includes a \code{country} column so users can filter by
 country downstream. It is uploaded as a versioned Parquet file to the
-cloud bucket under the `pds_cpue` file prefix.
+cloud bucket under the \code{pds_cpue} file prefix.
 }
 \seealso{
-[aggregate_pds_effort()], [predict_pds_tracks()],
-  [merge_survey_trips()]
+\code{\link[=aggregate_pds_effort]{aggregate_pds_effort()}}, \code{\link[=predict_pds_tracks]{predict_pds_tracks()}},
+\code{\link[=merge_survey_trips]{merge_survey_trips()}}
 }
 \keyword{modeling}
 \keyword{workflow}

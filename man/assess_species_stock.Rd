@@ -22,26 +22,28 @@ assess_species_stock(
 
 \item{priors}{A one-row life-history tibble for that species.}
 
-\item{methods}{Character vector of methods to run; any of `"lbi"`,
-`"lbspr"`, `"lbb"`. Default `c("lbi", "lbb")`: LBSPR is opt-in until its
+\item{methods}{Character vector of methods to run; any of \code{"lbi"},
+\code{"lbspr"}, \code{"lbb"}. Default \code{c("lbi", "lbb")}: LBSPR is opt-in until its
 fit stops failing on the Peskas length data.}
 
-\item{lbb_engine}{Optional LBB fitting routine (see [assess_stock_lbb()]).}
+\item{lbb_engine}{Optional LBB fitting routine, a function of
+\verb{(lengths, priors, n_eff)} with \code{n_eff} the trips measured (see
+\code{\link[=assess_stock_lbb]{assess_stock_lbb()}} and \code{\link[=lbb_engine_jags]{lbb_engine_jags()}}).}
 
 \item{robustness}{Logical. Attach the LBB prior-robustness band. Default
-`FALSE`. See [lbb_robustness()].}
+\code{FALSE}. See \code{\link[=lbb_robustness]{lbb_robustness()}}.}
 
-\item{production}{Logical. Add a `"production"` method row (exploitation
-rate E = F/Z against the sustainable share of production). Default `TRUE`.
-See [assess_production()].}
+\item{production}{Logical. Add a \code{"production"} method row (exploitation
+rate E = F/Z against the sustainable share of production). Default \code{TRUE}.
+See \code{\link[=assess_production]{assess_production()}}.}
 
 \item{trophic_level}{FishBase trophic level of the species, which sets the
-harvestable share `x`. Default `NA` (conservative `x`).}
+harvestable share \code{x}. Default \code{NA} (conservative \code{x}).}
 }
 \value{
 A tibble with one row per method, carrying the estimate columns of
-  each method plus `scientific_name`, `n_measured`, `frac_measured` and
-  `quality`.
+each method plus \code{scientific_name}, \code{n_measured}, \code{n_trips_measured},
+\code{frac_measured} and \code{quality}.
 }
 \description{
 Runs the length coverage summary, life-history priors and the chosen
