@@ -119,7 +119,7 @@ default:
       kenya: [51, 57]
       zanzibar: [51, 57]
       mozambique: [51, 57]
-      timor: [71]
+      timor: [57, 71]
   storage:
     google:
       key: gcs

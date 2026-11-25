@@ -150,7 +150,7 @@ get_taxa_backbone <- function(version = "latest") {
 #' `fao_areas = 57` to reproduce pre-4.6.0 output exactly.
 #'
 #' Countries outside the Indian Ocean must set the key — Timor-Leste, for
-#' example, is FAO Area 71 (Pacific, Western Central).
+#' example, straddles Areas 57 and 71 (Indian Ocean, Eastern; Pacific, Western Central).
 #'
 #' @keywords internal
 resolve_fao_areas <- function(conf, fao_areas = NULL) {

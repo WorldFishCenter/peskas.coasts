@@ -27,7 +27,7 @@ assess_group_layer(
 Default 100.}
 
 \item{fao_areas}{Named list mapping country key to an integer vector of FAO
-area codes (e.g. \code{list(kenya = c(51, 57), timor = 71)}). Countries absent
+area codes (e.g. \code{list(kenya = c(51, 57), timor = c(57, 71))}). Countries absent
 from the list skip the regional filter.}
 
 \item{version}{FishBase / SeaLifeBase release. See \code{\link[=resolve_db_version]{resolve_db_version()}}.}

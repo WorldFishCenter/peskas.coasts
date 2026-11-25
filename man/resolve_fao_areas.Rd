@@ -40,6 +40,6 @@ pre-4.6.0 output: every species that resolved before still resolves. Pass
 \code{fao_areas = 57} to reproduce pre-4.6.0 output exactly.
 
 Countries outside the Indian Ocean must set the key — Timor-Leste, for
-example, is FAO Area 71 (Pacific, Western Central).
+example, straddles Areas 57 and 71 (Indian Ocean, Eastern; Pacific, Western Central).
 }
 \keyword{internal}

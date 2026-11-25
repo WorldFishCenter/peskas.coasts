@@ -64,7 +64,7 @@ group-level layer and append them to the output. Default \code{TRUE}.}
 \item{n_groups}{Integer. Coarse taxa to assess per country. Default 15.}
 
 \item{fao_areas}{Named list mapping country key to FAO area codes for the
-regional group priors (e.g. \code{list(kenya = c(51, 57), timor = 71)}). \code{NULL}
+regional group priors (e.g. \code{list(kenya = c(51, 57), timor = c(57, 71))}). \code{NULL}
 reads \code{stock_assessment$fao_areas} from the configuration.}
 
 \item{upload}{Logical. Upload the versioned parquet to cloud storage.

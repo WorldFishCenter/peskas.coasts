@@ -1,3 +1,9 @@
+# coasts 4.28.1
+
+## Timor-Leste fish groups compared with both of its seas
+
+* **FIXED** The stock assessment of Timor-Leste's fish groups now draws its reference species from both the Indian Ocean and the Pacific, the two seas Timor-Leste fishes. Before, it used the Pacific only, which left out species found on the south coast.
+
 # coasts 4.28.0
 
 ## Stock assessment from catch lengths

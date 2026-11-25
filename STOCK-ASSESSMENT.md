@@ -18,7 +18,7 @@ run_stock_assessment(
   min_gear_trips = 100L,
   group_layer   = TRUE,                   # genus / family taxa
   n_groups      = 15L,
-  fao_areas     = NULL,                   # NULL -> kenya/zanzibar/mozambique 51+57, timor 71
+  fao_areas     = NULL,                   # NULL -> kenya/zanzibar/mozambique 51+57, timor 57+71
   upload        = TRUE,                   # FALSE for local runs
   log_threshold = logger::DEBUG,
   package       = "coasts"
@@ -176,7 +176,7 @@ The function returns one row with `method = "group-lbi"` and `scale = "group"`.
 - **L∞:** median of the species' FishBase growth studies in total length, the same value the dashboard's species table uses (`linf_source = "growth_studies"`). Otherwise FishBase `MaxLengthTL` (`"max_length"`). Species without either are skipped.
 - **M/K:** FishBase M/K when FishBase has M (`mk_source = "fishbase_m"`). Otherwise Then et al. 2015 (`"then2015"`) when K and L∞ exist. Otherwise 1.5 (`"default"`). FishBase currently returns no M for these species, so most priors are `then2015`.
 - **Lm:** median of the species' FishBase maturity studies in total length (`lm_source = "maturity_studies"`), else Froese–Binohlan from L∞ (`"from_linf"`).
-- **Groups:** member medians across regional members (FAO 51+57 for WIO, 71 for Timor).
+- **Groups:** member medians across regional members (FAO 51+57 for WIO, 57+71 for Timor, which faces both oceans).
 - **Group confidence:**
   - genus with `linf_cv` < 0.35 (or a single member) → `high`;
   - other genera → `moderate`;

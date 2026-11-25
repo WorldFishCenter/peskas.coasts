@@ -940,7 +940,7 @@ assess_species_stock <- function(
 #'   group-level layer and append them to the output. Default `TRUE`.
 #' @param n_groups Integer. Coarse taxa to assess per country. Default 15.
 #' @param fao_areas Named list mapping country key to FAO area codes for the
-#'   regional group priors (e.g. `list(kenya = c(51, 57), timor = 71)`). `NULL`
+#'   regional group priors (e.g. `list(kenya = c(51, 57), timor = c(57, 71))`). `NULL`
 #'   reads `stock_assessment$fao_areas` from the configuration.
 #' @param upload Logical. Upload the versioned parquet to cloud storage.
 #'   Default `TRUE` (the pipeline); set `FALSE` for local analysis runs so a

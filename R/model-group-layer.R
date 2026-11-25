@@ -386,7 +386,7 @@ assess_group_stock <- function(
 #' @param min_measured Minimum trips with measured lengths to attempt a read.
 #'   Default 100.
 #' @param fao_areas Named list mapping country key to an integer vector of FAO
-#'   area codes (e.g. `list(kenya = c(51, 57), timor = 71)`). Countries absent
+#'   area codes (e.g. `list(kenya = c(51, 57), timor = c(57, 71))`). Countries absent
 #'   from the list skip the regional filter.
 #' @param version FishBase / SeaLifeBase release. See [resolve_db_version()].
 #' @param production Logical. Add the production-based exploitation read,
