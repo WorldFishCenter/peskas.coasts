@@ -33,5 +33,7 @@ docs
 
 ## files
 app_usage_report.html
+Claude outputs/
+data-raw/
 .claude/settings.local.json
 CLAUDE.local.md

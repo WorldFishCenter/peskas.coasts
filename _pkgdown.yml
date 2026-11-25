@@ -75,6 +75,27 @@ reference:
       - process_trip_data
       - create_usage_heatmap
       - create_usage_table
+  - title: "Stock Assessment"
+    desc: "Length-based stock assessment of each country's main species and fish groups. See STOCK-ASSESSMENT.md."
+    contents:
+      - run_stock_assessment
+      - summarise_stock_status
+      - select_priority_species
+      - get_life_history_priors
+      - get_group_priors
+      - get_trophic_levels
+      - assess_species_stock
+      - assess_group_layer
+      - assess_group_stock
+      - assess_length_indicators
+      - assess_lbspr
+      - assess_stock_lbb
+      - lbb_engine_jags
+      - lbb_robustness
+      - assess_production
+      - estimate_exploitation
+      - scale_sustainable_yield
+      - flag_length_mixture
   - title: "API & Data Ingestion (PDS & Airtable)"
     desc: "Functions interacting with Pelagic Data Systems, Airtable, and KoboToolbox."
     contents:

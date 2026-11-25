@@ -41,6 +41,9 @@ data.
   tracker, trip and catch statistics for each fisher, and a weekly
   report on how the app is used.
 - Backs up the GPS tracks every day.
+- Reads the state of each country’s main fish stocks from the lengths of
+  the fish measured at landing (see
+  [STOCK-ASSESSMENT.md](STOCK-ASSESSMENT.md)).
 
 ## Where the data comes from
 
@@ -54,8 +57,9 @@ data.
   catch, recorded by an enumerator (a trained data collector). This
   pipeline does not read the survey forms itself. It takes the trips
   that the Kenya, Zanzibar and Mozambique pipelines have already checked
-  and matched to GPS trips, and the monthly summaries that all four
-  country pipelines publish.
+  and matched to GPS trips, the monthly summaries that all four country
+  pipelines publish, and the checked trips each country publishes for
+  the Peskas data API, for the stock assessment.
 - **Reference data.** Boat and tracker records kept in Airtable, the
   boundaries of regions and districts (FAO’s standard administrative
   boundaries), and species data from FishBase and SeaLifeBase.
@@ -75,6 +79,12 @@ Known limits:
   hexagons fished by at least three such trips.
 - Money is converted to US dollars with fixed exchange rates written in
   the code, not current market rates.
+- The stock assessment assumes the fish measured at landing show the
+  sizes in the whole stock. Small-scale boats catch only part of it,
+  often young fish near the coast, so a stock can read as overfished,
+  and still be marked reliable, when its large fish are simply out of
+  the boats’ reach. Ocean-wide species such as tuna are the clearest
+  case.
 
 ## Who runs it
 

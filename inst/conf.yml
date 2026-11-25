@@ -109,6 +109,17 @@ default:
       file_prefix: backup-users
     all_tracks:
       file_prefix: all-tracks
+  stock_assessment:
+    results:
+      file_prefix: stock-assessment-results
+    summary:
+      file_prefix: stock-assessment-summary
+    # FAO major fishing areas for the regional group priors.
+    fao_areas:
+      kenya: [51, 57]
+      zanzibar: [51, 57]
+      mozambique: [51, 57]
+      timor: [71]
   storage:
     google:
       key: gcs

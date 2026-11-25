@@ -47,6 +47,8 @@ tables, the family, order and class, the IUCN and CITES codes from
 \code{stocks}, the median length at first maturity from \code{maturity} and the
 optimum length from the asymptotic length in \code{popgrowth}, both restated
 to total length with the \code{popll} fits where a study used another length.
+The optimum length is \verb{3 Linf / (3 + M/K)}, as in \code{\link[=run_stock_assessment]{run_stock_assessment()}},
+with K from \code{estimate} and M from \code{\link[=.m_then2015]{.m_then2015()}}, or M/K = 1.5 without K.
 The maximum length is FishBase's own total-length estimate in \code{estimate}
 (\code{length_max_tl}); the common length from \code{species} is restated like the
 two above (\code{length_common_tl}). For crabs, lobsters and cephalopods

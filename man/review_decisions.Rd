@@ -50,6 +50,7 @@ review_decisions(
 }
 }
 \seealso{
-\code{\link[=list_validation_statuses]{list_validation_statuses()}}
+\code{\link[=list_validation_statuses]{list_validation_statuses()}}, \code{\link[=refresh_review_decisions]{refresh_review_decisions()}} for
+the decisions saved while the run goes on
 }
 \keyword{validation}

@@ -24,11 +24,12 @@ This repository does three jobs for Peskas, WorldFish's system for monitoring sm
 - Combines monthly catch, revenue and price indicators from the four countries, by region and district, with money shown in US dollars.
 - Keeps Peskas Tracks running: fisher accounts linked to each boat's tracker, trip and catch statistics for each fisher, and a weekly report on how the app is used.
 - Backs up the GPS tracks every day.
+- Reads the state of each country's main fish stocks from the lengths of the fish measured at landing (see [STOCK-ASSESSMENT.md](STOCK-ASSESSMENT.md)).
 
 ## Where the data comes from
 
 - **GPS tracks.** GPS trackers (Pelagic Data Systems) are small solar-powered devices on boats that record where they travel. The pipeline downloads new trips and their tracks. A statistical model from WorldFish's [SSF AI toolkit](https://github.com/WorldFishCenter/ssf-ai-toolkit) then marks which parts of each track were fishing and which were travelling.
-- **Landing surveys.** A landing is a boat's return to shore with its catch, recorded by an enumerator (a trained data collector). This pipeline does not read the survey forms itself. It takes the trips that the Kenya, Zanzibar and Mozambique pipelines have already checked and matched to GPS trips, and the monthly summaries that all four country pipelines publish.
+- **Landing surveys.** A landing is a boat's return to shore with its catch, recorded by an enumerator (a trained data collector). This pipeline does not read the survey forms itself. It takes the trips that the Kenya, Zanzibar and Mozambique pipelines have already checked and matched to GPS trips, the monthly summaries that all four country pipelines publish, and the checked trips each country publishes for the Peskas data API, for the stock assessment.
 - **Reference data.** Boat and tracker records kept in Airtable, the boundaries of regions and districts (FAO's standard administrative boundaries), and species data from FishBase and SeaLifeBase.
 - **Peskas Tracks.** The catches fishers log in the app.
 
@@ -40,6 +41,7 @@ Known limits:
 
 - Catch per hour is only calculated for trips that have both a GPS track and a landing survey, for the five most-caught species, and only in hexagons fished by at least three such trips.
 - Money is converted to US dollars with fixed exchange rates written in the code, not current market rates.
+- The stock assessment assumes the fish measured at landing show the sizes in the whole stock. Small-scale boats catch only part of it, often young fish near the coast, so a stock can read as overfished, and still be marked reliable, when its large fish are simply out of the boats' reach. Ocean-wide species such as tuna are the clearest case.
 
 ## Who runs it
 
